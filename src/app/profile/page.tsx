@@ -31,16 +31,23 @@ export default function ProfilePage() {
     setError(null);
     setIsLoggingOut(true);
 
-    const { error: logoutError } = await authClient.signOut();
+    try {
+      const { error: logoutError } = await authClient.signOut();
 
-    if (logoutError) {
-      setError(logoutError.message ?? "Unable to log out.");
+      if (logoutError) {
+        setError(logoutError.message ?? "Unable to log out.");
+        return;
+      }
+
+      router.replace("/sign-in");
+      router.refresh();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError.message : "Unable to log out.",
+      );
+    } finally {
       setIsLoggingOut(false);
-      return;
     }
-
-    router.replace("/sign-in");
-    router.refresh();
   }
 
   if (isPending || !session) {
@@ -67,7 +74,7 @@ export default function ProfilePage() {
           {session.user.image ? (
             <div
               role="img"
-              aria-label={`Avatar de ${userName}`}
+              aria-label={`${userName}'s avatar`}
               className="h-24 w-24 rounded-full bg-cover bg-center bg-no-repeat ring-4 ring-zinc-100 dark:ring-zinc-800"
               style={{ backgroundImage: `url("${session.user.image}")` }}
             />

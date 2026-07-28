@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { AuthShell } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
+import { clientEnv } from "@/env/client";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -13,26 +14,32 @@ export default function SignInPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const discordEnabled = clientEnv.NEXT_PUBLIC_DISCORD_ENABLED === "true";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setIsPending(true);
 
-    const { error: signInError } = await authClient.signIn.email({
-      email,
-      password,
-      callbackURL: "/profile",
-    });
+    try {
+      const { error: signInError } = await authClient.signIn.email({
+        email,
+        password,
+        callbackURL: "/profile",
+      });
 
-    if (signInError) {
-      setError(signInError.message ?? "Unable to sign in.");
+      if (signInError) {
+        setError(signInError.message ?? "Unable to sign in.");
+        return;
+      }
+
+      router.push("/profile");
+      router.refresh();
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to sign in.");
+    } finally {
       setIsPending(false);
-      return;
     }
-
-    router.push("/profile");
-    router.refresh();
   }
 
   async function handleDiscordSignIn() {
@@ -102,17 +109,21 @@ export default function SignInPage() {
         >
           {isPending ? "Signing in..." : "Sign in"}
         </button>
-        <div className="relative py-1 text-center text-xs text-zinc-500">
-          <span className="relative z-10 bg-white px-3 dark:bg-zinc-900">or</span>
-          <div className="absolute inset-x-0 top-1/2 border-t border-zinc-200 dark:border-zinc-800" />
-        </div>
-        <button
-          type="button"
-          onClick={handleDiscordSignIn}
-          className="h-11 w-full rounded-lg border border-zinc-300 px-4 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
-        >
-          Continue with Discord
-        </button>
+        {discordEnabled ? (
+          <>
+            <div className="relative py-1 text-center text-xs text-zinc-500">
+              <span className="relative z-10 bg-white px-3 dark:bg-zinc-900">or</span>
+              <div className="absolute inset-x-0 top-1/2 border-t border-zinc-200 dark:border-zinc-800" />
+            </div>
+            <button
+              type="button"
+              onClick={handleDiscordSignIn}
+              className="h-11 w-full rounded-lg border border-zinc-300 px-4 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Continue with Discord
+            </button>
+          </>
+        ) : null}
       </form>
     </AuthShell>
   );

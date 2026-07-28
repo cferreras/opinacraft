@@ -1,5 +1,7 @@
 import { Resend } from "resend";
 
+import { serverEnv } from "@/env/server";
+
 type PasswordResetEmail = {
   to: string;
   url: string;
@@ -9,8 +11,8 @@ export async function sendPasswordResetEmail({
   to,
   url,
 }: PasswordResetEmail) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+  const apiKey = serverEnv.RESEND_API_KEY;
+  const from = serverEnv.EMAIL_FROM;
 
   if (!apiKey || !from) {
     throw new Error(

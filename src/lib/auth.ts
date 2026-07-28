@@ -1,13 +1,15 @@
+import { after } from "next/server";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 
 import * as authSchema from "@/auth-schema";
 import { db } from "@/db";
+import { serverEnv } from "@/env/server";
 import { sendPasswordResetEmail } from "@/lib/email";
 import * as appSchema from "@/schema";
 
-const discordClientId = process.env.DISCORD_CLIENT_ID;
-const discordClientSecret = process.env.DISCORD_CLIENT_SECRET;
+const discordClientId = serverEnv.DISCORD_CLIENT_ID;
+const discordClientSecret = serverEnv.DISCORD_CLIENT_SECRET;
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -20,13 +22,18 @@ export const auth = betterAuth({
       verification: authSchema.verification,
     },
   }),
-  secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL,
+  secret: serverEnv.BETTER_AUTH_SECRET,
+  baseURL: serverEnv.BETTER_AUTH_URL,
   emailAndPassword: {
     enabled: true,
+    revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
-      void sendPasswordResetEmail({ to: user.email, url }).catch((error) => {
-        console.error("Failed to send password reset email", error);
+      after(async () => {
+        try {
+          await sendPasswordResetEmail({ to: user.email, url });
+        } catch (error) {
+          console.error("Failed to send password reset email", error);
+        }
       });
     },
   },

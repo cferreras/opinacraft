@@ -38,18 +38,27 @@ function ResetPasswordForm() {
     }
 
     setIsPending(true);
-    const { error: resetError } = await authClient.resetPassword({
-      newPassword: password,
-      token,
-    });
+    try {
+      const { error: resetError } = await authClient.resetPassword({
+        newPassword: password,
+        token,
+      });
 
-    if (resetError) {
-      setError(resetError.message ?? "Unable to reset your password.");
+      if (resetError) {
+        setError(resetError.message ?? "Unable to reset your password.");
+        return;
+      }
+
+      router.push("/sign-in?reset=success");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to reset your password.",
+      );
+    } finally {
       setIsPending(false);
-      return;
     }
-
-    router.push("/sign-in?reset=success");
   }
 
   return (

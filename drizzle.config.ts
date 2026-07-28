@@ -1,8 +1,7 @@
-import { serverEnv } from '@/env/server';
-import { config } from 'dotenv';
-import { defineConfig } from "drizzle-kit";
+import "dotenv/config";
 
-config({ path: '.env' });
+import { serverEnv } from '@/env/server';
+import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
   schema: ["./src/schema.ts", "./src/auth-schema.ts"],

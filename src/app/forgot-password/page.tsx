@@ -18,20 +18,28 @@ export default function ForgotPasswordPage() {
     setMessage(null);
     setIsPending(true);
 
-    const { error: requestError } = await authClient.requestPasswordReset({
-      email,
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    try {
+      const { error: requestError } = await authClient.requestPasswordReset({
+        email,
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
 
-    if (requestError) {
-      setError(requestError.message ?? "Unable to request a reset link.");
-    } else {
-      setMessage(
-        "If an account exists for that email, a password reset link is on its way.",
+      if (requestError) {
+        setError(requestError.message ?? "Unable to request a reset link.");
+      } else {
+        setMessage(
+          "If an account exists for that email, a password reset link is on its way.",
+        );
+      }
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to request a reset link.",
       );
+    } finally {
+      setIsPending(false);
     }
-
-    setIsPending(false);
   }
 
   return (

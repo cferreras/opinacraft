@@ -25,20 +25,29 @@ export default function ChangePasswordPage() {
     }
 
     setIsPending(true);
-    const { error: changeError } = await authClient.changePassword({
-      currentPassword,
-      newPassword,
-      revokeOtherSessions: true,
-    });
+    try {
+      const { error: changeError } = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
 
-    if (changeError) {
-      setError(changeError.message ?? "Unable to change your password.");
+      if (changeError) {
+        setError(changeError.message ?? "Unable to change your password.");
+        return;
+      }
+
+      router.push("/profile");
+      router.refresh();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to change your password.",
+      );
+    } finally {
       setIsPending(false);
-      return;
     }
-
-    router.push("/profile");
-    router.refresh();
   }
 
   return (
