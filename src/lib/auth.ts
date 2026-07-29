@@ -6,7 +6,6 @@ import * as authSchema from "@/auth-schema";
 import { db } from "@/db";
 import { serverEnv } from "@/env/server";
 import { sendPasswordResetEmail } from "@/lib/email";
-import * as appSchema from "@/schema";
 
 const discordClientId = serverEnv.DISCORD_CLIENT_ID;
 const discordClientSecret = serverEnv.DISCORD_CLIENT_SECRET;
@@ -15,7 +14,6 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {
-      ...appSchema,
       user: authSchema.user,
       session: authSchema.session,
       account: authSchema.account,
