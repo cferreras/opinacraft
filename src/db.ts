@@ -1,13 +1,31 @@
 import "dotenv/config";
 
-import { drizzle } from "drizzle-orm/neon-http";
-import { neon } from "@neondatabase/serverless";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { authRelations } from "./auth-schema";
 import { serverEnv } from "./env/server";
 import { relations } from "./relations";
 
-const sql = neon(serverEnv.DATABASE_URL);
+function secureConnectionString(connectionString: string) {
+  return connectionString.replace(
+    /([?&]sslmode=)(prefer|require|verify-ca)(?=(&|$))/i,
+    "$1verify-full",
+  );
+}
+
+const globalForDb = globalThis as typeof globalThis & { opinacraftPool?: Pool };
+const pool = globalForDb.opinacraftPool ?? new Pool({
+  connectionString: secureConnectionString(serverEnv.DATABASE_URL),
+  max: 2,
+  idleTimeoutMillis: 10_000,
+  connectionTimeoutMillis: 5_000,
+  statement_timeout: 10_000,
+  query_timeout: 10_000,
+  keepAlive: true,
+});
+if (process.env.NODE_ENV !== "production") globalForDb.opinacraftPool = pool;
+
 export const db = drizzle({
-  client: sql,
+  client: pool,
   relations: { ...relations, ...authRelations },
 });
