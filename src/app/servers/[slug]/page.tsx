@@ -1,17 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { getPublishedServerBySlug } from "@/lib/servers/queries";
 
 type PublicServerPageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ created?: string }>;
 };
+
+const getPublishedServer = cache(getPublishedServerBySlug);
 
 export async function generateMetadata({ params }: PublicServerPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const server = await getPublishedServerBySlug(slug);
+  const server = await getPublishedServer(slug);
 
   return server
     ? {
@@ -23,10 +25,9 @@ export async function generateMetadata({ params }: PublicServerPageProps): Promi
 
 export default async function PublicServerPage({
   params,
-  searchParams,
 }: PublicServerPageProps) {
-  const [{ slug }, { created }] = await Promise.all([params, searchParams]);
-  const server = await getPublishedServerBySlug(slug);
+  const { slug } = await params;
+  const server = await getPublishedServer(slug);
 
   if (!server) {
     notFound();
@@ -41,11 +42,12 @@ export default async function PublicServerPage({
         >
           Opinacraft
         </Link>
-        {created === "1" ? (
-          <p className="mt-8 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-            Your server page is live.
-          </p>
-        ) : null}
+        <Link
+          href="/servers"
+          className="ml-4 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+        >
+          All servers
+        </Link>
         <div className="mt-8">
           <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
             Minecraft server
@@ -53,6 +55,9 @@ export default async function PublicServerPage({
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-white">
             {server.name}
           </h1>
+          <span className={`mt-4 inline-flex rounded-full px-3 py-1 text-xs font-medium ${server.verificationStatus === "verified" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+            {server.verificationStatus === "verified" ? "Verified server" : "Not verified"}
+          </span>
           {server.description ? (
             <p className="mt-5 whitespace-pre-wrap text-base leading-7 text-zinc-600 dark:text-zinc-400">
               {server.description}
@@ -74,7 +79,7 @@ export default async function PublicServerPage({
                   {endpoint.edition}
                 </span>
                 <code className="text-sm text-zinc-950 dark:text-white">
-                  {endpoint.host}:{endpoint.port}
+                  {formatEndpoint(endpoint)}
                 </code>
               </div>
             ))}
@@ -112,4 +117,10 @@ export default async function PublicServerPage({
       </article>
     </main>
   );
+}
+
+function formatEndpoint(endpoint: { edition: "java" | "bedrock"; host: string; port: number }) {
+  const host = endpoint.host.includes(":") ? `[${endpoint.host}]` : endpoint.host;
+  const defaultPort = endpoint.edition === "java" ? 25_565 : 19_132;
+  return endpoint.port === defaultPort ? host : `${host}:${endpoint.port}`;
 }

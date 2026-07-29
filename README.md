@@ -1,4 +1,4 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is the OpinaCraft Next.js application.
 
 ## Getting Started
 
@@ -18,7 +18,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment
+
+Use Neon’s pooled PostgreSQL URL as `DATABASE_URL` at runtime and Neon’s direct (non-pooled) URL as `DIRECT_DATABASE_URL` for Drizzle Kit. Set `BETTER_AUTH_SECRET` (at least 32 characters), `BETTER_AUTH_URL`, and a random `SERVER_VERIFICATION_SECRET` (at least 32 bytes) before enabling MOTD verification. Rotating the verification secret invalidates pending codes, so owners must generate new ones. `BETTER_AUTH_TRUSTED_ORIGINS` accepts a comma-separated list of allowed origins.
+
+The migration in `src/migrations/20260729101958_old_boomer` is generated but intentionally not applied by the application. Review it, back up the database, and run Drizzle Kit with `DIRECT_DATABASE_URL` during deployment. Neon recommends the direct endpoint for schema migrations because the pooled endpoint uses PgBouncer transaction pooling.
 
 ## Learn More
 

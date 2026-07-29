@@ -36,15 +36,8 @@ export function ServerCard({ server }: { server: ManagedServer }) {
         ))}
       </div>
       <div className="mt-5 flex items-center justify-between gap-3">
-        <span className="text-xs capitalize text-zinc-500">
-          {server.publicationStatus}
-        </span>
-        <Link
-          href={`/servers/${server.slug}`}
-          className="text-sm font-medium text-zinc-950 hover:underline dark:text-white"
-        >
-          View public page
-        </Link>
+        <span className="text-xs capitalize text-zinc-500">{server.publicationStatus} &middot; {server.verificationStatus}</span>
+        <div className="flex gap-3"><Link href={`/servers/${server.slug}/manage`} className="text-sm font-medium text-zinc-950 hover:underline dark:text-white">Manage</Link>{server.publicationStatus === "published" ? <Link href={`/servers/${server.slug}`} className="text-sm font-medium text-zinc-950 hover:underline dark:text-white">View public page</Link> : null}</div>
       </div>
     </article>
   );

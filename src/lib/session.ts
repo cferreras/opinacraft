@@ -9,7 +9,7 @@ export async function getServerSession() {
   });
 }
 
-export async function requireServerSession(callbackURL = "/servers") {
+export async function requireServerSession(callbackURL = "/dashboard/servers") {
   const session = await getServerSession();
 
   if (!session) {

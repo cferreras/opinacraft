@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import { domainToASCII } from "node:url";
+import ipaddr from "ipaddr.js";
 
 import * as z from "zod";
 
@@ -21,6 +22,8 @@ export type CreateServerInput = {
   discordUrl?: string;
   endpoints: RawServerEndpoint[];
 };
+
+export type UpdateServerInput = CreateServerInput;
 
 export type NormalizedServerEndpoint = {
   edition: MinecraftEdition;
@@ -134,6 +137,32 @@ export function normalizeHost(value: string) {
   return ascii;
 }
 
+export function isPublicHost(value: string) {
+  const candidate = value.replace(/^\[|\]$/g, "");
+  const ipVersion = isIP(candidate);
+
+  if (ipVersion !== 0) {
+    try {
+      return ipaddr.parse(candidate).range() === "unicast";
+    } catch {
+      return false;
+    }
+  }
+
+  const hostname = candidate.toLowerCase();
+  const blockedSuffixes = [
+    ".localhost",
+    ".local",
+    ".internal",
+    ".home.arpa",
+  ];
+  return (
+    hostname.includes(".") &&
+    hostname !== "localhost" &&
+    !blockedSuffixes.some((suffix) => hostname.endsWith(suffix))
+  );
+}
+
 export function normalizeHttpUrl(value: string, field: "websiteUrl" | "discordUrl") {
   const candidate = value.trim();
 
@@ -206,6 +235,15 @@ export function normalizeCreateServerInput(
     port: endpoint.port ?? defaultPortForEdition(endpoint.edition),
   }));
 
+  for (const endpoint of endpoints) {
+    if (!isPublicHost(endpoint.host)) {
+      throw new ServerInputError(
+        "Use a public Minecraft hostname or IP address.",
+        "host",
+      );
+    }
+  }
+
   return {
     name: parsed.name.replace(/\s+/g, " "),
     description: parsed.description || null,
@@ -218,3 +256,5 @@ export function normalizeCreateServerInput(
     endpoints,
   };
 }
+
+export const normalizeUpdateServerInput = normalizeCreateServerInput;

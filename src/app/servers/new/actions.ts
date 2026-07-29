@@ -118,10 +118,10 @@ export async function createServerAction(
       return { formError: error.message };
     }
 
-    console.error("Failed to create server", error);
+    console.error("Failed to create server", error instanceof Error ? error.name : "unknown");
     return { formError: "Unable to create the server right now." };
   }
 
-  revalidatePath("/servers");
-  redirect(`/servers/${result.slug}?created=1`);
+  revalidatePath("/dashboard/servers");
+  redirect(`/servers/${result.slug}/manage?created=1`);
 }

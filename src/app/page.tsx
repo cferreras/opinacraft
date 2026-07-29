@@ -24,7 +24,13 @@ export default function Home() {
             href="/servers"
             className="inline-flex h-11 items-center rounded-lg border border-zinc-300 px-5 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
           >
-            Managed servers
+            Browse servers
+          </Link>
+          <Link
+            href="/dashboard/servers"
+            className="inline-flex h-11 items-center rounded-lg border border-zinc-300 px-5 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Manage servers
           </Link>
           <Link
             href="/sign-in"

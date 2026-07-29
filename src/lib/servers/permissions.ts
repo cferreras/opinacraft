@@ -1,9 +1,37 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { serverMembers } from "@/schema";
 
 export type ServerRole = "owner" | "admin" | "editor";
+
+export type ServerCapability =
+  | "identity:edit"
+  | "content:edit"
+  | "endpoint:edit"
+  | "publication:edit"
+  | "members:view"
+  | "members:manage"
+  | "verification:manage";
+
+const roleCapabilities: Record<ServerRole, readonly ServerCapability[]> = {
+  owner: [
+    "identity:edit",
+    "content:edit",
+    "endpoint:edit",
+    "publication:edit",
+    "members:view",
+    "members:manage",
+    "verification:manage",
+  ],
+  admin: [
+    "identity:edit",
+    "content:edit",
+    "endpoint:edit",
+    "members:view",
+  ],
+  editor: ["content:edit"],
+};
 
 export class ServerPermissionError extends Error {
   constructor() {
@@ -12,26 +40,57 @@ export class ServerPermissionError extends Error {
   }
 }
 
-export async function requireServerRole(
+type MembershipReader = Pick<typeof db, "select">;
+
+export async function getServerRole(
   serverId: string,
   userId: string,
-  allowedRoles: readonly ServerRole[],
+  reader: MembershipReader = db,
 ) {
-  const [membership] = await db
+  const [membership] = await reader
     .select({ role: serverMembers.role })
     .from(serverMembers)
     .where(
       and(
         eq(serverMembers.serverId, serverId),
         eq(serverMembers.userId, userId),
-        inArray(serverMembers.role, allowedRoles),
       ),
     )
     .limit(1);
 
-  if (!membership) {
+  return membership?.role ?? null;
+}
+
+export async function requireServerRole(
+  serverId: string,
+  userId: string,
+  allowedRoles: readonly ServerRole[],
+  reader: MembershipReader = db,
+) {
+  const role = await getServerRole(serverId, userId, reader);
+
+  if (!role || !allowedRoles.includes(role)) {
     throw new ServerPermissionError();
   }
 
-  return membership.role;
+  return role;
+}
+
+export async function requireServerCapability(
+  serverId: string,
+  userId: string,
+  capability: ServerCapability,
+  reader: MembershipReader = db,
+) {
+  const role = await getServerRole(serverId, userId, reader);
+
+  if (!role || !roleCapabilities[role].includes(capability)) {
+    throw new ServerPermissionError();
+  }
+
+  return role;
+}
+
+export function canRole(capability: ServerCapability, role: ServerRole) {
+  return roleCapabilities[role].includes(capability);
 }
