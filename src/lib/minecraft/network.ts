@@ -33,7 +33,7 @@ function isPublicAddress(value: string) {
     if (address.kind() === "ipv6") {
       const ipv6 = address as ipaddr.IPv6;
       if (ipv6.isIPv4MappedAddress()) {
-        address = (ipv6 as unknown as { toIPv4: () => ipaddr.IPv4 }).toIPv4();
+        address = ipv6.toIPv4Address();
       }
     }
     if (address.kind() === "ipv4") {
@@ -108,37 +108,40 @@ export async function resolveMinecraftTarget(hostInput: string, portInput: numbe
     throw new BlockedMinecraftTargetError();
   }
 
-  let effectiveHost = host;
-  let effectivePort = port;
   if (port === 25565 && isIP(host) === 0) {
     const records = await withTimeout(
       dns.resolveSrv(`_minecraft._tcp.${host}`),
     ).catch(() => []);
     if (records.length) {
       const ordered = [...records].sort((a, b) => a.priority - b.priority || b.weight - a.weight);
-      const resolved = await Promise.all(
-        ordered.map(async (record) => ({
-          record,
-          addresses: await resolveAddresses(record.name.replace(/\.$/, "")),
-        })),
-      );
-      if (resolved.some(({ record }) => record.port < 1024 || record.port > 65535)) {
+      let blockedRecord = false;
+
+      for (const record of ordered) {
+        if (record.port < 1024 || record.port > 65535) continue;
+
+        try {
+          const addresses = await resolveAddresses(record.name.replace(/\.$/, ""));
+          return {
+            handshakeHost: host,
+            connectHost: addresses[0]!,
+            port: record.port,
+          } satisfies MinecraftTarget;
+        } catch (error) {
+          if (error instanceof BlockedMinecraftTargetError) blockedRecord = true;
+        }
+      }
+
+      if (blockedRecord || ordered.every((record) => record.port < 1024 || record.port > 65535)) {
         throw new BlockedMinecraftTargetError();
       }
-      effectiveHost = resolved[0]!.record.name.replace(/\.$/, "");
-      effectivePort = resolved[0]!.record.port;
-      return {
-        handshakeHost: host,
-        connectHost: resolved[0]!.addresses[0]!,
-        port: effectivePort,
-      } satisfies MinecraftTarget;
+      throw new MinecraftDnsError();
     }
   }
 
-  const addresses = await resolveAddresses(effectiveHost);
+  const addresses = await resolveAddresses(host);
   return {
     handshakeHost: host,
     connectHost: addresses[0]!,
-    port: effectivePort,
+    port,
   } satisfies MinecraftTarget;
 }

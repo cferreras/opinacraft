@@ -3,7 +3,8 @@ import Link from "next/link";
 import type { ManagedServer } from "@/lib/servers/queries";
 
 function endpointLabel(endpoint: ManagedServer["endpoints"][number]) {
-  return `${endpoint.host}:${endpoint.port}`;
+  const host = endpoint.host.includes(":") ? `[${endpoint.host}]` : endpoint.host;
+  return `${host}:${endpoint.port}`;
 }
 
 export function ServerCard({ server }: { server: ManagedServer }) {

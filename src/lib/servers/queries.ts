@@ -29,12 +29,19 @@ export type ManagedServer = {
 
 export type PublicServer = Omit<ManagedServer, "role">;
 
-function groupServerRows<TRow extends {
+type ServerRow = {
   server: Omit<ManagedServer, "role" | "endpoints">;
   role?: ManagedServer["role"] | null;
   endpoint: { edition: ManagedServer["endpoints"][number]["edition"]; host: string; port: number } | null;
-}>(rows: TRow[]) {
-  const grouped = new Map<string, ManagedServer>();
+};
+
+type ManagedServerRow = ServerRow & { role: ManagedServer["role"] };
+type PublicServerRow = ServerRow & { role?: null };
+
+function groupServerRows(rows: ManagedServerRow[]): ManagedServer[];
+function groupServerRows(rows: PublicServerRow[]): PublicServer[];
+function groupServerRows(rows: ServerRow[]): Array<ManagedServer | PublicServer> {
+  const grouped = new Map<string, ManagedServer | PublicServer>();
 
   for (const row of rows) {
     const existing = grouped.get(row.server.id);
@@ -47,11 +54,14 @@ function groupServerRows<TRow extends {
       continue;
     }
 
-    grouped.set(row.server.id, {
+    const server = {
       ...row.server,
-      role: row.role ?? "editor",
       endpoints: endpoint ? [endpoint] : [],
-    });
+    };
+    grouped.set(
+      row.server.id,
+      row.role ? { ...server, role: row.role } : server,
+    );
   }
 
   return [...grouped.values()];
@@ -114,24 +124,7 @@ export async function listPublishedServers(): Promise<PublicServer[]> {
     .where(eq(servers.publicationStatus, "published"))
     .orderBy(desc(servers.createdAt), asc(serverEndpoints.edition));
 
-  const grouped = new Map<string, PublicServer>();
-  for (const row of rows) {
-    const endpoint = row.endpoint;
-    const existing = grouped.get(row.server.id);
-    if (existing) {
-      if (endpoint && !existing.endpoints.some((item) => item.edition === endpoint.edition)) {
-        existing.endpoints.push(endpoint);
-      }
-      continue;
-    }
-
-    grouped.set(row.server.id, {
-      ...row.server,
-      endpoints: endpoint ? [endpoint] : [],
-    });
-  }
-
-  return [...grouped.values()];
+  return groupServerRows(rows);
 }
 
 export async function getPublishedServerBySlug(slug: string) {
@@ -166,9 +159,7 @@ export async function getPublishedServerBySlug(slug: string) {
     return null;
   }
 
-  return groupServerRows(
-    rows.map((row) => ({ ...row, role: null })),
-  )[0] ?? null;
+  return groupServerRows(rows)[0] ?? null;
 }
 
 export async function getManagedServerBySlug(slug: string, userId: string) {

@@ -43,7 +43,7 @@ const endpointSchema = z
   .object({
     edition: z.enum(minecraftEditions),
     host: z.string().trim().min(1).max(253),
-    port: z.number().int().min(1).max(65_535).optional(),
+    port: z.number().int().min(1_024, "Use a public port between 1024 and 65535.").max(65_535).optional(),
   })
   .strict();
 

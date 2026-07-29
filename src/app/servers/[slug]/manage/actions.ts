@@ -14,6 +14,7 @@ import {
   removeServerMember,
 } from "@/lib/servers/members";
 import {
+  DuplicateEndpointError,
   ServerNotFoundError,
   updateServer,
 } from "@/lib/servers/service";
@@ -108,7 +109,7 @@ export async function updateServerAction(
     if (error instanceof ServerNotFoundError) {
       return { formError: "This server is no longer available." };
     }
-    if (databaseErrorCode(error) === "23505" && databaseConstraint(error) === "server_endpoints_edition_host_port_key") {
+    if (error instanceof DuplicateEndpointError || (databaseErrorCode(error) === "23505" && databaseConstraint(error) === "server_endpoints_verified_edition_host_port_key")) {
       return { fieldErrors: { endpoints: "One of these addresses is already registered." } };
     }
     console.error("Failed to update server", error instanceof Error ? error.name : "unknown");
@@ -142,6 +143,7 @@ export async function addMemberAction(formData: FormData) {
       error instanceof DuplicateMemberError ? "duplicate" :
       error instanceof MemberNotFoundError ? "not-found" :
       error instanceof ServerPermissionError ? "forbidden" : "unknown";
+    if (reason === "unknown") console.error("Failed to add server member", error);
     redirect(`/servers/${slug}/manage?memberError=${reason}`);
   }
 
@@ -162,6 +164,7 @@ export async function changeMemberRoleAction(formData: FormData) {
     await changeServerMemberRole(serverId, session.user.id, targetUserId, role.data);
   } catch (error) {
     const reason = error instanceof OwnerMembershipError ? "owner" : error instanceof MemberNotFoundError ? "not-found" : "forbidden";
+    if (reason === "forbidden" && !(error instanceof ServerPermissionError)) console.error("Failed to change server member role", error);
     redirect(`/servers/${slug}/manage?memberError=${reason}`);
   }
   revalidatePath(`/servers/${slug}/manage`);
@@ -178,6 +181,7 @@ export async function removeMemberAction(formData: FormData) {
     await removeServerMember(serverId, session.user.id, targetUserId);
   } catch (error) {
     const reason = error instanceof OwnerMembershipError ? "owner" : error instanceof MemberNotFoundError ? "not-found" : "forbidden";
+    if (reason === "forbidden" && !(error instanceof ServerPermissionError)) console.error("Failed to remove server member", error);
     redirect(`/servers/${slug}/manage?memberError=${reason}`);
   }
   revalidatePath(`/servers/${slug}/manage`);
@@ -195,6 +199,7 @@ export async function startVerificationAction(formData: FormData) {
     const reason = error instanceof NoJavaEndpointError ? "no-java" :
       error instanceof VerificationRateLimitError ? "rate-limit" :
       error instanceof VerificationUnavailableError ? "unavailable" : "unknown";
+    if (reason === "unknown") console.error("Failed to start server verification", error);
     redirect(`/servers/${slug}/manage?verificationError=${reason}`);
   }
   revalidatePath(`/servers/${slug}/manage`);
@@ -220,9 +225,14 @@ export async function checkVerificationAction(formData: FormData) {
     if (error instanceof VerificationUnavailableError) {
       redirect(`/servers/${slug}/manage?verificationError=unavailable`);
     }
+    console.error("Failed to check server verification", error);
     redirect(`/servers/${slug}/manage?verificationError=unknown`);
   }
   revalidatePath(`/servers/${slug}/manage`);
+  if (result.result === "verified") {
+    revalidatePath("/servers");
+    revalidatePath(`/servers/${slug}`);
+  }
   redirect(`/servers/${slug}/manage?verification=${result.result}`);
 }
 

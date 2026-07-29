@@ -4,6 +4,7 @@ import {
   createHmac,
   hkdfSync,
   randomBytes,
+  randomInt,
 } from "node:crypto";
 
 import { serverEnv } from "../../env/server.ts";
@@ -34,10 +35,9 @@ function keyMaterial() {
 }
 
 export function generateVerificationCode() {
-  const bytes = randomBytes(CODE_LENGTH);
   let value = "";
-  for (const byte of bytes) {
-    value += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+  for (let index = 0; index < CODE_LENGTH; index += 1) {
+    value += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
   }
   return `${CODE_PREFIX}${value.slice(0, 5)}-${value.slice(5)}`;
 }

@@ -1,4 +1,3 @@
-import { defineRelationsPart } from "drizzle-orm";
 import {
   check,
   bytea,
@@ -10,7 +9,6 @@ import {
   smallint,
   text,
   timestamp,
-  unique,
   uniqueIndex,
   uuid,
   varchar,
@@ -113,6 +111,9 @@ export const serverEndpoints = pgTable(
     edition: minecraftEdition("edition").notNull(),
     host: varchar("host", { length: 253 }).notNull(),
     port: integer("port").notNull(),
+    verificationStatus: serverVerificationStatus("verification_status")
+      .default("unverified")
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -123,14 +124,16 @@ export const serverEndpoints = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.serverId, table.edition] }),
-    unique("server_endpoints_edition_host_port_key").on(
+    uniqueIndex("server_endpoints_verified_edition_host_port_key")
+      .on(
       table.edition,
       table.host,
       table.port,
-    ),
+      )
+      .where(sql`${table.verificationStatus} = 'verified'`),
     check(
       "server_endpoints_port_check",
-      sql`${table.port} between 1 and 65535`,
+      sql`${table.port} between 1024 and 65535`,
     ),
   ],
 );
@@ -219,41 +222,4 @@ export const serverVerifications = pgTable(
       .on(table.serverId)
       .where(sql`${table.status} = 'pending'`),
   ],
-);
-
-export const appRelations = defineRelationsPart(
-  { testsTable, servers, serverEndpoints, serverMembers, serverVerifications, user },
-  (r) => ({
-    servers: {
-      endpoints: r.many.serverEndpoints(),
-      members: r.many.serverMembers(),
-      verifications: r.many.serverVerifications(),
-    },
-    serverEndpoints: {
-      server: r.one.servers({
-        from: r.serverEndpoints.serverId,
-        to: r.servers.id,
-      }),
-    },
-    serverMembers: {
-      server: r.one.servers({
-        from: r.serverMembers.serverId,
-        to: r.servers.id,
-      }),
-      user: r.one.user({
-        from: r.serverMembers.userId,
-        to: r.user.id,
-      }),
-    },
-    serverVerifications: {
-      server: r.one.servers({
-        from: r.serverVerifications.serverId,
-        to: r.servers.id,
-      }),
-      requestedBy: r.one.user({
-        from: r.serverVerifications.requestedByUserId,
-        to: r.user.id,
-      }),
-    },
-  }),
 );

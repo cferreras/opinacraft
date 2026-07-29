@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -79,16 +79,30 @@ function slugCandidate(base: string, attempt: number) {
   return RESERVED_SLUGS.has(candidate) ? `${candidate}-server` : candidate;
 }
 
-async function assertEndpointAvailability(input: NormalizedCreateServerInput) {
+async function lockEndpoint(tx: DatabaseTransaction, endpoint: NormalizedCreateServerInput["endpoints"][number]) {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`${endpoint.edition}:${endpoint.host}:${endpoint.port}`}))`,
+  );
+}
+
+async function assertEndpointAvailability(
+  tx: DatabaseTransaction,
+  input: NormalizedCreateServerInput,
+  excludedServerId?: string,
+) {
   for (const endpoint of input.endpoints) {
-    const [existing] = await db
+    await lockEndpoint(tx, endpoint);
+    const [existing] = await tx
       .select({ serverId: serverEndpoints.serverId })
       .from(serverEndpoints)
+      .innerJoin(servers, eq(serverEndpoints.serverId, servers.id))
       .where(
         and(
           eq(serverEndpoints.edition, endpoint.edition),
           eq(serverEndpoints.host, endpoint.host),
           eq(serverEndpoints.port, endpoint.port),
+          eq(servers.verificationStatus, "verified"),
+          ...(excludedServerId ? [ne(servers.id, excludedServerId)] : []),
         ),
       )
       .limit(1);
@@ -134,7 +148,6 @@ async function insertServerBundle(
 
 export async function createServer(userId: string, rawInput: CreateServerInput) {
   const input = normalizeCreateServerInput(rawInput);
-  await assertEndpointAvailability(input);
 
   const baseSlug = slugifyServerName(input.name);
 
@@ -142,9 +155,10 @@ export async function createServer(userId: string, rawInput: CreateServerInput) 
     const slug = slugCandidate(baseSlug, attempt);
 
     try {
-      return await db.transaction((tx) =>
-        insertServerBundle(tx, userId, input, slug),
-      );
+      return await db.transaction(async (tx) => {
+        await assertEndpointAvailability(tx, input);
+        return insertServerBundle(tx, userId, input, slug);
+      });
     } catch (error) {
       if (
         databaseErrorCode(error) === "23505" &&
@@ -157,8 +171,7 @@ export async function createServer(userId: string, rawInput: CreateServerInput) 
 
       if (
         databaseErrorCode(error) === "23505" &&
-        databaseConstraint(error) ===
-          "server_endpoints_edition_host_port_key"
+        databaseConstraint(error) === "server_endpoints_verified_edition_host_port_key"
       ) {
         throw new DuplicateEndpointError();
       }
@@ -183,6 +196,7 @@ export async function updateServer(
       .select({
         id: servers.id,
         name: servers.name,
+        verificationStatus: servers.verificationStatus,
       })
       .from(servers)
       .where(eq(servers.id, serverId))
@@ -226,6 +240,7 @@ export async function updateServer(
 
     if (endpointsChanged) {
       await requireServerCapability(serverId, userId, "endpoint:edit", tx);
+      await assertEndpointAvailability(tx, input, serverId);
     }
 
     await tx
@@ -257,11 +272,20 @@ export async function updateServer(
     if (endpointsChanged) {
       await tx.delete(serverEndpoints).where(eq(serverEndpoints.serverId, serverId));
       for (const endpoint of input.endpoints) {
+        const current = currentEndpoints.find((item) => item.edition === endpoint.edition);
         await tx.insert(serverEndpoints).values({
           serverId,
           edition: endpoint.edition,
           host: endpoint.host,
           port: endpoint.port,
+          verificationStatus:
+            endpoint.edition === "java" &&
+            server.verificationStatus === "verified" &&
+            !javaChanged &&
+            current?.host === endpoint.host &&
+            current?.port === endpoint.port
+              ? "verified"
+              : "unverified",
         });
       }
     }

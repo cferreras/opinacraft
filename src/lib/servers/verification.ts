@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -192,16 +192,27 @@ export async function getVerificationDisplay(serverId: string, userId: string) {
   if (!verification) return null;
   const isActive = verification.status === "pending" && verification.expiresAt > new Date();
   let code: string | null = null;
+  let decryptionFailed = false;
   if (isActive) {
     try {
       code = decryptVerificationCode(verification.tokenCiphertext);
-    } catch (error) {
-      if (!(error instanceof VerificationConfigurationError)) throw error;
+    } catch {
+      decryptionFailed = true;
+      await db
+        .update(serverVerifications)
+        .set({ status: "superseded" })
+        .where(eq(serverVerifications.id, verification.id));
     }
   }
   return {
     id: verification.id,
-    status: isActive ? verification.status : verification.status === "pending" ? "expired" : verification.status,
+    status: decryptionFailed
+      ? "superseded"
+      : isActive
+        ? verification.status
+        : verification.status === "pending"
+          ? "expired"
+          : verification.status,
     attemptCount: verification.attemptCount,
     lastFailureCode: verification.lastFailureCode,
     lastAttemptAt: verification.lastAttemptAt,
@@ -278,13 +289,22 @@ export async function checkServerVerification(
       }
       throw new VerificationUnavailableError();
     }
-    return {
-      ...row,
-      code: decryptVerificationCode(row.tokenCiphertext),
-    };
+    try {
+      return {
+        ...row,
+        code: decryptVerificationCode(row.tokenCiphertext),
+      };
+    } catch {
+      await tx
+        .update(serverVerifications)
+        .set({ status: "superseded" })
+        .where(eq(serverVerifications.id, row.id));
+      return { unavailable: true as const };
+    }
   });
 
   if ("expired" in claimed) throw new VerificationExpiredError();
+  if ("unavailable" in claimed) throw new VerificationUnavailableError();
 
   let failure: VerificationFailureCode | null = null;
   let matches = false;
@@ -297,6 +317,12 @@ export async function checkServerVerification(
     matches = motdContainsCode(status.description, claimed.code);
     if (!matches) failure = "code_not_found";
   } catch (error) {
+    const knownError = error instanceof BlockedMinecraftTargetError
+      || error instanceof MinecraftResponseError
+      || error instanceof MinecraftTimeoutError
+      || error instanceof MinecraftDnsError
+      || error instanceof MinecraftOfflineError
+      || error instanceof VerificationConfigurationError;
     failure = error instanceof BlockedMinecraftTargetError
       ? "blocked_target"
       : error instanceof MinecraftResponseError
@@ -307,7 +333,10 @@ export async function checkServerVerification(
           ? "offline"
           : error instanceof VerificationConfigurationError
             ? "invalid_response"
-            : "timeout";
+            : "invalid_response";
+    if (!knownError) {
+      console.error("[verification:check] unmapped error", error instanceof Error ? error.name : "unknown");
+    }
   }
   console.info("[verification:check]", {
     serverId,
@@ -357,9 +386,37 @@ export async function checkServerVerification(
     }
 
     if (matches) {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`java:${claimed.endpointHost}:${claimed.endpointPort}`}))`,
+      );
+      const [endpointConflict] = await tx
+        .select({ serverId: servers.id })
+        .from(serverEndpoints)
+        .innerJoin(servers, eq(serverEndpoints.serverId, servers.id))
+        .where(
+          and(
+            eq(serverEndpoints.edition, "java"),
+            eq(serverEndpoints.host, claimed.endpointHost),
+            eq(serverEndpoints.port, claimed.endpointPort),
+            eq(servers.verificationStatus, "verified"),
+            ne(servers.id, serverId),
+          ),
+        )
+        .limit(1);
+      if (endpointConflict) return { result: "endpoint_taken" as const };
+
       const verifiedAt = new Date();
       await tx.update(serverVerifications).set({ status: "verified", verifiedAt, lastFailureCode: null }).where(eq(serverVerifications.id, claimed.id));
       await tx.update(servers).set({ verificationStatus: "verified", verifiedAt }).where(eq(servers.id, serverId));
+      await tx
+        .update(serverEndpoints)
+        .set({ verificationStatus: "verified" })
+        .where(
+          and(
+            eq(serverEndpoints.serverId, serverId),
+            eq(serverEndpoints.edition, "java"),
+          ),
+        );
       return { result: "verified" as const };
     }
 

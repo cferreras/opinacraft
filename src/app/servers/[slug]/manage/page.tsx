@@ -50,6 +50,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
         {query.verification === "timeout" ? <Notice tone="warning">The check timed out before the server responded.</Notice> : null}
         {query.verification === "blocked_target" ? <Notice tone="warning">This target is blocked because it is not a public server address.</Notice> : null}
         {query.verification === "invalid_response" ? <Notice tone="warning">The server returned an invalid status response.</Notice> : null}
+        {query.verification === "endpoint_taken" ? <Notice tone="warning">That endpoint is already verified by another server.</Notice> : null}
         {query.verification === "stale" ? <Notice tone="warning">That verification is no longer active. Generate a new code.</Notice> : null}
         {query.verification === "expired" ? <Notice tone="warning">The verification code has expired. Generate a new one.</Notice> : null}
         {query.verificationError ? <Notice tone="warning">Verification could not start or complete: {query.verificationError.replaceAll("-", " ")}.</Notice> : null}
