@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   description: "Discover Minecraft communities on Opinacraft.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function PublicServersPage() {
   const servers = await listPublishedServers();
 

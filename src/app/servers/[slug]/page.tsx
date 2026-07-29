@@ -9,6 +9,8 @@ type PublicServerPageProps = {
   params: Promise<{ slug: string }>;
 };
 
+export const dynamic = "force-dynamic";
+
 const getPublishedServer = cache(getPublishedServerBySlug);
 
 export async function generateMetadata({ params }: PublicServerPageProps): Promise<Metadata> {
