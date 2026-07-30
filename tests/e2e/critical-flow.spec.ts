@@ -10,10 +10,18 @@ test.afterAll(async () => {
 
   const pool = new Pool({ connectionString: testDatabaseUrl, max: 1 });
   try {
-    await pool.query(
-      'delete from servers where id in (select server_id from server_members where user_id = any($1::text[]))',
+    const userIdsResult = await pool.query(
+      'select id from "user" where email = any($1::text[])',
       [createdEmails],
     );
+    const userIds = userIdsResult.rows.map(row => row.id);
+
+    if (userIds.length > 0) {
+      await pool.query(
+        'delete from servers where id in (select server_id from server_members where user_id = any($1::text[]))',
+        [userIds],
+      );
+    }
     await pool.query('delete from "user" where email = any($1::text[])', [createdEmails]);
   } finally {
     await pool.end();
