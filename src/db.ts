@@ -39,5 +39,7 @@ export const db = drizzle({
 });
 
 export async function closeDatabase() {
-  await pool.end();
+  if (!globalForDb.opinacraftPool) return;
+  await globalForDb.opinacraftPool.end();
+  globalForDb.opinacraftPool = undefined;
 }

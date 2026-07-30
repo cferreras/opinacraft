@@ -5,9 +5,9 @@ import { defineConfig, devices } from "@playwright/test";
 const externalBaseUrl = process.env.E2E_BASE_URL;
 const baseURL = externalBaseUrl ?? "http://127.0.0.1:3000";
 
-if (!externalBaseUrl && !process.env.TEST_DATABASE_URL) {
+if (!process.env.TEST_DATABASE_URL) {
   throw new Error(
-    "Set TEST_DATABASE_URL before running local E2E tests. Use a dedicated test database, never Production.",
+    "Set TEST_DATABASE_URL before running E2E tests. Use a dedicated test database, never Production.",
   );
 }
 
