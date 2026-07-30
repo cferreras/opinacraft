@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "OpinaCraft",
   description: "Discover and share Minecraft communities.",
+  robots:
+    process.env.VERCEL_ENV === "preview"
+      ? { index: false, follow: false }
+      : undefined,
 };
 
 export default function RootLayout({

@@ -37,3 +37,7 @@ export const db = drizzle({
   client: pool,
   relations: { ...relations, ...authRelations },
 });
+
+export async function closeDatabase() {
+  await pool.end();
+}
