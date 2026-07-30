@@ -1,40 +1,117 @@
-This is the OpinaCraft Next.js application.
+# OpinaCraft
 
-## Getting Started
+OpinaCraft is a Next.js directory and management application for Minecraft communities.
 
-First, run the development server:
+## Requirements
+
+- Node.js 22 (`.node-version` is the source of truth).
+- pnpm 11.9.0.
+- A PostgreSQL database. Neon is the supported hosted provider.
+
+Check the local runtime before working:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+node --version
+pnpm --version
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm install --frozen-lockfile
+```
 
-## Environment
+Copy `.env.example` to `.env` and fill in environment-specific values. Never commit `.env` or production secrets.
 
-Use Neon’s pooled PostgreSQL URL as `DATABASE_URL` at runtime and Neon’s direct (non-pooled) URL as `DIRECT_DATABASE_URL` for Drizzle Kit. Set `BETTER_AUTH_SECRET` (at least 32 characters), `BETTER_AUTH_URL`, and a random `SERVER_VERIFICATION_SECRET` (at least 32 bytes) before enabling MOTD verification. Rotating the verification secret invalidates pending codes, so owners must generate new ones. `BETTER_AUTH_TRUSTED_ORIGINS` accepts a comma-separated list of allowed origins.
+```bash
+pnpm dev
+```
 
-The migration in `src/migrations/20260729101958_old_boomer` is generated but intentionally not applied by the application. Review it, back up the database, and run Drizzle Kit with `DIRECT_DATABASE_URL` during deployment. Neon recommends the direct endpoint for schema migrations because the pooled endpoint uses PgBouncer transaction pooling.
+The development server runs at `http://localhost:3000`.
 
-## Learn More
+## Environment and Neon
 
-To learn more about Next.js, take a look at the following resources:
+`DATABASE_URL` is the pooled Neon connection used by the application runtime.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`DIRECT_DATABASE_URL` is the direct, non-pooled Neon connection used only by Drizzle Kit. The migration configuration refuses to run when this variable is missing, so a pooled connection cannot be used accidentally for schema changes.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Inspect the database without changing it:
 
-## Deploy on Vercel
+```bash
+pnpm db:inspect
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Apply migrations manually, in order, using the direct URL:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm db:migrate
+```
+
+Migrations are not executed automatically during a Vercel build. Review the generated SQL, confirm the target database or Neon branch, and keep a recovery point when the provider makes one available before applying changes.
+
+The repository currently contains migrations for Better Auth, server management, Java MOTD verification, verified endpoint claims, removal of the residual `tests` table, and validation of the endpoint port constraint.
+
+## Tests
+
+Run the baseline checks:
+
+```bash
+pnpm lint
+pnpm test
+pnpm build
+git diff --check
+```
+
+Integration tests use PostgreSQL and require `TEST_DATABASE_URL`, which must point to a dedicated Neon test branch or database. They never use the application URLs and roll back or clean up their test data.
+
+```bash
+pnpm test:integration
+```
+
+Do not point `TEST_DATABASE_URL` at Production. Apply the current migrations to the dedicated test database with its direct connection before running the suite.
+
+The critical E2E flow uses Playwright and covers account creation, server creation, publication, public listing, public detail, and management. It also checks the controlled offline verification error using `offline.example.invalid`; it does not use Discord, real email, or a public Minecraft server.
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+Local E2E requires `TEST_DATABASE_URL`. To test an already deployed environment, set `E2E_BASE_URL` to the Preview URL and keep the test data isolated.
+
+## CI
+
+GitHub Actions runs for pull requests targeting `main` and pushes to `main`. The workflow pins Node 22, uses pnpm caching, installs with `--frozen-lockfile`, and runs lint, tests, and build with safe fictional build-time environment variables.
+
+Integration and E2E database credentials are not embedded in CI. If those suites are enabled in a separate workflow, provide a dedicated test database through GitHub Secrets.
+
+## Vercel deployment
+
+The Vercel build command is `pnpm build`. It must not run database migrations.
+
+For Preview:
+
+- associate the Preview deployment with the intended branch and Neon test/preview branch;
+- set `BETTER_AUTH_URL=https://preview.opinacraft.com`;
+- configure `DATABASE_URL` with the pooled Preview connection;
+- configure `DIRECT_DATABASE_URL` only for operator-run migrations;
+- configure `BETTER_AUTH_SECRET` and `SERVER_VERIFICATION_SECRET` with Preview-only secrets;
+- configure Discord OAuth callback URLs only if Discord is being tested;
+- verify authentication, server creation/publication, public detail, member management, and MOTD verification;
+- check function logs and confirm the Preview response has `noindex`.
+
+Typical Vercel CLI validation commands are:
+
+```bash
+vercel pull --environment=preview
+vercel build
+vercel deploy --prebuilt
+```
+
+For Production, use the Production environment values, run reviewed migrations separately against the Production direct connection, and then deploy the same build without adding migration commands to the build step.
+
+## Known limitations
+
+The following are intentionally deferred to the next product phase: tags, search, filters, reviews, votes, moderation, monitoring, images, Bedrock verification, invitations, server deletion, and ownership transfer.
+
+Email verification is represented in the Better Auth schema but does not yet have an application email/confirmation flow. Discord OAuth and Resend are optional integrations.

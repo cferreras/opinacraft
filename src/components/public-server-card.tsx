@@ -1,12 +1,7 @@
 import Link from "next/link";
 
 import type { PublicServer } from "@/lib/servers/queries";
-
-function formatEndpoint(endpoint: PublicServer["endpoints"][number]) {
-  const host = endpoint.host.includes(":") ? `[${endpoint.host}]` : endpoint.host;
-  const defaultPort = endpoint.edition === "java" ? 25_565 : 19_132;
-  return endpoint.port === defaultPort ? host : `${host}:${endpoint.port}`;
-}
+import { formatEndpoint } from "@/lib/servers/format";
 
 export function PublicServerCard({ server }: { server: PublicServer }) {
   return (
@@ -29,12 +24,15 @@ export function PublicServerCard({ server }: { server: PublicServer }) {
       ) : null}
       <div className="mt-4 flex flex-wrap gap-2">
         {server.endpoints.map((endpoint) => (
-          <code
+          <div
             key={endpoint.edition}
             className="rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
           >
-            {endpoint.edition}: {formatEndpoint(endpoint)}
-          </code>
+            <code>{endpoint.edition}: {formatEndpoint(endpoint)}</code>
+            <span className="ml-2 capitalize text-zinc-500">
+              {endpoint.verificationStatus === "verified" ? "verified" : "not verified"}
+            </span>
+          </div>
         ))}
       </div>
       <Link

@@ -9,6 +9,7 @@ const discordEnabled = Boolean(
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+  serverExternalPackages: ["minecraft-protocol"],
   env: {
     NEXT_PUBLIC_DISCORD_ENABLED: discordEnabled ? "true" : "false",
   },

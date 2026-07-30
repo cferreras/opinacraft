@@ -43,7 +43,10 @@ export const auth = betterAuth({
         try {
           await sendPasswordResetEmail({ to: user.email, url });
         } catch (error) {
-          console.error("Failed to send password reset email", error instanceof Error ? error.name : "unknown");
+          console.error(
+            "Failed to send password reset email",
+            error instanceof Error ? `${error.name}: ${error.message}` : "unknown",
+          );
         }
       });
     },

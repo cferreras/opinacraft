@@ -48,6 +48,10 @@ DECLARE
 BEGIN
   IF TG_TABLE_NAME = 'servers' THEN
     target_server_id := NEW.id;
+  ELSIF TG_OP = 'DELETE' THEN
+    target_server_id := OLD.server_id;
+  ELSIF TG_OP = 'INSERT' THEN
+    target_server_id := NEW.server_id;
   ELSE
     target_server_id := COALESCE(NEW.server_id, OLD.server_id);
   END IF;

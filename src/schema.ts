@@ -14,14 +14,8 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { serial, snakeCase } from "drizzle-orm/pg-core";
 
 import { user } from "./auth-schema";
-
-export const testsTable = snakeCase.table("tests", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-});
 
 export const serverPublicationStatus = pgEnum("server_publication_status", [
   "draft",

@@ -24,9 +24,9 @@ export async function sendPasswordResetEmail({
   const { error } = await resend.emails.send({
     from,
     to: [to],
-    subject: "Reset your Opinacraft password",
+    subject: "Reset your OpinaCraft password",
     text: `Reset your password using this link: ${url}`,
-    html: `<p>Reset your Opinacraft password by clicking the link below.</p><p><a href="${url}">Reset your password</a></p>`,
+    html: `<p>Reset your OpinaCraft password by clicking the link below.</p><p><a href="${url}">Reset your password</a></p>`,
   });
 
   if (error) {

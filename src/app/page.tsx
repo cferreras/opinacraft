@@ -5,7 +5,7 @@ export default function Home() {
     <main className="flex min-h-screen items-center justify-center bg-zinc-100 px-6 py-12 dark:bg-zinc-950">
       <section className="w-full max-w-3xl rounded-2xl bg-white p-10 shadow-xl shadow-zinc-200/60 dark:bg-zinc-900 dark:shadow-black/20 sm:p-14">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500">
-          Opinacraft
+          OpinaCraft
         </p>
         <h1 className="mt-5 max-w-2xl text-4xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-5xl">
           Discover Minecraft communities worth joining.

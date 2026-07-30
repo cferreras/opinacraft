@@ -32,12 +32,10 @@ function EndpointFields({
   edition,
   enabled,
   onEnabledChange,
-  error,
 }: {
   edition: "java" | "bedrock";
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
-  error?: string;
 }) {
   const defaults = edition === "java" ? { name: "Java", port: 25565 } : { name: "Bedrock", port: 19132 };
 
@@ -83,7 +81,6 @@ function EndpointFields({
           </label>
         </div>
       ) : null}
-      <FieldError message={error} />
     </fieldset>
   );
 }
@@ -167,14 +164,13 @@ export function ServerForm() {
           edition="java"
           enabled={javaEnabled}
           onEnabledChange={setJavaEnabled}
-          error={state?.fieldErrors?.endpoints}
         />
         <EndpointFields
           edition="bedrock"
           enabled={bedrockEnabled}
           onEnabledChange={setBedrockEnabled}
-          error={state?.fieldErrors?.endpoints}
         />
+        <FieldError message={state?.fieldErrors?.endpoints} />
         {!javaEnabled && !bedrockEnabled ? (
           <p className="text-sm text-red-700 dark:text-red-300">
             Select at least one Minecraft edition.

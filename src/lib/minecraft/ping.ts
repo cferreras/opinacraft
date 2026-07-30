@@ -1,12 +1,17 @@
 import net from "node:net";
 
-import minecraftProtocol, { type NewPingResult } from "minecraft-protocol";
+import type { NewPingResult } from "minecraft-protocol";
 
 import type { MinecraftTarget } from "@/lib/minecraft/network";
 
 const CONNECT_TIMEOUT_MS = 5_000;
 const MAX_RESPONSE_BYTES = 64 * 1024;
-const { ping } = minecraftProtocol;
+
+async function getMinecraftPing() {
+  const protocolModule = await import("minecraft-protocol");
+  const minecraftProtocol = protocolModule.default ?? protocolModule;
+  return minecraftProtocol.ping;
+}
 
 export class MinecraftOfflineError extends Error {
   constructor() {
@@ -60,6 +65,7 @@ export async function pingJavaServer(target: MinecraftTarget): Promise<NewPingRe
     }
   });
 
+  const ping = await getMinecraftPing();
   const promise = (ping(createMinecraftPingOptions(target, socket) as never) as Promise<NewPingResult>)
     .catch((error: unknown) => {
       if (error instanceof SyntaxError) throw new MinecraftResponseError();
@@ -77,6 +83,7 @@ export async function pingJavaServer(target: MinecraftTarget): Promise<NewPingRe
     if (tooLarge) throw new MinecraftResponseError();
     return result;
   } catch (error) {
+    if (tooLarge) throw new MinecraftResponseError();
     if (error instanceof MinecraftResponseError || error instanceof MinecraftOfflineError || error instanceof MinecraftTimeoutError) throw error;
     if (error instanceof Error && error.message === "ETIMEDOUT") throw new MinecraftTimeoutError();
     throw new MinecraftOfflineError();

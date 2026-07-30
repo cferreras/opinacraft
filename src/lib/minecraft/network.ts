@@ -1,8 +1,7 @@
 import dns from "node:dns/promises";
 import { isIP } from "node:net";
 
-import ipaddr from "ipaddr.js";
-
+import { isPublicAddress } from "./address.ts";
 import { isPublicHost, normalizeHost } from "../servers/validation.ts";
 
 const DNS_TIMEOUT_MS = 2_000;
@@ -26,27 +25,6 @@ export type MinecraftTarget = {
   connectHost: string;
   port: number;
 };
-
-function isPublicAddress(value: string) {
-  try {
-    let address = ipaddr.parse(value) as ipaddr.IPv4 | ipaddr.IPv6;
-    if (address.kind() === "ipv6") {
-      const ipv6 = address as ipaddr.IPv6;
-      if (ipv6.isIPv4MappedAddress()) {
-        address = ipv6.toIPv4Address();
-      }
-    }
-    if (address.kind() === "ipv4") {
-      const normalized = address.toString();
-      if (new Set(["168.63.129.16", "169.254.169.254", "100.100.100.200"]).has(normalized)) {
-        return false;
-      }
-    }
-    return address.range() === "unicast";
-  } catch {
-    return false;
-  }
-}
 
 async function withTimeout<T>(promise: Promise<T>) {
   let timer: ReturnType<typeof setTimeout> | undefined;
