@@ -30,7 +30,7 @@ export function ServerManageForm({
   );
   const java = server.endpoints.find((endpoint) => endpoint.edition === "java");
   const bedrock = server.endpoints.find((endpoint) => endpoint.edition === "bedrock");
-  const canEditIdentity = server.role !== "editor";
+  const canEditName = server.role !== "editor";
   const canEditEndpoints = server.role !== "editor";
   const canPublish = server.role === "owner";
 
@@ -40,8 +40,8 @@ export function ServerManageForm({
       <input type="hidden" name="slug" value={server.slug} />
       <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
         Name
-        {!canEditIdentity ? <input type="hidden" name="name" value={server.name} /> : null}
-        <input name="name" defaultValue={server.name} required minLength={3} maxLength={80} disabled={!canEditIdentity} className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950" />
+        {!canEditName ? <input type="hidden" name="name" value={server.name} /> : null}
+        <input name="name" defaultValue={server.name} required minLength={3} maxLength={80} disabled={!canEditName} className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950" />
         {state?.fieldErrors?.name ? <ErrorText>{state.fieldErrors.name}</ErrorText> : null}
       </label>
       <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">

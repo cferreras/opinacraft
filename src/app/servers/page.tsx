@@ -5,12 +5,22 @@ import { PublicServerCard } from "@/components/public-server-card";
 import { listPublishedServers } from "@/lib/servers/queries";
 
 export const metadata: Metadata = {
-  title: "Minecraft servers | Opinacraft",
-  description: "Discover Minecraft communities on Opinacraft.",
+  title: "Minecraft servers | OpinaCraft",
+  description: "Discover Minecraft communities on OpinaCraft.",
 };
 
-export default async function PublicServersPage() {
-  const servers = await listPublishedServers();
+export const dynamic = "force-dynamic";
+
+export default async function PublicServersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const query = await searchParams;
+  const requestedPage = Number.parseInt(query.page ?? "1", 10);
+  const { servers, hasNextPage, page } = await listPublishedServers({
+    page: Number.isFinite(requestedPage) ? requestedPage : 1,
+  });
 
   return (
     <main className="min-h-screen bg-zinc-100 px-6 py-12 dark:bg-zinc-950">
@@ -21,7 +31,7 @@ export default async function PublicServersPage() {
               href="/"
               className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
             >
-              Opinacraft
+              OpinaCraft
             </Link>
             <h1 className="mt-6 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-white">
               Minecraft servers
@@ -52,7 +62,7 @@ export default async function PublicServersPage() {
               No published servers yet
             </h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              Be the first to publish a Minecraft community on Opinacraft.
+              Be the first to publish a Minecraft community on OpinaCraft.
             </p>
             <Link
               href="/servers/new"
@@ -62,11 +72,31 @@ export default async function PublicServersPage() {
             </Link>
           </div>
         ) : (
-          <div className="mt-10 grid gap-4">
-            {servers.map((server) => (
-              <PublicServerCard key={server.id} server={server} />
-            ))}
-          </div>
+          <>
+            <div className="mt-10 grid gap-4">
+              {servers.map((server) => (
+                <PublicServerCard key={server.id} server={server} />
+              ))}
+            </div>
+            <nav className="mt-8 flex items-center justify-between" aria-label="Server pages">
+              {page > 1 ? (
+                <Link
+                  href={`/servers?page=${page - 1}`}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
+                >
+                  Previous
+                </Link>
+              ) : <span />}
+              {hasNextPage ? (
+                <Link
+                  href={`/servers?page=${page + 1}`}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
+                >
+                  Next
+                </Link>
+              ) : null}
+            </nav>
+          </>
         )}
       </section>
     </main>

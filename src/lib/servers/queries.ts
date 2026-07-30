@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -24,15 +24,24 @@ export type ManagedServer = {
     edition: "java" | "bedrock";
     host: string;
     port: number;
+    verificationStatus: "unverified" | "verified";
   }>;
 };
+
+export const PUBLIC_SERVER_PAGE_SIZE = 24;
+const MAX_PUBLIC_SERVER_PAGE = 10_000;
 
 export type PublicServer = Omit<ManagedServer, "role">;
 
 type ServerRow = {
   server: Omit<ManagedServer, "role" | "endpoints">;
   role?: ManagedServer["role"] | null;
-  endpoint: { edition: ManagedServer["endpoints"][number]["edition"]; host: string; port: number } | null;
+  endpoint: {
+    edition: ManagedServer["endpoints"][number]["edition"];
+    host: string;
+    port: number;
+    verificationStatus: ManagedServer["endpoints"][number]["verificationStatus"];
+  } | null;
 };
 
 type ManagedServerRow = ServerRow & { role: ManagedServer["role"] };
@@ -87,6 +96,7 @@ export async function listManagedServers(userId: string) {
         edition: serverEndpoints.edition,
         host: serverEndpoints.host,
         port: serverEndpoints.port,
+        verificationStatus: serverEndpoints.verificationStatus,
       },
     })
     .from(serverMembers)
@@ -98,7 +108,23 @@ export async function listManagedServers(userId: string) {
   return groupServerRows(rows);
 }
 
-export async function listPublishedServers(): Promise<PublicServer[]> {
+export async function listPublishedServers({ page = 1 }: { page?: number } = {}) {
+  const safePage = Number.isSafeInteger(page) && page > 0
+    ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
+    : 1;
+  const serverIds = await db
+    .select({ id: servers.id })
+    .from(servers)
+    .where(eq(servers.publicationStatus, "published"))
+    .orderBy(desc(servers.createdAt), desc(servers.id))
+    .limit(PUBLIC_SERVER_PAGE_SIZE + 1)
+    .offset((safePage - 1) * PUBLIC_SERVER_PAGE_SIZE);
+  const hasNextPage = serverIds.length > PUBLIC_SERVER_PAGE_SIZE;
+  const ids = serverIds.slice(0, PUBLIC_SERVER_PAGE_SIZE).map(({ id }) => id);
+  if (ids.length === 0) {
+    return { servers: [], hasNextPage: false, page: safePage };
+  }
+
   const rows = await db
     .select({
       server: {
@@ -117,14 +143,15 @@ export async function listPublishedServers(): Promise<PublicServer[]> {
         edition: serverEndpoints.edition,
         host: serverEndpoints.host,
         port: serverEndpoints.port,
+        verificationStatus: serverEndpoints.verificationStatus,
       },
     })
     .from(servers)
     .leftJoin(serverEndpoints, eq(serverEndpoints.serverId, servers.id))
-    .where(eq(servers.publicationStatus, "published"))
-    .orderBy(desc(servers.createdAt), asc(serverEndpoints.edition));
+    .where(inArray(servers.id, ids))
+    .orderBy(desc(servers.createdAt), desc(servers.id), asc(serverEndpoints.edition));
 
-  return groupServerRows(rows);
+  return { servers: groupServerRows(rows), hasNextPage, page: safePage };
 }
 
 export async function getPublishedServerBySlug(slug: string) {
@@ -146,6 +173,7 @@ export async function getPublishedServerBySlug(slug: string) {
         edition: serverEndpoints.edition,
         host: serverEndpoints.host,
         port: serverEndpoints.port,
+        verificationStatus: serverEndpoints.verificationStatus,
       },
     })
     .from(servers)
@@ -191,6 +219,7 @@ export async function getManagedServerBySlug(slug: string, userId: string) {
         edition: serverEndpoints.edition,
         host: serverEndpoints.host,
         port: serverEndpoints.port,
+        verificationStatus: serverEndpoints.verificationStatus,
       })
       .from(serverEndpoints)
       .where(eq(serverEndpoints.serverId, server.id))

@@ -1,8 +1,9 @@
 import { isIP } from "node:net";
 import { domainToASCII } from "node:url";
-import ipaddr from "ipaddr.js";
 
 import * as z from "zod";
+
+import { isPublicAddress } from "../minecraft/address.ts";
 
 export const minecraftEditions = ["java", "bedrock"] as const;
 export type MinecraftEdition = (typeof minecraftEditions)[number];
@@ -142,11 +143,7 @@ export function isPublicHost(value: string) {
   const ipVersion = isIP(candidate);
 
   if (ipVersion !== 0) {
-    try {
-      return ipaddr.parse(candidate).range() === "unicast";
-    } catch {
-      return false;
-    }
+    return isPublicAddress(candidate);
   }
 
   const hostname = candidate.toLowerCase();

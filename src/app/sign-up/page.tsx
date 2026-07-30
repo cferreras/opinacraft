@@ -59,7 +59,7 @@ export default function SignUpPage() {
   return (
     <AuthShell
       title="Create your account"
-      description="Start building your Opinacraft workspace today."
+      description="Start building your OpinaCraft workspace today."
       footer={
         <>
           Already have an account?{" "}

@@ -7,10 +7,18 @@ import { serverEnv } from "./env/server";
 import { relations } from "./relations";
 
 function secureConnectionString(connectionString: string) {
-  return connectionString.replace(
-    /([?&]sslmode=)(prefer|require|verify-ca)(?=(&|$))/i,
-    "$1verify-full",
-  );
+  if (/[?&]sslmode=/i.test(connectionString)) {
+    return connectionString.replace(
+      /([?&]sslmode=)(prefer|require|verify-ca)(?=(&|$))/i,
+      "$1verify-full",
+    );
+  }
+  const separator = connectionString.includes("?")
+    ? connectionString.endsWith("?") || connectionString.endsWith("&")
+      ? ""
+      : "&"
+    : "?";
+  return `${connectionString}${separator}sslmode=verify-full`;
 }
 
 const globalForDb = globalThis as typeof globalThis & { opinacraftPool?: Pool };

@@ -67,7 +67,7 @@ export default function ProfilePage() {
           href="/"
           className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
         >
-          Opinacraft
+          OpinaCraft
         </Link>
 
         <div className="mt-8 flex justify-center">

@@ -22,7 +22,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 Use Neon’s pooled PostgreSQL URL as `DATABASE_URL` at runtime and Neon’s direct (non-pooled) URL as `DIRECT_DATABASE_URL` for Drizzle Kit. Set `BETTER_AUTH_SECRET` (at least 32 characters), `BETTER_AUTH_URL`, and a random `SERVER_VERIFICATION_SECRET` (at least 32 bytes) before enabling MOTD verification. Rotating the verification secret invalidates pending codes, so owners must generate new ones. `BETTER_AUTH_TRUSTED_ORIGINS` accepts a comma-separated list of allowed origins.
 
-The migration in `src/migrations/20260729101958_old_boomer` is generated but intentionally not applied by the application. Review it, back up the database, and run Drizzle Kit with `DIRECT_DATABASE_URL` during deployment. Neon recommends the direct endpoint for schema migrations because the pooled endpoint uses PgBouncer transaction pooling.
+The migration in `src/migrations/20260729101958_old_boomer` is generated but intentionally not applied by the application. Review it, back up the database, and run Drizzle Kit separately with `DIRECT_DATABASE_URL` before deploying. The Vercel build command must remain `pnpm build`; do not prepend `pnpm exec drizzle-kit migrate` to it. Neon recommends the direct endpoint for schema migrations because the pooled endpoint uses PgBouncer transaction pooling.
 
 ## Learn More
 
