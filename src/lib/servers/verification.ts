@@ -24,7 +24,6 @@ import {
   encryptVerificationCode,
   generateVerificationCode,
   hashVerificationCode,
-  VerificationConfigurationError,
 } from "@/lib/servers/verification-crypto";
 
 const VERIFICATION_TTL_MS = 30 * 60 * 1000;
@@ -317,24 +316,14 @@ export async function checkServerVerification(
     matches = motdContainsCode(status.description, claimed.code);
     if (!matches) failure = "code_not_found";
   } catch (error) {
-    const knownError = error instanceof BlockedMinecraftTargetError
-      || error instanceof MinecraftResponseError
-      || error instanceof MinecraftTimeoutError
-      || error instanceof MinecraftDnsError
-      || error instanceof MinecraftOfflineError
-      || error instanceof VerificationConfigurationError;
-    failure = error instanceof BlockedMinecraftTargetError
-      ? "blocked_target"
-      : error instanceof MinecraftResponseError
-        ? "invalid_response"
-      : error instanceof MinecraftTimeoutError
-        ? "timeout"
-        : error instanceof MinecraftDnsError || error instanceof MinecraftOfflineError
-          ? "offline"
-          : error instanceof VerificationConfigurationError
-            ? "invalid_response"
-            : "invalid_response";
-    if (!knownError) {
+    const mappedFailure = [
+      [error instanceof BlockedMinecraftTargetError, "blocked_target"],
+      [error instanceof MinecraftResponseError, "invalid_response"],
+      [error instanceof MinecraftTimeoutError, "timeout"],
+      [error instanceof MinecraftDnsError || error instanceof MinecraftOfflineError, "offline"],
+    ].find(([matched]) => matched)?.[1] as VerificationFailureCode | undefined;
+    failure = mappedFailure ?? "invalid_response";
+    if (!mappedFailure) {
       console.error("[verification:check] unmapped error", error instanceof Error ? error.name : "unknown");
     }
   }
@@ -398,7 +387,7 @@ export async function checkServerVerification(
             eq(serverEndpoints.edition, "java"),
             eq(serverEndpoints.host, claimed.endpointHost),
             eq(serverEndpoints.port, claimed.endpointPort),
-            eq(servers.verificationStatus, "verified"),
+            eq(serverEndpoints.verificationStatus, "verified"),
             ne(servers.id, serverId),
           ),
         )

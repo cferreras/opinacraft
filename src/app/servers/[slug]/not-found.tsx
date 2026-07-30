@@ -5,7 +5,7 @@ export default function ServerNotFound() {
     <main className="flex min-h-screen items-center justify-center bg-zinc-100 px-6 dark:bg-zinc-950">
       <section className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl dark:bg-zinc-900">
         <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
-          Opinacraft
+          OpinaCraft
         </p>
         <h1 className="mt-4 text-2xl font-semibold text-zinc-950 dark:text-white">
           Server not found

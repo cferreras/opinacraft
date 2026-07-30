@@ -64,7 +64,7 @@ function ResetPasswordForm() {
   return (
     <AuthShell
       title="Choose a new password"
-      description="Set a new password for your Opinacraft account."
+      description="Set a new password for your OpinaCraft account."
       footer={
         <Link
           href="/sign-in"

@@ -17,7 +17,7 @@ export default async function ManagedServersPage() {
               href="/"
               className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
             >
-              Opinacraft
+              OpinaCraft
             </Link>
             <h1 className="mt-6 text-3xl font-semibold tracking-tight text-zinc-950 dark:text-white">
               Managed servers
@@ -48,7 +48,7 @@ export default async function ManagedServersPage() {
               No servers yet
             </h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              Add your first Minecraft community to create its public Opinacraft page.
+              Add your first Minecraft community to create its public OpinaCraft page.
             </p>
             <Link
               href="/servers/new"

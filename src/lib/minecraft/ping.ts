@@ -83,6 +83,7 @@ export async function pingJavaServer(target: MinecraftTarget): Promise<NewPingRe
     if (tooLarge) throw new MinecraftResponseError();
     return result;
   } catch (error) {
+    if (tooLarge) throw new MinecraftResponseError();
     if (error instanceof MinecraftResponseError || error instanceof MinecraftOfflineError || error instanceof MinecraftTimeoutError) throw error;
     if (error instanceof Error && error.message === "ETIMEDOUT") throw new MinecraftTimeoutError();
     throw new MinecraftOfflineError();

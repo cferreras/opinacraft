@@ -18,6 +18,7 @@ import {
   type NormalizedCreateServerInput,
 } from "@/lib/servers/validation";
 import { requireServerCapability } from "@/lib/servers/permissions";
+import { databaseConstraint, databaseErrorCode } from "@/lib/db-errors";
 
 const RESERVED_SLUGS = new Set(["new"]);
 const MAX_SLUG_ATTEMPTS = 8;
@@ -44,36 +45,6 @@ export class ServerNotFoundError extends Error {
   }
 }
 
-function databaseErrorCode(error: unknown) {
-  if (!error || typeof error !== "object") {
-    return undefined;
-  }
-
-  const candidate = error as { code?: unknown; cause?: { code?: unknown } };
-  return typeof candidate.code === "string"
-    ? candidate.code
-    : typeof candidate.cause?.code === "string"
-      ? candidate.cause.code
-      : undefined;
-}
-
-function databaseConstraint(error: unknown) {
-  if (!error || typeof error !== "object") {
-    return undefined;
-  }
-
-  const candidate = error as {
-    constraint?: unknown;
-    cause?: { constraint?: unknown };
-  };
-
-  return typeof candidate.constraint === "string"
-    ? candidate.constraint
-    : typeof candidate.cause?.constraint === "string"
-      ? candidate.cause.constraint
-      : undefined;
-}
-
 function slugCandidate(base: string, attempt: number) {
   const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`;
   return RESERVED_SLUGS.has(candidate) ? `${candidate}-server` : candidate;
@@ -90,7 +61,10 @@ async function assertEndpointAvailability(
   input: NormalizedCreateServerInput,
   excludedServerId?: string,
 ) {
-  for (const endpoint of input.endpoints) {
+  const endpoints = [...input.endpoints].sort((a, b) =>
+    `${a.edition}:${a.host}:${a.port}`.localeCompare(`${b.edition}:${b.host}:${b.port}`),
+  );
+  for (const endpoint of endpoints) {
     await lockEndpoint(tx, endpoint);
     const [existing] = await tx
       .select({ serverId: serverEndpoints.serverId })
@@ -101,7 +75,7 @@ async function assertEndpointAvailability(
           eq(serverEndpoints.edition, endpoint.edition),
           eq(serverEndpoints.host, endpoint.host),
           eq(serverEndpoints.port, endpoint.port),
-          eq(servers.verificationStatus, "verified"),
+          eq(serverEndpoints.verificationStatus, "verified"),
           ...(excludedServerId ? [ne(servers.id, excludedServerId)] : []),
         ),
       )
@@ -219,7 +193,12 @@ export async function updateServer(
     }
 
     const currentEndpoints = await tx
-      .select({ edition: serverEndpoints.edition, host: serverEndpoints.host, port: serverEndpoints.port })
+      .select({
+        edition: serverEndpoints.edition,
+        host: serverEndpoints.host,
+        port: serverEndpoints.port,
+        verificationStatus: serverEndpoints.verificationStatus,
+      })
       .from(serverEndpoints)
       .where(eq(serverEndpoints.serverId, serverId));
 
@@ -280,7 +259,7 @@ export async function updateServer(
           port: endpoint.port,
           verificationStatus:
             endpoint.edition === "java" &&
-            server.verificationStatus === "verified" &&
+            current?.verificationStatus === "verified" &&
             !javaChanged &&
             current?.host === endpoint.host &&
             current?.port === endpoint.port

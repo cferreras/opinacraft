@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { getPublishedServerBySlug } from "@/lib/servers/queries";
+import { formatEndpoint } from "@/lib/servers/format";
 
 type PublicServerPageProps = {
   params: Promise<{ slug: string }>;
@@ -19,10 +20,10 @@ export async function generateMetadata({ params }: PublicServerPageProps): Promi
 
   return server
     ? {
-        title: `${server.name} | Opinacraft`,
-        description: server.description ?? `Discover ${server.name} on Opinacraft.`,
+        title: `${server.name} | OpinaCraft`,
+        description: server.description ?? `Discover ${server.name} on OpinaCraft.`,
       }
-    : { title: "Server not found | Opinacraft" };
+    : { title: "Server not found | OpinaCraft" };
 }
 
 export default async function PublicServerPage({
@@ -42,7 +43,7 @@ export default async function PublicServerPage({
           href="/"
           className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
         >
-          Opinacraft
+          OpinaCraft
         </Link>
         <Link
           href="/servers"
@@ -83,6 +84,9 @@ export default async function PublicServerPage({
                 <code className="text-sm text-zinc-950 dark:text-white">
                   {formatEndpoint(endpoint)}
                 </code>
+                <span className="text-xs capitalize text-zinc-500">
+                  {endpoint.verificationStatus === "verified" ? "verified" : "not verified"}
+                </span>
               </div>
             ))}
           </div>
@@ -114,15 +118,9 @@ export default async function PublicServerPage({
         ) : null}
 
         <p className="mt-10 text-xs text-zinc-500">
-          Listed on Opinacraft on {server.createdAt.toLocaleDateString("en-US")}.
+          Listed on OpinaCraft on {server.createdAt.toLocaleDateString("en-US")}.
         </p>
       </article>
     </main>
   );
-}
-
-function formatEndpoint(endpoint: { edition: "java" | "bedrock"; host: string; port: number }) {
-  const host = endpoint.host.includes(":") ? `[${endpoint.host}]` : endpoint.host;
-  const defaultPort = endpoint.edition === "java" ? 25_565 : 19_132;
-  return endpoint.port === defaultPort ? host : `${host}:${endpoint.port}`;
 }

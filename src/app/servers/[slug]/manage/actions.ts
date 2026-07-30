@@ -27,6 +27,7 @@ import {
   VerificationUnavailableError,
 } from "@/lib/servers/verification";
 import { ServerPermissionError } from "@/lib/servers/permissions";
+import { databaseConstraint, databaseErrorCode } from "@/lib/db-errors";
 import {
   minecraftEditions,
   ServerInputError,
@@ -142,6 +143,7 @@ export async function addMemberAction(formData: FormData) {
     const reason =
       error instanceof DuplicateMemberError ? "duplicate" :
       error instanceof MemberNotFoundError ? "not-found" :
+      error instanceof ServerNotFoundError ? "server-not-found" :
       error instanceof ServerPermissionError ? "forbidden" : "unknown";
     if (reason === "unknown") console.error("Failed to add server member", error);
     redirect(`/servers/${slug}/manage?memberError=${reason}`);
@@ -163,8 +165,8 @@ export async function changeMemberRoleAction(formData: FormData) {
   try {
     await changeServerMemberRole(serverId, session.user.id, targetUserId, role.data);
   } catch (error) {
-    const reason = error instanceof OwnerMembershipError ? "owner" : error instanceof MemberNotFoundError ? "not-found" : "forbidden";
-    if (reason === "forbidden" && !(error instanceof ServerPermissionError)) console.error("Failed to change server member role", error);
+    const reason = error instanceof OwnerMembershipError ? "owner" : error instanceof MemberNotFoundError ? "not-found" : error instanceof ServerNotFoundError ? "server-not-found" : error instanceof ServerPermissionError ? "forbidden" : "unknown";
+    if (reason === "unknown") console.error("Failed to change server member role", error);
     redirect(`/servers/${slug}/manage?memberError=${reason}`);
   }
   revalidatePath(`/servers/${slug}/manage`);
@@ -180,8 +182,8 @@ export async function removeMemberAction(formData: FormData) {
   try {
     await removeServerMember(serverId, session.user.id, targetUserId);
   } catch (error) {
-    const reason = error instanceof OwnerMembershipError ? "owner" : error instanceof MemberNotFoundError ? "not-found" : "forbidden";
-    if (reason === "forbidden" && !(error instanceof ServerPermissionError)) console.error("Failed to remove server member", error);
+    const reason = error instanceof OwnerMembershipError ? "owner" : error instanceof MemberNotFoundError ? "not-found" : error instanceof ServerNotFoundError ? "server-not-found" : error instanceof ServerPermissionError ? "forbidden" : "unknown";
+    if (reason === "unknown") console.error("Failed to remove server member", error);
     redirect(`/servers/${slug}/manage?memberError=${reason}`);
   }
   revalidatePath(`/servers/${slug}/manage`);
@@ -234,24 +236,4 @@ export async function checkVerificationAction(formData: FormData) {
     revalidatePath(`/servers/${slug}`);
   }
   redirect(`/servers/${slug}/manage?verification=${result.result}`);
-}
-
-function databaseErrorCode(error: unknown) {
-  if (!error || typeof error !== "object") return undefined;
-  const candidate = error as { code?: unknown; cause?: { code?: unknown } };
-  return typeof candidate.code === "string"
-    ? candidate.code
-    : typeof candidate.cause?.code === "string"
-      ? candidate.cause.code
-      : undefined;
-}
-
-function databaseConstraint(error: unknown) {
-  if (!error || typeof error !== "object") return undefined;
-  const candidate = error as { constraint?: unknown; cause?: { constraint?: unknown } };
-  return typeof candidate.constraint === "string"
-    ? candidate.constraint
-    : typeof candidate.cause?.constraint === "string"
-      ? candidate.cause.constraint
-      : undefined;
 }

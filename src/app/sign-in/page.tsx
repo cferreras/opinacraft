@@ -53,7 +53,7 @@ export default function SignInPage() {
   return (
     <AuthShell
       title="Welcome back"
-      description="Sign in to continue to your Opinacraft account."
+      description="Sign in to continue to your OpinaCraft account."
       footer={
         <>
           Don&apos;t have an account?{" "}

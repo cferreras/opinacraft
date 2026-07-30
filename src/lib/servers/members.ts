@@ -6,6 +6,8 @@ import { serverMembers, servers } from "@/schema";
 import {
   requireServerCapability,
 } from "@/lib/servers/permissions";
+import { ServerNotFoundError } from "@/lib/servers/service";
+import { databaseErrorCode } from "@/lib/db-errors";
 
 export class MemberNotFoundError extends Error {
   constructor() {
@@ -169,15 +171,5 @@ async function lockServer(tx: Pick<typeof db, "select">, serverId: string) {
     .where(eq(servers.id, serverId))
     .for("update")
     .limit(1);
-  if (!server) throw new MemberNotFoundError();
-}
-
-function databaseErrorCode(error: unknown) {
-  if (!error || typeof error !== "object") return undefined;
-  const candidate = error as { code?: unknown; cause?: { code?: unknown } };
-  return typeof candidate.code === "string"
-    ? candidate.code
-    : typeof candidate.cause?.code === "string"
-      ? candidate.cause.code
-      : undefined;
+  if (!server) throw new ServerNotFoundError();
 }
