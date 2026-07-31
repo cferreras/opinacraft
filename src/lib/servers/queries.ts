@@ -210,7 +210,7 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
       eq(servers.verificationStatus, "verified"),
       isNull(servers.availabilityHiddenAt),
       query.trim() ? sql`(${ilike(servers.name, `%${query.trim().slice(0, 80)}%`)} or ${ilike(servers.description, `%${query.trim().slice(0, 80)}%`)} or similarity(lower(${servers.name}), lower(${query.trim().slice(0, 80)})) > 0.2 or similarity(lower(coalesce(${servers.description}, '')), lower(${query.trim().slice(0, 80)})) > 0.2 or exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.status = 'active' and (t.slug like ${`%${query.trim().slice(0, 80).toLowerCase()}%`} or similarity(lower(t.slug), lower(${query.trim().slice(0, 80)})) > 0.2)))` : undefined,
-      edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition})` : undefined,
+      edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition} and se.verification_status = 'verified')` : undefined,
       sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
       ...tagSlugs.slice(0, 8).map((slug) => sql`exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.slug = ${slug} and t.status = 'active')`),
       status ? sql`case when exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified' and se.health_status = 'online' and se.last_checked_at > now() - interval '30 minutes') then 'online' when not exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified' and (se.last_checked_at is null or se.last_checked_at <= now() - interval '30 minutes' or se.health_status <> 'offline')) then 'offline' else 'unknown' end = ${status}` : undefined,
@@ -261,7 +261,11 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
     .where(and(inArray(servers.id, ids), eq(servers.moderationStatus, "active"), eq(serverEndpoints.verificationStatus, "verified")))
     .orderBy(desc(servers.createdAt), desc(servers.id), asc(serverEndpoints.edition));
 
-  return { servers: await attachCatalogData(groupServerRows(rows)), hasNextPage, page: safePage };
+  const rank = new Map(ids.map((id, index) => [id, index]));
+  const orderedServers = groupServerRows(rows).sort(
+    (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
+  );
+  return { servers: await attachCatalogData(orderedServers), hasNextPage, page: safePage };
 }
 
 export async function getPublishedServerBySlug(slug: string) {

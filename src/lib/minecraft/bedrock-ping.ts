@@ -42,7 +42,12 @@ export async function pingBedrockServer(target: MinecraftTarget): Promise<Bedroc
     socket.once("error", () => finish(new BedrockOfflineError()));
     socket.on("message", (message) => {
       if (message.length > MAX_RESPONSE_BYTES) return finish(new BedrockOfflineError("Respuesta Bedrock demasiado grande."));
-      if (message.length < 35 || message[0] !== 0x1c || !message.subarray(17, 33).equals(MAGIC)) return;
+      if (
+        message.length < 35 ||
+        message[0] !== 0x1c ||
+        message.readBigInt64BE(1) !== timestamp ||
+        !message.subarray(17, 33).equals(MAGIC)
+      ) return;
       const payloadLength = message.readUInt16BE(33);
       if (payloadLength <= 0 || 35 + payloadLength > message.length) return finish(new BedrockOfflineError("Respuesta Bedrock inválida."));
       const fields = message.subarray(35, 35 + payloadLength).toString("utf8").split(";");

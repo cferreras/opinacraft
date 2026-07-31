@@ -121,7 +121,7 @@ export class NoBedrockEndpointError extends Error {
 export async function startServerVerification(serverId: string, userId: string, edition: "java" | "bedrock" = "java") {
   for (let tokenAttempt = 0; tokenAttempt < 3; tokenAttempt += 1) {
     try {
-      return await db.transaction(async (tx) => {
+      const result = await db.transaction(async (tx) => {
     const [server] = await tx
       .select({ id: servers.id })
       .from(servers)
@@ -146,7 +146,7 @@ export async function startServerVerification(serverId: string, userId: string, 
     if (endpoint.verificationStatus === "verified") {
       await tx
         .update(serverVerifications)
-        .set({ status: "superseded", lastFailureCode: "endpoint_changed" })
+        .set({ status: "superseded" })
         .where(
           and(
             eq(serverVerifications.serverId, serverId),
@@ -154,7 +154,7 @@ export async function startServerVerification(serverId: string, userId: string, 
             eq(serverVerifications.status, "pending"),
           ),
         );
-      throw new EndpointAlreadyVerifiedError();
+      return { alreadyVerified: true as const };
     }
 
     const now = new Date();
@@ -225,6 +225,8 @@ export async function startServerVerification(serverId: string, userId: string, 
 
     return { id: verification!.id, code, expiresAt: verification!.expiresAt };
       });
+      if ("alreadyVerified" in result) throw new EndpointAlreadyVerifiedError();
+      return result;
     } catch (error) {
       if (isTokenHashCollision(error) && tokenAttempt < 2) continue;
       throw error;
@@ -286,7 +288,6 @@ export async function checkServerVerification(
   verificationId: string,
   serverId: string,
   userId: string,
-  edition: "java" | "bedrock" = "java",
 ) {
   const claimed = await db.transaction(async (tx) => {
     await requireServerCapability(serverId, userId, "verification:manage", tx);
@@ -412,7 +413,7 @@ export async function checkServerVerification(
     const [currentEndpoint] = await tx
       .select({ host: serverEndpoints.host, port: serverEndpoints.port })
       .from(serverEndpoints)
-      .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.edition, edition)))
+      .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.edition, claimed.edition)))
       .limit(1);
     const [current] = await tx
       .select({
@@ -442,7 +443,7 @@ export async function checkServerVerification(
 
     if (matches) {
       await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtext(${`java:${claimed.endpointHost}:${claimed.endpointPort}`}))`,
+        sql`select pg_advisory_xact_lock(hashtext(${`${claimed.edition}:${claimed.endpointHost}:${claimed.endpointPort}`}))`,
       );
       const [endpointConflict] = await tx
         .select({ serverId: servers.id })
@@ -450,7 +451,7 @@ export async function checkServerVerification(
         .innerJoin(servers, eq(serverEndpoints.serverId, servers.id))
         .where(
           and(
-            eq(serverEndpoints.edition, edition),
+            eq(serverEndpoints.edition, claimed.edition),
             eq(serverEndpoints.host, claimed.endpointHost),
             eq(serverEndpoints.port, claimed.endpointPort),
             eq(serverEndpoints.verificationStatus, "verified"),
@@ -469,7 +470,7 @@ export async function checkServerVerification(
         .where(
           and(
             eq(serverEndpoints.serverId, serverId),
-            eq(serverEndpoints.edition, edition),
+            eq(serverEndpoints.edition, claimed.edition),
           ),
         );
       return { result: "verified" as const };

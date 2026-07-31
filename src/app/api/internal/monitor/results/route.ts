@@ -1,12 +1,30 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq } from "drizzle-orm";
+import * as z from "zod";
 import { NextResponse } from "next/server";
 
 import { db } from "@/db";
-import { serverEndpoints, monitorRuns } from "@/schema";
+import { monitorRuns, notificationJobs, serverEndpoints, serverMembers } from "@/schema";
+import { user } from "@/auth-schema";
 import { serverEnv } from "@/env/server";
 
 export const runtime = "nodejs";
+
+const resultSchema = z.object({
+  serverId: z.string().uuid(),
+  edition: z.literal("bedrock"),
+  online: z.boolean(),
+  playersCurrent: z.number().int().nonnegative().nullable().optional(),
+  playersMax: z.number().int().nonnegative().nullable().optional(),
+  version: z.string().max(100).nullable().optional(),
+  latencyMs: z.number().int().nonnegative().nullable().optional(),
+});
+
+const payloadSchema = z.object({
+  runId: z.string().min(1).max(100),
+  nonce: z.string().min(1).max(128),
+  results: z.array(resultSchema).max(200),
+});
 
 export async function POST(request: Request) {
   const secret = serverEnv.MONITOR_SECRET;
@@ -15,14 +33,61 @@ export async function POST(request: Request) {
   if (!secret || !signature) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const expected = createHmac("sha256", secret).update(raw).digest("hex");
   if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-  const body = JSON.parse(raw) as { runId?: string; nonce?: string; results?: Array<{ serverId: string; edition: "java" | "bedrock"; online: boolean; playersCurrent?: number; playersMax?: number; version?: string; latencyMs?: number }> };
-  if (!body.runId || !body.nonce || !Array.isArray(body.results)) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  const results = body.results;
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(raw);
+  } catch {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+  const parsed = payloadSchema.safeParse(parsedBody);
+  if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  const body = parsed.data;
   const [run] = await db.select().from(monitorRuns).where(and(eq(monitorRuns.runId, body.runId), eq(monitorRuns.nonce, body.nonce))).limit(1);
   if (!run || run.status !== "pending" || run.expiresAt <= new Date()) return NextResponse.json({ error: "Expired run" }, { status: 409 });
+  const dispatched = new Set(run.fallbackEndpoints.map((endpoint) => `${endpoint.serverId}:${endpoint.edition}`));
+  if (body.results.some((result) => !dispatched.has(`${result.serverId}:${result.edition}`))) {
+    return NextResponse.json({ error: "Result is not part of this monitor run." }, { status: 400 });
+  }
   await db.transaction(async (tx) => {
-    for (const result of results.slice(0, 200)) await tx.update(serverEndpoints).set({ healthStatus: result.online ? "online" : "offline", playersCurrent: result.playersCurrent ?? null, playersMax: result.playersMax ?? null, version: result.version?.slice(0, 100) ?? null, latencyMs: result.latencyMs ?? null, lastCheckedAt: new Date(), lastOnlineAt: result.online ? new Date() : undefined, consecutiveFailures: result.online ? 0 : 3 }).where(and(eq(serverEndpoints.serverId, result.serverId), eq(serverEndpoints.edition, result.edition)));
+    for (const result of body.results) {
+      const [current] = await tx
+        .select({ healthStatus: serverEndpoints.healthStatus, consecutiveFailures: serverEndpoints.consecutiveFailures })
+        .from(serverEndpoints)
+        .where(and(eq(serverEndpoints.serverId, result.serverId), eq(serverEndpoints.edition, result.edition), eq(serverEndpoints.verificationStatus, "verified")))
+        .for("update")
+        .limit(1);
+      if (!current) continue;
+      const now = new Date();
+      const failures = result.online ? 0 : current.consecutiveFailures + 1;
+      const nextHealth = result.online ? "online" : failures >= 3 ? "offline" : current.healthStatus;
+      await tx
+        .update(serverEndpoints)
+        .set({ healthStatus: nextHealth, playersCurrent: result.playersCurrent ?? null, playersMax: result.playersMax ?? null, version: result.version ?? null, latencyMs: result.latencyMs ?? null, lastCheckedAt: now, lastOnlineAt: result.online ? now : undefined, consecutiveFailures: failures })
+        .where(and(eq(serverEndpoints.serverId, result.serverId), eq(serverEndpoints.edition, result.edition)));
+      const transition = result.online && current.healthStatus === "offline"
+        ? "recovered"
+        : !result.online && failures >= 3 && current.healthStatus !== "offline"
+          ? "down"
+          : null;
+      if (transition) {
+        const [owner] = await tx
+          .select({ userId: serverMembers.userId, email: user.email })
+          .from(serverMembers)
+          .innerJoin(user, eq(serverMembers.userId, user.id))
+          .where(and(eq(serverMembers.serverId, result.serverId), eq(serverMembers.role, "owner")))
+          .limit(1);
+        if (owner?.email) {
+          await tx.insert(notificationJobs).values({
+            dedupeKey: `endpoint:${result.serverId}:${result.edition}:${transition}:${now.toISOString().slice(0, 10)}`,
+            recipientUserId: owner.userId,
+            recipientEmail: owner.email,
+            template: `endpoint_${transition}`,
+            payload: { serverId: result.serverId, edition: result.edition, transition },
+          }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
+        }
+      }
+    }
     await tx.update(monitorRuns).set({ status: "done" }).where(eq(monitorRuns.runId, run.runId));
   });
-  return NextResponse.json({ ok: true, processed: results.length });
+  return NextResponse.json({ ok: true, processed: body.results.length });
 }

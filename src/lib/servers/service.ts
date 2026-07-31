@@ -229,12 +229,6 @@ export async function updateServer(
       await requireServerCapability(serverId, userId, "publication:edit", tx);
       if (publicationStatus === "published") {
         await requireVerifiedEmail(userId, tx);
-        const [verifiedEndpoint] = await tx
-          .select({ serverId: serverEndpoints.serverId })
-          .from(serverEndpoints)
-          .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.verificationStatus, "verified")))
-          .limit(1);
-        if (!verifiedEndpoint) throw new NoVerifiedEndpointError();
       }
     }
 
@@ -321,11 +315,20 @@ export async function updateServer(
       }
     }
 
-    if (role === "owner" && input.tags?.length) await requireVerifiedEmail(userId, tx);
+    const [verifiedEndpoint] = await tx
+      .select({ serverId: serverEndpoints.serverId })
+      .from(serverEndpoints)
+      .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.verificationStatus, "verified")))
+      .limit(1);
+    if (publicationStatus === "published" && !verifiedEndpoint) {
+      throw new NoVerifiedEndpointError();
+    }
 
-    await replaceServerTagsForServer(tx, serverId, input.tags, { allowCreate: role === "owner" });
+    if (input.tags !== undefined) {
+      if (role === "owner" && input.tags.length) await requireVerifiedEmail(userId, tx);
+      await replaceServerTagsForServer(tx, serverId, input.tags, { allowCreate: role === "owner" });
+    }
 
-    const [verifiedEndpoint] = await tx.select({ serverId: serverEndpoints.serverId }).from(serverEndpoints).where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.verificationStatus, "verified"))).limit(1);
     await tx.update(servers).set(verifiedEndpoint ? { verificationStatus: "verified", verifiedAt: sql`coalesce(${servers.verifiedAt}, now())` } : { verificationStatus: "unverified", verifiedAt: null }).where(eq(servers.id, serverId));
 
     return { role, javaChanged };
@@ -340,5 +343,13 @@ export async function deleteServer(userId: string, serverId: string, confirmatio
     await tx.delete(servers).where(eq(servers.id, serverId));
     return rows;
   });
-  await Promise.all(media.map(({ blobKey }) => mediaStorage.remove(blobKey).catch((error) => enqueueMediaCleanup(blobKey, error))));
+  await Promise.all(
+    media.map(({ blobKey }) =>
+      mediaStorage.remove(blobKey).catch((error) =>
+        enqueueMediaCleanup(blobKey, error).catch((cleanupError) => {
+          console.error("Failed to enqueue media cleanup", cleanupError);
+        }),
+      ),
+    ),
+  );
 }

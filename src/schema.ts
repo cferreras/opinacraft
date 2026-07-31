@@ -1,6 +1,7 @@
 import {
   check,
   bytea,
+  bigint,
   integer,
   index,
   pgEnum,
@@ -13,6 +14,7 @@ import {
   uuid,
   varchar,
   jsonb,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -286,7 +288,7 @@ export const tags = pgTable(
     slug: varchar("slug", { length: 64 }).notNull().unique(),
     status: serverTagStatus("status").default("active").notNull(),
     usageCount: integer("usage_count").default(0).notNull(),
-    aliasOf: uuid("alias_of"),
+    aliasOf: uuid("alias_of").references((): AnyPgColumn => tags.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -394,7 +396,7 @@ export const mediaUsageCounters = pgTable(
   "media_usage_counters",
   {
     period: varchar("period", { length: 7 }).primaryKey(),
-    storedBytes: integer("stored_bytes").default(0).notNull(),
+    storedBytes: bigint("stored_bytes", { mode: "number" }).default(0).notNull(),
     advancedOperations: integer("advanced_operations").default(0).notNull(),
     alerted70: timestamp("alerted_70", { withTimezone: true }),
     alerted85: timestamp("alerted_85", { withTimezone: true }),
@@ -420,6 +422,7 @@ export const notificationJobs = pgTable(
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
     lastError: text("last_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
   },
   (table) => [index("notification_jobs_queue_idx").on(table.status, table.nextAttemptAt)],
@@ -432,6 +435,7 @@ export const monitorRuns = pgTable(
     nonce: varchar("nonce", { length: 128 }).notNull().unique(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     status: varchar("status", { length: 20 }).default("pending").notNull(),
+    fallbackEndpoints: jsonb("fallback_endpoints").$type<Array<{ serverId: string; edition: "bedrock"; host: string; port: number }>>().default([]).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
 );

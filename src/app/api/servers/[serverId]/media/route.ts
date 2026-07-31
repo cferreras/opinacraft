@@ -85,6 +85,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ser
 export async function DELETE(request: Request, { params }: { params: Promise<{ serverId: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  if (!session.user.emailVerified) return NextResponse.json({ error: "Verify your email before deleting media." }, { status: 403 });
   const { serverId } = await params;
   const kindValue = new URL(request.url).searchParams.get("kind");
   const kind = kindValue === "logo" || kindValue === "banner" ? kindValue : null;

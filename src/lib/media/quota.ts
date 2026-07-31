@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
 import { mediaUsageCounters, notificationJobs } from "@/schema";
@@ -6,6 +6,7 @@ import { serverEnv } from "@/env/server";
 
 const DEFAULT_STORAGE_LIMIT = 1_000_000_000;
 const DEFAULT_ADVANCED_LIMIT = 2_000;
+const TOTAL_STORAGE_KEY = "total";
 
 export class MediaQuotaExceededError extends Error {
   constructor() {
@@ -29,24 +30,38 @@ export async function reserveMediaQuota(bytes: number) {
   const key = period();
   const { storage, advanced } = limits();
   return db.transaction(async (tx) => {
-    await tx.insert(mediaUsageCounters).values({ period: key }).onConflictDoNothing();
-    const [counter] = await tx.select().from(mediaUsageCounters).where(eq(mediaUsageCounters.period, key)).for("update");
-    const currentBytes = Number(counter?.storedBytes ?? 0);
-    const currentOps = Number(counter?.advancedOperations ?? 0);
-    if (counter?.blockedAt || currentBytes >= storage * 0.95 || currentOps >= advanced * 0.95) {
-      await tx.update(mediaUsageCounters).set({ blockedAt: counter?.blockedAt ?? new Date(), updatedAt: new Date() }).where(eq(mediaUsageCounters.period, key));
+    await tx.insert(mediaUsageCounters).values([{ period: key }, { period: TOTAL_STORAGE_KEY }]).onConflictDoNothing();
+    const counters = await tx
+      .select()
+      .from(mediaUsageCounters)
+      .where(inArray(mediaUsageCounters.period, [key, TOTAL_STORAGE_KEY]))
+      .for("update");
+    const periodCounter = counters.find((counter) => counter.period === key);
+    const totalCounter = counters.find((counter) => counter.period === TOTAL_STORAGE_KEY);
+    const currentBytes = Number(totalCounter?.storedBytes ?? 0);
+    const currentOps = Number(periodCounter?.advancedOperations ?? 0);
+    if (currentBytes >= storage * 0.95 || currentOps >= advanced * 0.95) {
       throw new MediaQuotaExceededError();
     }
     const nextBytes = currentBytes + bytes;
     const nextOps = currentOps + 1;
-    const update: Record<string, unknown> = { storedBytes: nextBytes, advancedOperations: nextOps, updatedAt: new Date() };
-    if (!counter?.alerted70 && (nextBytes >= storage * .7 || nextOps >= advanced * .7)) update.alerted70 = new Date();
-    if (!counter?.alerted85 && (nextBytes >= storage * .85 || nextOps >= advanced * .85)) update.alerted85 = new Date();
-    if (!counter?.alerted95 && (nextBytes >= storage * .95 || nextOps >= advanced * .95)) update.alerted95 = new Date();
-    if (nextBytes >= storage * .95 || nextOps >= advanced * .95) update.blockedAt = new Date();
-    await tx.update(mediaUsageCounters).set(update).where(eq(mediaUsageCounters.period, key));
+    const now = new Date();
+    const periodUpdate: Record<string, unknown> = { advancedOperations: nextOps, updatedAt: now };
+    if (periodCounter?.blockedAt) periodUpdate.blockedAt = null;
+    if (!periodCounter?.alerted70 && (nextBytes >= storage * 0.7 || nextOps >= advanced * 0.7)) periodUpdate.alerted70 = now;
+    if (!periodCounter?.alerted85 && (nextBytes >= storage * 0.85 || nextOps >= advanced * 0.85)) periodUpdate.alerted85 = now;
+    if (!periodCounter?.alerted95 && (nextBytes >= storage * 0.95 || nextOps >= advanced * 0.95)) periodUpdate.alerted95 = now;
+    if (nextBytes >= storage * 0.95 || nextOps >= advanced * 0.95) periodUpdate.blockedAt = now;
+    await tx.update(mediaUsageCounters).set({ storedBytes: nextBytes, updatedAt: now }).where(eq(mediaUsageCounters.period, TOTAL_STORAGE_KEY));
+    await tx.update(mediaUsageCounters).set(periodUpdate).where(eq(mediaUsageCounters.period, key));
     if (serverEnv.BLOB_OPERATOR_EMAIL) {
-      const level = !counter?.alerted95 && (nextBytes >= storage * .95 || nextOps >= advanced * .95) ? 95 : !counter?.alerted85 && (nextBytes >= storage * .85 || nextOps >= advanced * .85) ? 85 : !counter?.alerted70 && (nextBytes >= storage * .7 || nextOps >= advanced * .7) ? 70 : null;
+      const level = !periodCounter?.alerted95 && (nextBytes >= storage * 0.95 || nextOps >= advanced * 0.95)
+        ? 95
+        : !periodCounter?.alerted85 && (nextBytes >= storage * 0.85 || nextOps >= advanced * 0.85)
+          ? 85
+          : !periodCounter?.alerted70 && (nextBytes >= storage * 0.7 || nextOps >= advanced * 0.7)
+            ? 70
+            : null;
       if (level) await tx.insert(notificationJobs).values({ dedupeKey: `blob-quota:${key}:${level}`, recipientEmail: serverEnv.BLOB_OPERATOR_EMAIL, template: "blob_quota", payload: { period: key, level, bytes: nextBytes, operations: nextOps } }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
     }
     return { period: key, bytes: nextBytes, operations: nextOps, storageLimit: storage, operationLimit: advanced };
@@ -55,12 +70,24 @@ export async function reserveMediaQuota(bytes: number) {
 
 export async function releaseMediaQuota(bytes: number) {
   const key = period();
-  await db.update(mediaUsageCounters).set({ storedBytes: sql`greatest(0, ${mediaUsageCounters.storedBytes} - ${bytes})`, updatedAt: new Date() }).where(eq(mediaUsageCounters.period, key));
+  const { storage, advanced } = limits();
+  await db.transaction(async (tx) => {
+    const [totalCounter] = await tx.select().from(mediaUsageCounters).where(eq(mediaUsageCounters.period, TOTAL_STORAGE_KEY)).for("update");
+    const [periodCounter] = await tx.select().from(mediaUsageCounters).where(eq(mediaUsageCounters.period, key)).for("update");
+    if (!totalCounter) return;
+    const nextBytes = Math.max(0, Number(totalCounter.storedBytes) - bytes);
+    await tx.update(mediaUsageCounters).set({ storedBytes: nextBytes, updatedAt: new Date() }).where(eq(mediaUsageCounters.period, TOTAL_STORAGE_KEY));
+    if (periodCounter) {
+      await tx.update(mediaUsageCounters).set({ blockedAt: nextBytes < storage * 0.95 && Number(periodCounter.advancedOperations) < advanced * 0.95 ? null : periodCounter.blockedAt, updatedAt: new Date() }).where(eq(mediaUsageCounters.period, key));
+    }
+  });
 }
 
 export async function getMediaQuota() {
   const key = period();
-  const [counter] = await db.select().from(mediaUsageCounters).where(eq(mediaUsageCounters.period, key)).limit(1);
+  const counters = await db.select().from(mediaUsageCounters).where(inArray(mediaUsageCounters.period, [key, TOTAL_STORAGE_KEY]));
+  const periodCounter = counters.find((counter) => counter.period === key);
+  const totalCounter = counters.find((counter) => counter.period === TOTAL_STORAGE_KEY);
   const { storage, advanced } = limits();
-  return { period: key, bytes: counter?.storedBytes ?? 0, operations: counter?.advancedOperations ?? 0, storageLimit: storage, operationLimit: advanced, blocked: Boolean(counter?.blockedAt) };
+  return { period: key, bytes: totalCounter?.storedBytes ?? 0, operations: periodCounter?.advancedOperations ?? 0, storageLimit: storage, operationLimit: advanced, blocked: Boolean(periodCounter?.blockedAt) };
 }

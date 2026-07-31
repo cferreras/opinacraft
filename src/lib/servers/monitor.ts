@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
-import { db } from "@/db";
+import { db, withAdvisoryLock } from "@/db";
 import { notificationJobs, serverEndpoints, serverMembers, servers } from "@/schema";
 import { user } from "@/auth-schema";
 import { resolveMinecraftTarget, resolveMinecraftBedrockTarget } from "@/lib/minecraft/network";
@@ -33,20 +33,24 @@ function pingData(value: unknown) {
   };
 }
 
-async function checkEndpoint(tx: DatabaseTransaction, endpoint: Endpoint) {
+async function checkEndpoint(endpoint: Endpoint) {
   const startedAt = Date.now();
   try {
     const result = endpoint.edition === "bedrock"
       ? await resolveMinecraftBedrockTarget(endpoint.host, endpoint.port).then((target) => pingBedrockServer(target))
       : await resolveMinecraftTarget(endpoint.host, endpoint.port).then((target) => pingJavaServer(target));
     const data = pingData(result);
-    await tx.update(serverEndpoints).set({ healthStatus: "online", playersCurrent: data.playersCurrent, playersMax: data.playersMax, version: data.version, latencyMs: Date.now() - startedAt, lastCheckedAt: new Date(), lastOnlineAt: new Date(), consecutiveFailures: 0 }).where(and(eq(serverEndpoints.serverId, endpoint.serverId), eq(serverEndpoints.edition, endpoint.edition)));
-    if (endpoint.healthStatus === "offline") await enqueueEndpointNotification(tx, endpoint.serverId, endpoint.edition, "recovered");
+    await db.transaction(async (tx) => {
+      await tx.update(serverEndpoints).set({ healthStatus: "online", playersCurrent: data.playersCurrent, playersMax: data.playersMax, version: data.version, latencyMs: Date.now() - startedAt, lastCheckedAt: new Date(), lastOnlineAt: new Date(), consecutiveFailures: 0 }).where(and(eq(serverEndpoints.serverId, endpoint.serverId), eq(serverEndpoints.edition, endpoint.edition)));
+      if (endpoint.healthStatus === "offline") await enqueueEndpointNotification(tx, endpoint.serverId, endpoint.edition, "recovered");
+    });
     return "online" as const;
   } catch (error) {
     const failures = endpoint.consecutiveFailures + 1;
-    await tx.update(serverEndpoints).set({ healthStatus: failures >= FAILURE_THRESHOLD ? "offline" : endpoint.healthStatus, lastCheckedAt: new Date(), consecutiveFailures: failures, latencyMs: null }).where(and(eq(serverEndpoints.serverId, endpoint.serverId), eq(serverEndpoints.edition, endpoint.edition)));
-    if (failures >= FAILURE_THRESHOLD && endpoint.healthStatus !== "offline") await enqueueEndpointNotification(tx, endpoint.serverId, endpoint.edition, "down");
+    await db.transaction(async (tx) => {
+      await tx.update(serverEndpoints).set({ healthStatus: failures >= FAILURE_THRESHOLD ? "offline" : endpoint.healthStatus, lastCheckedAt: new Date(), consecutiveFailures: failures, latencyMs: null }).where(and(eq(serverEndpoints.serverId, endpoint.serverId), eq(serverEndpoints.edition, endpoint.edition)));
+      if (failures >= FAILURE_THRESHOLD && endpoint.healthStatus !== "offline") await enqueueEndpointNotification(tx, endpoint.serverId, endpoint.edition, "down");
+    });
     if (!(error instanceof MinecraftOfflineError || error instanceof MinecraftResponseError || error instanceof MinecraftTimeoutError || error instanceof BedrockOfflineError)) {
       console.warn("[monitor] endpoint check failed", error instanceof Error ? error.name : "unknown");
     }
@@ -60,33 +64,26 @@ async function enqueueEndpointNotification(tx: DatabaseTransaction, serverId: st
   await tx.insert(notificationJobs).values({ dedupeKey: `endpoint:${serverId}:${edition}:${transition}:${new Date().toISOString().slice(0, 10)}`, recipientUserId: owner.userId, recipientEmail: owner.email, template: `endpoint_${transition}`, payload: { serverId, edition, transition } }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
 }
 
-async function withMonitorLock<T>(operation: (tx: DatabaseTransaction) => Promise<T>) {
-  return db.transaction(async (tx) => {
-    const rows = await tx.execute(sql`select pg_try_advisory_xact_lock(hashtext(${MONITOR_LOCK})) as acquired`);
-    if (!Boolean((rows as unknown as Array<{ acquired?: boolean }>)[0]?.acquired)) return null;
-    return operation(tx);
-  });
-}
-
 export async function runEndpointMonitor() {
-  const result = await withMonitorLock(async (tx) => {
-    const endpoints = await tx.select({ serverId: serverEndpoints.serverId, edition: serverEndpoints.edition, host: serverEndpoints.host, port: serverEndpoints.port, healthStatus: serverEndpoints.healthStatus, consecutiveFailures: serverEndpoints.consecutiveFailures }).from(serverEndpoints).where(eq(serverEndpoints.verificationStatus, "verified")).orderBy(asc(sql`${serverEndpoints.lastCheckedAt} is not null`), asc(serverEndpoints.lastCheckedAt), asc(serverEndpoints.serverId), asc(serverEndpoints.edition)).limit(MAX_ENDPOINTS_PER_RUN);
+  const result = await withAdvisoryLock(MONITOR_LOCK, async () => {
+    const endpoints = await db.select({ serverId: serverEndpoints.serverId, edition: serverEndpoints.edition, host: serverEndpoints.host, port: serverEndpoints.port, healthStatus: serverEndpoints.healthStatus, consecutiveFailures: serverEndpoints.consecutiveFailures }).from(serverEndpoints).where(eq(serverEndpoints.verificationStatus, "verified")).orderBy(asc(sql`${serverEndpoints.lastCheckedAt} is not null`), asc(serverEndpoints.lastCheckedAt), asc(serverEndpoints.serverId), asc(serverEndpoints.edition)).limit(MAX_ENDPOINTS_PER_RUN);
+    const javaEndpoints = endpoints.filter((endpoint) => endpoint.edition === "java");
     let cursor = 0;
     let online = 0;
     let offline = 0;
     let skipped = 0;
     async function worker() {
-      while (cursor < endpoints.length) {
-        const endpoint = endpoints[cursor++];
-        const result = await checkEndpoint(tx, endpoint);
+      while (cursor < javaEndpoints.length) {
+        const endpoint = javaEndpoints[cursor++];
+        const result = await checkEndpoint(endpoint);
         if (result === "online") online += 1;
         else if (result === "offline") offline += 1;
         else skipped += 1;
       }
     }
-    await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, endpoints.length) }, () => worker()));
-    await updateAvailabilityVisibility(tx);
-    return { processed: endpoints.length, online, offline, skipped, fallback: endpoints.filter((endpoint) => endpoint.edition === "bedrock").map((endpoint) => ({ serverId: endpoint.serverId, edition: endpoint.edition, host: endpoint.host, port: endpoint.port })) };
+    await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, javaEndpoints.length) }, () => worker()));
+    await db.transaction((tx) => updateAvailabilityVisibility(tx));
+    return { processed: javaEndpoints.length, online, offline, skipped, fallback: endpoints.filter((endpoint) => endpoint.edition === "bedrock").map((endpoint) => ({ serverId: endpoint.serverId, edition: "bedrock" as const, host: endpoint.host, port: endpoint.port })) };
   });
   if (result) {
     await runMediaCleanup();
@@ -104,7 +101,7 @@ async function updateAvailabilityVisibility(tx: DatabaseTransaction) {
     if (!rows.length) continue;
     const fresh = rows.filter((row) => row.lastCheckedAt && row.lastCheckedAt >= staleCutoff);
     const allOffline = fresh.length === rows.length && rows.every((row) => row.healthStatus === "offline");
-    const sevenDaysOffline = rows.every((row) => !row.lastOnlineAt || row.lastOnlineAt <= cutoff) && rows.every((row) => row.lastCheckedAt && row.lastCheckedAt <= cutoff);
+    const sevenDaysOffline = rows.every((row) => !row.lastOnlineAt || row.lastOnlineAt <= cutoff);
     if (allOffline && sevenDaysOffline) {
       const [changed] = await tx.update(servers).set({ availabilityHiddenAt: sql`coalesce(${servers.availabilityHiddenAt}, now())` }).where(and(eq(servers.id, server.id), isNull(servers.availabilityHiddenAt))).returning({ id: servers.id, hiddenAt: servers.availabilityHiddenAt });
       if (changed) await enqueueAvailabilityNotification(tx, server.id, "hidden", changed.hiddenAt);

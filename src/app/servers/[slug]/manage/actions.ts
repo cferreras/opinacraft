@@ -248,10 +248,9 @@ export async function checkVerificationAction(formData: FormData) {
   const serverId = formValue(formData, "serverId") ?? "";
   const slug = formValue(formData, "slug") ?? "";
   const verificationId = formValue(formData, "verificationId") ?? "";
-  const edition = formValue(formData, "edition") === "bedrock" ? "bedrock" : "java";
   let result: Awaited<ReturnType<typeof checkServerVerification>>;
   try {
-    result = await checkServerVerification(verificationId, serverId, session.user.id, edition);
+    result = await checkServerVerification(verificationId, serverId, session.user.id);
   } catch (error) {
     if (error instanceof VerificationExpiredError) {
       redirect(`/servers/${slug}/manage?verification=expired`);

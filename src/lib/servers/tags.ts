@@ -93,14 +93,26 @@ export async function replaceServerTagsForServer(
     if (!existing[0] && options.allowCreate === false) throw new TagInputError("Solo el propietario puede crear etiquetas nuevas.");
     if (!existing[0]) await tx.insert(tags).values({ label: item.label, slug: item.slug }).onConflictDoNothing({ target: tags.slug });
 
-    const [tag] = await tx
+    let [tag] = await tx
       .select({ id: tags.id, status: tags.status, aliasOf: tags.aliasOf })
       .from(tags)
       .where(existing[0] ? eq(tags.id, existing[0].id) : eq(tags.slug, item.slug))
       .limit(1);
 
     if (!tag || tag.status === "blocked" || (tag.status === "merged" && !tag.aliasOf)) throw new TagBlockedError();
-    const tagId = tag.aliasOf && tag.status === "merged" ? tag.aliasOf : tag.id;
+    const visited = new Set<string>();
+    while (tag.status === "merged" && tag.aliasOf) {
+      if (visited.has(tag.id)) throw new TagBlockedError();
+      visited.add(tag.id);
+      const [canonical] = await tx
+        .select({ id: tags.id, status: tags.status, aliasOf: tags.aliasOf })
+        .from(tags)
+        .where(eq(tags.id, tag.aliasOf))
+        .limit(1);
+      if (!canonical || canonical.status === "blocked" || (canonical.status === "merged" && !canonical.aliasOf)) throw new TagBlockedError();
+      tag = canonical;
+    }
+    const tagId = tag.id;
     if (!resolved.includes(tagId)) resolved.push(tagId);
     touched.add(tagId);
   }
@@ -189,9 +201,11 @@ export async function mergeTags(userId: string, sourceId: string, canonicalId: s
   await requirePlatformRole(userId);
   if (sourceId === canonicalId) throw new TagInputError("Selecciona dos etiquetas distintas.");
   await db.transaction(async (tx) => {
-    const [source] = await tx.select({ id: tags.id, slug: tags.slug }).from(tags).where(eq(tags.id, sourceId)).for("update").limit(1);
-    const [canonical] = await tx.select({ id: tags.id }).from(tags).where(eq(tags.id, canonicalId)).for("update").limit(1);
+    const [source] = await tx.select({ id: tags.id, slug: tags.slug, status: tags.status }).from(tags).where(eq(tags.id, sourceId)).for("update").limit(1);
+    const [canonical] = await tx.select({ id: tags.id, status: tags.status }).from(tags).where(eq(tags.id, canonicalId)).for("update").limit(1);
     if (!source || !canonical) throw new TagInputError("Etiqueta no encontrada.");
+    if (source.status !== "active") throw new TagInputError("La etiqueta origen debe estar activa.");
+    if (canonical.status !== "active") throw new TagInputError("La etiqueta destino debe estar activa.");
     const relations = await tx.select({ serverId: serverTags.serverId }).from(serverTags).where(eq(serverTags.tagId, sourceId));
     await tx.delete(serverTags).where(eq(serverTags.tagId, sourceId));
     if (relations.length) await tx.insert(serverTags).values(relations.map((row) => ({ serverId: row.serverId, tagId: canonicalId }))).onConflictDoNothing();

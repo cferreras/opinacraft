@@ -53,7 +53,7 @@ function EndpointFields({
           onChange={(event) => onEnabledChange(event.target.checked)}
           className="h-4 w-4 rounded border-zinc-300 accent-zinc-950 dark:border-zinc-700 dark:accent-white"
         />
-        This server has a {defaults.name} endpoint
+        Este servidor tiene un endpoint {defaults.name}
       </label>
       {enabled ? (
         <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_150px]">
@@ -69,7 +69,7 @@ function EndpointFields({
             />
           </label>
           <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Port
+            Puerto
             <input
               name={`${edition}Port`}
               type="number"

@@ -21,6 +21,6 @@ export async function POST(request: Request) {
   const runId = randomUUID();
   const nonce = randomBytes(24).toString("hex");
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  await db.insert(monitorRuns).values({ runId, nonce, expiresAt });
+  await db.insert(monitorRuns).values({ runId, nonce, expiresAt, fallbackEndpoints: result.fallback });
   return NextResponse.json({ ...result, runId, nonce, expiresAt: expiresAt.toISOString() });
 }
