@@ -2,32 +2,37 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { AuthShell } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
 import { clientEnv } from "@/env/client";
+import { safeCallbackUrl } from "@/lib/callback-url";
 
 export default function SignUpPage() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const discordEnabled = clientEnv.NEXT_PUBLIC_DISCORD_ENABLED === "true";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setMessage(null);
     setIsPending(true);
+    const callbackURL = safeCallbackUrl(
+      new URLSearchParams(window.location.search).get("callbackURL"),
+      "/profile",
+    );
 
     try {
       const { error: signUpError } = await authClient.signUp.email({
         name,
         email,
         password,
-        callbackURL: "/profile",
+        callbackURL,
       });
 
       if (signUpError) {
@@ -35,8 +40,9 @@ export default function SignUpPage() {
         return;
       }
 
-      router.push("/profile");
-      router.refresh();
+      setMessage(
+        "Cuenta creada. Revisa tu email y confirma el enlace antes de iniciar sesión.",
+      );
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -50,9 +56,13 @@ export default function SignUpPage() {
 
   async function handleDiscordSignIn() {
     setError(null);
+    const callbackURL = safeCallbackUrl(
+      new URLSearchParams(window.location.search).get("callbackURL"),
+      "/profile",
+    );
     await authClient.signIn.social({
       provider: "discord",
-      callbackURL: "/profile",
+      callbackURL,
     });
   }
 
@@ -72,7 +82,18 @@ export default function SignUpPage() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
+      {message ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+          {message}{" "}
+          <Link
+            className="font-medium underline"
+            href="/sign-in"
+          >
+            Ir a iniciar sesión
+          </Link>
+        </p>
+      ) : null}
+      {!message ? <form onSubmit={handleSubmit} className="space-y-5">
         <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
           Name
           <input
@@ -137,7 +158,7 @@ export default function SignUpPage() {
             </button>
           </>
         ) : null}
-      </form>
+      </form> : null}
     </AuthShell>
   );
 }

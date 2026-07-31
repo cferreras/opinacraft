@@ -8,6 +8,8 @@ export const relations = defineRelations({ ...schema, user }, (r) => ({
     endpoints: r.many.serverEndpoints(),
     members: r.many.serverMembers(),
     verifications: r.many.serverVerifications(),
+    tags: r.many.serverTags(),
+    media: r.many.serverMedia(),
   },
   serverEndpoints: {
     server: r.one.servers({
@@ -33,6 +35,25 @@ export const relations = defineRelations({ ...schema, user }, (r) => ({
     requestedBy: r.one.user({
       from: r.serverVerifications.requestedByUserId,
       to: r.user.id,
+    }),
+  },
+  serverTags: {
+    server: r.one.servers({
+      from: r.serverTags.serverId,
+      to: r.servers.id,
+    }),
+    tag: r.one.tags({
+      from: r.serverTags.tagId,
+      to: r.tags.id,
+    }),
+  },
+  tags: {
+    servers: r.many.serverTags(),
+  },
+  serverMedia: {
+    server: r.one.servers({
+      from: r.serverMedia.serverId,
+      to: r.servers.id,
     }),
   },
 }));

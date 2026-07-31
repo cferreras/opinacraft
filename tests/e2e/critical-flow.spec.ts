@@ -37,6 +37,8 @@ async function createAccount(page: Page) {
   await page.getByLabel("Password").fill("e2e-password-123");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/profile$/);
+  const pool = new Pool({ connectionString: testDatabaseUrl, max: 1 });
+  try { await pool.query('update "user" set email_verified = true where email = $1', [email]); } finally { await pool.end(); }
   return email;
 }
 
@@ -44,11 +46,16 @@ async function createAndPublishServer(page: Page, name: string, host: string) {
   await page.goto("/servers/new");
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByLabel("Host", { exact: true }).fill(host);
-  await page.getByRole("button", { name: "Create server" }).click();
+  await page.getByRole("button", { name: "Crear servidor" }).click();
   await expect(page).toHaveURL(/\/servers\/[^/]+\/manage\?created=1$/);
 
   const manageUrl = new URL(page.url());
   const slug = manageUrl.pathname.split("/")[2];
+  const pool = new Pool({ connectionString: testDatabaseUrl, max: 1 });
+  try {
+    await pool.query("update server_endpoints set verification_status = 'verified' where server_id = (select id from servers where slug = $1)", [slug]);
+    await pool.query("update servers set verification_status = 'verified', verified_at = now() where slug = $1", [slug]);
+  } finally { await pool.end(); }
   await page.getByLabel("Publication").selectOption("published");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?updated=1$`));
@@ -63,7 +70,7 @@ test("owner can create, publish, browse and manage a server", async ({ page }) =
   await page.goto("/servers");
   const card = page.locator("article").filter({ hasText: serverName });
   await expect(card.getByRole("heading", { name: serverName })).toBeVisible();
-  await card.getByRole("link", { name: "View server" }).click();
+  await card.getByRole("link", { name: "Ver servidor" }).click();
   await expect(page).toHaveURL(`/servers/${slug}`);
   await expect(page.getByRole("heading", { name: serverName })).toBeVisible();
 

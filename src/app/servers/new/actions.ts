@@ -9,16 +9,18 @@ import {
   createServer,
   DuplicateEndpointError,
   SlugGenerationError,
+  UnverifiedEmailError,
 } from "@/lib/servers/service";
 import {
   ServerInputError,
   type CreateServerInput,
   minecraftEditions,
 } from "@/lib/servers/validation";
+import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type CreateServerState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "discordUrl" | "endpoints", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "discordUrl" | "tags" | "endpoints", string>>;
 };
 
 function formValue(formData: FormData, key: string) {
@@ -56,6 +58,7 @@ function getInput(formData: FormData): CreateServerInput {
     description: formValue(formData, "description"),
     websiteUrl: formValue(formData, "websiteUrl"),
     discordUrl: formValue(formData, "discordUrl"),
+    tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
     endpoints,
   };
 }
@@ -70,6 +73,7 @@ function zodFieldErrors(error: z.ZodError) {
       field === "description" ||
       field === "websiteUrl" ||
       field === "discordUrl" ||
+      field === "tags" ||
       field === "endpoints"
     ) {
       fieldErrors[field] ??= issue.message;
@@ -116,6 +120,13 @@ export async function createServerAction(
 
     if (error instanceof SlugGenerationError) {
       return { formError: error.message };
+    }
+
+    if (error instanceof UnverifiedEmailError) {
+      return { formError: `${error.message} Revisa tu perfil para reenviar el enlace.` };
+    }
+    if (error instanceof TagInputError || error instanceof TagBlockedError) {
+      return { fieldErrors: { tags: error.message } };
     }
 
     console.error("Failed to create server", error instanceof Error ? error.name : "unknown");

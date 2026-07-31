@@ -8,6 +8,8 @@ import { requireServerSession } from "@/lib/session";
 import { getManagedServerBySlug } from "@/lib/servers/queries";
 import { listServerMembers } from "@/lib/servers/members";
 import { getVerificationDisplay } from "@/lib/servers/verification";
+import { DeleteServerForm } from "@/components/delete-server-form";
+import { MediaUploadForm } from "@/components/media-upload-form";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -22,12 +24,15 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
   const server = await getManagedServerBySlug(slug, session.user.id);
   if (!server) notFound();
 
-  const [members, verification] = await Promise.all([
+  const [members, javaVerification, bedrockVerification] = await Promise.all([
     server.role === "owner" || server.role === "admin"
       ? listServerMembers(server.id, session.user.id)
       : Promise.resolve([]),
     server.role === "owner"
       ? getVerificationDisplay(server.id, session.user.id)
+      : Promise.resolve(null),
+    server.role === "owner"
+      ? getVerificationDisplay(server.id, session.user.id, "bedrock")
       : Promise.resolve(null),
   ]);
 
@@ -53,12 +58,19 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
         {query.verification === "endpoint_taken" ? <Notice tone="warning">That endpoint is already verified by another server.</Notice> : null}
         {query.verification === "stale" ? <Notice tone="warning">That verification is no longer active. Generate a new code.</Notice> : null}
         {query.verification === "expired" ? <Notice tone="warning">The verification code has expired. Generate a new one.</Notice> : null}
-        {query.verificationError ? <Notice tone="warning">Verification could not start or complete: {query.verificationError.replaceAll("-", " ")}.</Notice> : null}
+        {query.verificationError === "already-verified" ? <Notice>Este endpoint ya está verificado; no necesitas generar otro código.</Notice> : null}
+        {query.verificationError === "pending" ? <Notice tone="warning">Ya hay un código pendiente para este endpoint. Compruébalo cuando lo hayas añadido al MOTD.</Notice> : null}
+        {query.verificationError && query.verificationError !== "already-verified" && query.verificationError !== "pending" ? <Notice tone="warning">Verification could not start or complete: {query.verificationError.replaceAll("-", " ")}.</Notice> : null}
         {query.memberUpdated ? <Notice>Member list updated.</Notice> : null}
         {query.memberError ? <Notice tone="warning">Member action failed: {query.memberError.replaceAll("-", " ")}.</Notice> : null}
         <section className="rounded-2xl bg-white p-6 dark:bg-zinc-900"><h2 className="mb-5 text-lg font-semibold">Server details</h2><ServerManageForm server={server} /></section>
-        {server.role === "owner" ? <VerificationPanel serverId={server.id} slug={server.slug} verification={verification} /> : null}
+        <MediaUploadForm serverId={server.id} />
+        {server.role === "owner" ? <>
+          <VerificationPanel serverId={server.id} slug={server.slug} verification={javaVerification} edition="java" />
+          <VerificationPanel serverId={server.id} slug={server.slug} verification={bedrockVerification} edition="bedrock" />
+        </> : null}
         {(server.role === "owner" || server.role === "admin") ? <MemberPanel serverId={server.id} slug={server.slug} members={members} canManage={server.role === "owner"} /> : null}
+        {server.role === "owner" ? <DeleteServerForm serverId={server.id} slug={server.slug} /> : null}
       </section>
     </main>
   );

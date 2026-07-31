@@ -9,17 +9,19 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --experimental-strip-types --test tests/validation.test.ts tests/verification.test.ts",
-    "test:integration": "node --experimental-strip-types --test tests/integration.test.ts",
+    "test:integration": "node scripts/bootstrap-test-database.mjs && node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/integration.test.ts",
     "test:e2e": "playwright test",
     "db:inspect": "node scripts/inspect-database.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
+    ,"admin:grant": "node scripts/grant-admin.mjs"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.0-beta.10",
     "@t3-oss/env-nextjs": "^0.13.11",
+    "@vercel/blob": "^2.6.1",
     "better-auth": "1.7.0-beta.10",
     "dotenv": "^17.4.2",
     "drizzle-orm": "1.0.0-rc.4",
@@ -30,6 +32,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.18.0",
+    "sharp": "^0.35.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {

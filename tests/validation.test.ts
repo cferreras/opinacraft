@@ -63,3 +63,13 @@ test("creates an ASCII slug and validates external URLs", () => {
   );
   assert.throws(() => normalizeHttpUrl("javascript:alert(1)", "websiteUrl"));
 });
+
+test("trims server tags and enforces the eight-tag limit", () => {
+  const input = normalizeCreateServerInput({
+    name: "A Minecraft Community",
+    tags: [" Survival ", "survival", "español"],
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  });
+  assert.deepEqual(input.tags, ["Survival", "survival", "español"]);
+  assert.equal(createServerInputSchema.safeParse({ name: "A Minecraft Community", tags: Array.from({ length: 9 }, () => "tag"), endpoints: [{ edition: "java", host: "play.example.com" }] }).success, false);
+});

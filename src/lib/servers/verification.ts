@@ -11,6 +11,7 @@ import {
   BlockedMinecraftTargetError,
   MinecraftDnsError,
   resolveMinecraftTarget,
+  resolveMinecraftBedrockTarget,
 } from "@/lib/minecraft/network";
 import {
   MinecraftOfflineError,
@@ -18,6 +19,7 @@ import {
   MinecraftTimeoutError,
   pingJavaServer,
 } from "@/lib/minecraft/ping";
+import { pingBedrockServer, BedrockOfflineError } from "@/lib/minecraft/bedrock-ping";
 import { motdContainsCode } from "@/lib/minecraft/motd";
 import {
   decryptVerificationCode,
@@ -81,6 +83,20 @@ export class VerificationUnavailableError extends Error {
   }
 }
 
+export class EndpointAlreadyVerifiedError extends Error {
+  constructor() {
+    super("Este endpoint ya está verificado; no necesitas generar otro código.");
+    this.name = "EndpointAlreadyVerifiedError";
+  }
+}
+
+export class VerificationAlreadyPendingError extends Error {
+  constructor() {
+    super("Ya hay un código pendiente para este endpoint.");
+    this.name = "VerificationAlreadyPendingError";
+  }
+}
+
 export class VerificationExpiredError extends Error {
   constructor() {
     super("This verification code has expired.");
@@ -95,10 +111,17 @@ export class NoJavaEndpointError extends Error {
   }
 }
 
-export async function startServerVerification(serverId: string, userId: string) {
+export class NoBedrockEndpointError extends Error {
+  constructor() {
+    super("Añade un endpoint Minecraft Bedrock con un puerto público entre 1024 y 65535 antes de verificar este servidor.");
+    this.name = "NoBedrockEndpointError";
+  }
+}
+
+export async function startServerVerification(serverId: string, userId: string, edition: "java" | "bedrock" = "java") {
   for (let tokenAttempt = 0; tokenAttempt < 3; tokenAttempt += 1) {
     try {
-      return await db.transaction(async (tx) => {
+      const result = await db.transaction(async (tx) => {
     const [server] = await tx
       .select({ id: servers.id })
       .from(servers)
@@ -109,12 +132,29 @@ export async function startServerVerification(serverId: string, userId: string) 
     await requireServerCapability(serverId, userId, "verification:manage", tx);
 
     const [endpoint] = await tx
-      .select({ host: serverEndpoints.host, port: serverEndpoints.port })
+      .select({
+        host: serverEndpoints.host,
+        port: serverEndpoints.port,
+        verificationStatus: serverEndpoints.verificationStatus,
+      })
       .from(serverEndpoints)
-      .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.edition, "java")))
+      .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.edition, edition)))
       .limit(1);
     if (!endpoint || endpoint.port < 1024 || endpoint.port > 65535) {
-      throw new NoJavaEndpointError();
+      throw edition === "java" ? new NoJavaEndpointError() : new NoBedrockEndpointError();
+    }
+    if (endpoint.verificationStatus === "verified") {
+      await tx
+        .update(serverVerifications)
+        .set({ status: "superseded" })
+        .where(
+          and(
+            eq(serverVerifications.serverId, serverId),
+            eq(serverVerifications.edition, edition),
+            eq(serverVerifications.status, "pending"),
+          ),
+        );
+      return { alreadyVerified: true as const };
     }
 
     const now = new Date();
@@ -124,10 +164,29 @@ export async function startServerVerification(serverId: string, userId: string) 
       .where(
         and(
           eq(serverVerifications.serverId, serverId),
+          eq(serverVerifications.edition, edition),
           eq(serverVerifications.status, "pending"),
           lte(serverVerifications.expiresAt, now),
         ),
       );
+
+    const [pending] = await tx
+      .select({
+        endpointHost: serverVerifications.endpointHost,
+        endpointPort: serverVerifications.endpointPort,
+      })
+      .from(serverVerifications)
+      .where(
+        and(
+          eq(serverVerifications.serverId, serverId),
+          eq(serverVerifications.edition, edition),
+          eq(serverVerifications.status, "pending"),
+        ),
+      )
+      .limit(1);
+    if (pending && pending.endpointHost === endpoint.host && pending.endpointPort === endpoint.port) {
+      throw new VerificationAlreadyPendingError();
+    }
 
     const since = new Date(now.getTime() - GENERATION_WINDOW_MS);
     const [{ count }] = await tx
@@ -137,6 +196,7 @@ export async function startServerVerification(serverId: string, userId: string) 
         and(
           eq(serverVerifications.serverId, serverId),
           eq(serverVerifications.requestedByUserId, userId),
+          eq(serverVerifications.edition, edition),
           gte(serverVerifications.createdAt, since),
         ),
       );
@@ -145,7 +205,7 @@ export async function startServerVerification(serverId: string, userId: string) 
     await tx
       .update(serverVerifications)
       .set({ status: "superseded" })
-      .where(and(eq(serverVerifications.serverId, serverId), eq(serverVerifications.status, "pending")));
+      .where(and(eq(serverVerifications.serverId, serverId), eq(serverVerifications.edition, edition), eq(serverVerifications.status, "pending")));
 
     const code = generateVerificationCode();
     const [verification] = await tx
@@ -153,6 +213,8 @@ export async function startServerVerification(serverId: string, userId: string) 
       .values({
         serverId,
         requestedByUserId: userId,
+        edition,
+        method: edition === "java" ? "motd_java" : "motd_bedrock",
         endpointHost: endpoint.host,
         endpointPort: endpoint.port,
         tokenHash: hashVerificationCode(code),
@@ -163,6 +225,8 @@ export async function startServerVerification(serverId: string, userId: string) 
 
     return { id: verification!.id, code, expiresAt: verification!.expiresAt };
       });
+      if ("alreadyVerified" in result) throw new EndpointAlreadyVerifiedError();
+      return result;
     } catch (error) {
       if (isTokenHashCollision(error) && tokenAttempt < 2) continue;
       throw error;
@@ -171,7 +235,7 @@ export async function startServerVerification(serverId: string, userId: string) 
   throw new VerificationUnavailableError();
 }
 
-export async function getVerificationDisplay(serverId: string, userId: string) {
+export async function getVerificationDisplay(serverId: string, userId: string, edition: "java" | "bedrock" = "java") {
   await requireServerCapability(serverId, userId, "verification:manage");
   const [verification] = await db
     .select({
@@ -184,7 +248,7 @@ export async function getVerificationDisplay(serverId: string, userId: string) {
       tokenCiphertext: serverVerifications.tokenCiphertext,
     })
     .from(serverVerifications)
-    .where(eq(serverVerifications.serverId, serverId))
+    .where(and(eq(serverVerifications.serverId, serverId), eq(serverVerifications.edition, edition)))
     .orderBy(sql`${serverVerifications.createdAt} desc`)
     .limit(1);
 
@@ -255,6 +319,7 @@ export async function checkServerVerification(
         attemptCount: serverVerifications.attemptCount,
         endpointHost: serverVerifications.endpointHost,
         endpointPort: serverVerifications.endpointPort,
+        edition: serverVerifications.edition,
         tokenCiphertext: serverVerifications.tokenCiphertext,
       });
 
@@ -309,9 +374,10 @@ export async function checkServerVerification(
   let matches = false;
   const networkStartedAt = Date.now();
   try {
-    const status = await withOperationTimeout(
-      resolveMinecraftTarget(claimed.endpointHost, claimed.endpointPort)
-        .then((target) => pingJavaServer(target)),
+    const status = await withOperationTimeout<Awaited<ReturnType<typeof pingJavaServer>> | Awaited<ReturnType<typeof pingBedrockServer>>>(
+      (claimed.edition === "bedrock"
+        ? resolveMinecraftBedrockTarget(claimed.endpointHost, claimed.endpointPort).then((target) => pingBedrockServer(target))
+        : resolveMinecraftTarget(claimed.endpointHost, claimed.endpointPort).then((target) => pingJavaServer(target))),
     );
     matches = motdContainsCode(status.description, claimed.code);
     if (!matches) failure = "code_not_found";
@@ -321,6 +387,7 @@ export async function checkServerVerification(
       [error instanceof MinecraftResponseError, "invalid_response"],
       [error instanceof MinecraftTimeoutError, "timeout"],
       [error instanceof MinecraftDnsError || error instanceof MinecraftOfflineError, "offline"],
+      [error instanceof BedrockOfflineError, "offline"],
     ].find(([matched]) => matched)?.[1] as VerificationFailureCode | undefined;
     failure = mappedFailure ?? "invalid_response";
     if (!mappedFailure) {
@@ -346,7 +413,7 @@ export async function checkServerVerification(
     const [currentEndpoint] = await tx
       .select({ host: serverEndpoints.host, port: serverEndpoints.port })
       .from(serverEndpoints)
-      .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.edition, "java")))
+      .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.edition, claimed.edition)))
       .limit(1);
     const [current] = await tx
       .select({
@@ -376,7 +443,7 @@ export async function checkServerVerification(
 
     if (matches) {
       await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtext(${`java:${claimed.endpointHost}:${claimed.endpointPort}`}))`,
+        sql`select pg_advisory_xact_lock(hashtext(${`${claimed.edition}:${claimed.endpointHost}:${claimed.endpointPort}`}))`,
       );
       const [endpointConflict] = await tx
         .select({ serverId: servers.id })
@@ -384,7 +451,7 @@ export async function checkServerVerification(
         .innerJoin(servers, eq(serverEndpoints.serverId, servers.id))
         .where(
           and(
-            eq(serverEndpoints.edition, "java"),
+            eq(serverEndpoints.edition, claimed.edition),
             eq(serverEndpoints.host, claimed.endpointHost),
             eq(serverEndpoints.port, claimed.endpointPort),
             eq(serverEndpoints.verificationStatus, "verified"),
@@ -403,7 +470,7 @@ export async function checkServerVerification(
         .where(
           and(
             eq(serverEndpoints.serverId, serverId),
-            eq(serverEndpoints.edition, "java"),
+            eq(serverEndpoints.edition, claimed.edition),
           ),
         );
       return { result: "verified" as const };

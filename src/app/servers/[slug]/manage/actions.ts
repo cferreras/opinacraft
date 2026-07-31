@@ -15,14 +15,20 @@ import {
 } from "@/lib/servers/members";
 import {
   DuplicateEndpointError,
+  NoVerifiedEndpointError,
+  deleteServer,
   ServerNotFoundError,
+  UnverifiedEmailError,
   updateServer,
 } from "@/lib/servers/service";
 import {
   checkServerVerification,
+  EndpointAlreadyVerifiedError,
   NoJavaEndpointError,
   VerificationExpiredError,
   startServerVerification,
+  NoBedrockEndpointError,
+  VerificationAlreadyPendingError,
   VerificationRateLimitError,
   VerificationUnavailableError,
 } from "@/lib/servers/verification";
@@ -33,10 +39,11 @@ import {
   ServerInputError,
   type UpdateServerInput,
 } from "@/lib/servers/validation";
+import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type ManageState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "discordUrl" | "endpoints" | "publicationStatus", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "discordUrl" | "tags" | "endpoints" | "publicationStatus", string>>;
 };
 
 function formValue(formData: FormData, key: string) {
@@ -67,6 +74,7 @@ function getServerInput(formData: FormData): UpdateServerInput {
     description: formValue(formData, "description"),
     websiteUrl: formValue(formData, "websiteUrl"),
     discordUrl: formValue(formData, "discordUrl"),
+    tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
     endpoints,
   };
 }
@@ -110,6 +118,15 @@ export async function updateServerAction(
     if (error instanceof ServerNotFoundError) {
       return { formError: "This server is no longer available." };
     }
+    if (error instanceof UnverifiedEmailError) {
+      return { formError: `${error.message} Revisa tu perfil para reenviar el enlace.` };
+    }
+    if (error instanceof NoVerifiedEndpointError) {
+      return { formError: error.message };
+    }
+    if (error instanceof TagInputError || error instanceof TagBlockedError) {
+      return { fieldErrors: { tags: error.message } };
+    }
     if (error instanceof DuplicateEndpointError || (databaseErrorCode(error) === "23505" && databaseConstraint(error) === "server_endpoints_verified_edition_host_port_key")) {
       return { fieldErrors: { endpoints: "One of these addresses is already registered." } };
     }
@@ -122,6 +139,20 @@ export async function updateServerAction(
   revalidatePath(`/servers/${slug}`);
   revalidatePath(`/servers/${slug}/manage`);
   redirect(`/servers/${slug}/manage?updated=1`);
+}
+
+export async function deleteServerAction(formData: FormData) {
+  const session = await getServerSession();
+  if (!session) redirect("/sign-in?callbackURL=/dashboard/servers");
+  const serverId = formValue(formData, "serverId") ?? "";
+  try {
+    await deleteServer(session.user.id, serverId, formValue(formData, "confirmation") ?? "");
+  } catch (error) {
+    redirect(`/servers/${formValue(formData, "slug") ?? ""}/manage?deleteError=${encodeURIComponent(error instanceof Error ? error.message : "Unable to delete server.")}`);
+  }
+  revalidatePath("/servers");
+  revalidatePath("/dashboard/servers");
+  redirect("/dashboard/servers?deleted=1");
 }
 
 export async function addMemberAction(formData: FormData) {
@@ -195,10 +226,13 @@ export async function startVerificationAction(formData: FormData) {
   if (!session) redirect("/sign-in?callbackURL=/dashboard/servers");
   const serverId = formValue(formData, "serverId") ?? "";
   const slug = formValue(formData, "slug") ?? "";
+  const edition = formValue(formData, "edition") === "bedrock" ? "bedrock" : "java";
   try {
-    await startServerVerification(serverId, session.user.id);
+    await startServerVerification(serverId, session.user.id, edition);
   } catch (error) {
-    const reason = error instanceof NoJavaEndpointError ? "no-java" :
+    const reason = error instanceof EndpointAlreadyVerifiedError ? "already-verified" :
+      error instanceof VerificationAlreadyPendingError ? "pending" :
+      error instanceof NoJavaEndpointError || error instanceof NoBedrockEndpointError ? `no-${edition}` :
       error instanceof VerificationRateLimitError ? "rate-limit" :
       error instanceof VerificationUnavailableError ? "unavailable" : "unknown";
     if (reason === "unknown") console.error("Failed to start server verification", error);

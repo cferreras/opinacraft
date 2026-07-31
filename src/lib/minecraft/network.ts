@@ -123,3 +123,34 @@ export async function resolveMinecraftTarget(hostInput: string, portInput: numbe
     port,
   } satisfies MinecraftTarget;
 }
+
+/** Resolve a Bedrock endpoint while preserving the public host/port used in
+ * the RakNet packet. Bedrock commonly advertises `_minecraft._udp` SRV
+ * records; every resolved address is validated before a datagram is sent. */
+export async function resolveMinecraftBedrockTarget(hostInput: string, portInput: number) {
+  const host = normalizeHost(hostInput);
+  if (!isPublicHost(host)) throw new BlockedMinecraftTargetError();
+  const requestedPort = Number(portInput);
+  if (!Number.isInteger(requestedPort) || requestedPort < 1024 || requestedPort > 65535) {
+    throw new BlockedMinecraftTargetError();
+  }
+
+  let port = requestedPort;
+  let addresses: string[] = [];
+  if (isIP(host) === 0 && requestedPort === 19132) {
+    const records = await withTimeout(dns.resolveSrv(`_minecraft._udp.${host}`)).catch(() => []);
+    const ordered = [...records].sort((a, b) => a.priority - b.priority || b.weight - a.weight);
+    for (const record of ordered) {
+      if (record.port < 1024 || record.port > 65535) continue;
+      try {
+        addresses = await resolveAddresses(record.name.replace(/\.$/, ""));
+        port = record.port;
+        break;
+      } catch (error) {
+        if (error instanceof BlockedMinecraftTargetError) throw error;
+      }
+    }
+  }
+  if (!addresses.length) addresses = await resolveAddresses(host);
+  return { handshakeHost: host, connectHost: addresses[0]!, port } satisfies MinecraftTarget;
+}

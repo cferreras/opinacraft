@@ -49,7 +49,7 @@ pnpm db:migrate
 
 Migrations are not executed automatically during a Vercel build. Review the generated SQL, confirm the target database or Neon branch, and keep a recovery point when the provider makes one available before applying changes.
 
-The repository currently contains migrations for Better Auth, server management, Java MOTD verification, verified endpoint claims, removal of the residual `tests` table, and validation of the endpoint port constraint.
+The repository currently contains migrations for Better Auth, server management, Java/Bedrock MOTD verification, verified endpoint claims, tags/media, pg_trgm search, endpoint health, availability hiding, Blob quota counters, notification outbox and moderation/reporting. Review every generated migration before applying it to a database.
 
 ## Tests
 
@@ -68,7 +68,7 @@ Integration tests use PostgreSQL and require `TEST_DATABASE_URL`, which must poi
 pnpm test:integration
 ```
 
-Do not point `TEST_DATABASE_URL` at Production. Apply the current migrations to the dedicated test database with its direct connection before running the suite.
+Do not point `TEST_DATABASE_URL` at Production. The integration command applies an idempotent, additive compatibility bootstrap to the dedicated test database before running the suite; production and development databases still require the normal `pnpm db:migrate` flow.
 
 The critical E2E flow uses Playwright and covers account creation, server creation, publication, public listing, public detail, and management. It also checks the controlled offline verification error using `offline.example.invalid`; it does not use Discord, real email, or a public Minecraft server.
 
@@ -110,8 +110,22 @@ vercel deploy --prebuilt
 
 For Production, use the Production environment values, run reviewed migrations separately against the Production direct connection, and then deploy the same build without adding migration commands to the build step.
 
-## Known limitations
+## Current phase notes
 
-The following are intentionally deferred to the next product phase: tags, search, filters, reviews, votes, moderation, monitoring, images, Bedrock verification, invitations, server deletion, and ownership transfer.
+The public-beta foundation now includes email verification, safe callback redirects, keyboard tag autocomplete, fuzzy search, Vercel Blob WebP media uploads with quota guards and cleanup retries, Java/Bedrock endpoint verification and monitoring, signed fallback results, availability hiding, reporting/moderation, server deletion, account export and Spanish legal pages.
 
-Email verification is represented in the Better Auth schema but does not yet have an application email/confirmation flow. Discord OAuth and Resend are optional integrations.
+Vercel Blob is optional in local development. Preview/Production media uploads require `BLOB_READ_WRITE_TOKEN`; the monitor workflow requires `MONITOR_SECRET` plus the two GitHub secrets documented in `.github/workflows/monitor.yml`. Hobby quota counters default to 1 GB and 2,000 advanced operations and are conservative estimates; Vercel Observability remains the exact source for transfer, cache and monthly usage.
+
+To trigger the monitor locally, add a development-only `MONITOR_SECRET` (at least 32 characters), start the app, and call the internal route:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:MONITOR_SECRET" }
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/internal/monitor/run -Headers $headers
+```
+
+Only verified endpoints are checked. A successful check marks an endpoint online immediately; an unreachable endpoint needs three monitor runs before it becomes offline. Without this request (or the scheduled GitHub workflow), health remains `unknown`.
+
+After the initial bootstrap, grant platform roles from an operator shell with `pnpm admin:grant -- --email <email> --role admin|moderator`. Only admins can grant roles in the application.
+
+The agreed implementation roadmap for the next phase is documented in
+[`docs/phase-3-public-beta.md`](docs/phase-3-public-beta.md).

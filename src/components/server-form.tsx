@@ -7,6 +7,7 @@ import {
   createServerAction,
   type CreateServerState,
 } from "@/app/servers/new/actions";
+import { TagCombobox } from "@/components/tag-combobox";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -17,7 +18,7 @@ function SubmitButton() {
       disabled={pending}
       className="h-11 rounded-lg bg-zinc-950 px-5 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
     >
-      {pending ? "Creating server..." : "Create server"}
+      {pending ? "Creando servidor…" : "Crear servidor"}
     </button>
   );
 }
@@ -52,7 +53,7 @@ function EndpointFields({
           onChange={(event) => onEnabledChange(event.target.checked)}
           className="h-4 w-4 rounded border-zinc-300 accent-zinc-950 dark:border-zinc-700 dark:accent-white"
         />
-        This server has a {defaults.name} endpoint
+        Este servidor tiene un endpoint {defaults.name}
       </label>
       {enabled ? (
         <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_150px]">
@@ -68,7 +69,7 @@ function EndpointFields({
             />
           </label>
           <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Port
+            Puerto
             <input
               name={`${edition}Port`}
               type="number"
@@ -98,14 +99,14 @@ export function ServerForm() {
       <section className="space-y-5">
         <div>
           <h2 className="text-base font-semibold text-zinc-950 dark:text-white">
-            Server information
+            Información del servidor
           </h2>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Tell players what makes your community worth discovering.
+            Cuenta a los jugadores qué hace especial a tu comunidad.
           </p>
         </div>
         <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Name
+          Nombre
           <input
             name="name"
             type="text"
@@ -118,7 +119,7 @@ export function ServerForm() {
           <FieldError message={state?.fieldErrors?.name} />
         </label>
         <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Description
+          Descripción
           <textarea
             name="description"
             rows={5}
@@ -129,7 +130,7 @@ export function ServerForm() {
         </label>
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Website URL
+            Sitio web
             <input
               name="websiteUrl"
               type="url"
@@ -139,7 +140,7 @@ export function ServerForm() {
             <FieldError message={state?.fieldErrors?.websiteUrl} />
           </label>
           <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Discord invite URL
+            Invitación de Discord
             <input
               name="discordUrl"
               type="url"
@@ -149,15 +150,20 @@ export function ServerForm() {
             <FieldError message={state?.fieldErrors?.discordUrl} />
           </label>
         </div>
+        <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          Etiquetas
+          <TagCombobox name="tags" />
+          <FieldError message={state?.fieldErrors?.tags} />
+        </label>
       </section>
 
       <section className="space-y-4">
         <div>
           <h2 className="text-base font-semibold text-zinc-950 dark:text-white">
-            Server addresses
+            Direcciones del servidor
           </h2>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Add at least one address. Java defaults to port 25565 and Bedrock to 19132.
+            Añade al menos una dirección. Java usa el puerto 25565 y Bedrock el 19132.
           </p>
         </div>
         <EndpointFields
@@ -173,7 +179,7 @@ export function ServerForm() {
         <FieldError message={state?.fieldErrors?.endpoints} />
         {!javaEnabled && !bedrockEnabled ? (
           <p className="text-sm text-red-700 dark:text-red-300">
-            Select at least one Minecraft edition.
+            Selecciona al menos una edición de Minecraft.
           </p>
         ) : null}
       </section>

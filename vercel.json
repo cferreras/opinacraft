@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm build",
-  "regions": ["lhr1"]
+  "regions": ["lhr1"],
+  "functions": {
+    "src/app/api/internal/monitor/run/route.ts": {
+      "maxDuration": 180
+    }
+  }
 }
