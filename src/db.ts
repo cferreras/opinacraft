@@ -21,7 +21,7 @@ function secureConnectionString(connectionString: string) {
   return `${connectionString}${separator}sslmode=verify-full`;
 }
 
-const globalForDb = globalThis as typeof globalThis & { opinacraftPool?: Pool };
+const globalForDb = globalThis as typeof globalThis & { opinacraftPool?: Pool; opinacraftLockPool?: Pool };
 const pool = globalForDb.opinacraftPool ?? new Pool({
   connectionString: secureConnectionString(serverEnv.DATABASE_URL),
   max: 2,
@@ -31,7 +31,19 @@ const pool = globalForDb.opinacraftPool ?? new Pool({
   query_timeout: 10_000,
   keepAlive: true,
 });
-if (process.env.NODE_ENV !== "production") globalForDb.opinacraftPool = pool;
+const lockPool = globalForDb.opinacraftLockPool ?? new Pool({
+  connectionString: secureConnectionString(serverEnv.DATABASE_URL),
+  max: 1,
+  idleTimeoutMillis: 10_000,
+  connectionTimeoutMillis: 5_000,
+  statement_timeout: 10_000,
+  query_timeout: 10_000,
+  keepAlive: true,
+});
+if (process.env.NODE_ENV !== "production") {
+  globalForDb.opinacraftPool = pool;
+  globalForDb.opinacraftLockPool = lockPool;
+}
 
 export const db = drizzle({
   client: pool,
@@ -39,7 +51,8 @@ export const db = drizzle({
 });
 
 export async function withAdvisoryLock<T>(lockName: string, operation: () => Promise<T>) {
-  const client = await pool.connect();
+  const client = await lockPool.connect();
+  let unlockError: Error | undefined;
   try {
     const result = await client.query<{ acquired: boolean }>(
       "select pg_try_advisory_lock(hashtext($1)) as acquired",
@@ -49,15 +62,24 @@ export async function withAdvisoryLock<T>(lockName: string, operation: () => Pro
     try {
       return await operation();
     } finally {
-      await client.query("select pg_advisory_unlock(hashtext($1))", [lockName]);
+      try {
+        await client.query("select pg_advisory_unlock(hashtext($1))", [lockName]);
+      } catch (error) {
+        unlockError = error instanceof Error ? error : new Error("Failed to release advisory lock");
+        console.error("[db] failed to release advisory lock", lockName, error);
+      }
     }
   } finally {
-    client.release();
+    client.release(unlockError);
   }
 }
 
 export async function closeDatabase() {
-  if (!globalForDb.opinacraftPool) return;
-  await globalForDb.opinacraftPool.end();
+  if (!globalForDb.opinacraftPool && !globalForDb.opinacraftLockPool) return;
+  await Promise.all([
+    globalForDb.opinacraftPool?.end(),
+    globalForDb.opinacraftLockPool?.end(),
+  ]);
   globalForDb.opinacraftPool = undefined;
+  globalForDb.opinacraftLockPool = undefined;
 }

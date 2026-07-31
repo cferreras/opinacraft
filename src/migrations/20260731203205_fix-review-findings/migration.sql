@@ -6,5 +6,5 @@ ALTER TABLE "tags" ADD CONSTRAINT "tags_alias_of_tags_id_fkey" FOREIGN KEY ("ali
 INSERT INTO "media_usage_counters" ("period", "stored_bytes")
 SELECT 'total', COALESCE(SUM("bytes"), 0)::bigint
 FROM "server_media"
-WHERE "status" = 'active'
+WHERE "status" IN ('pending', 'active', 'deleted')
 ON CONFLICT ("period") DO NOTHING;

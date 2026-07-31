@@ -11,7 +11,7 @@ import { serverEnv } from "@/env/server";
 export const runtime = "nodejs";
 
 const resultSchema = z.object({
-  serverId: z.string().uuid(),
+  serverId: z.uuid(),
   edition: z.literal("bedrock"),
   online: z.boolean(),
   playersCurrent: z.number().int().nonnegative().nullable().optional(),
@@ -42,14 +42,21 @@ export async function POST(request: Request) {
   const parsed = payloadSchema.safeParse(parsedBody);
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   const body = parsed.data;
-  const [run] = await db.select().from(monitorRuns).where(and(eq(monitorRuns.runId, body.runId), eq(monitorRuns.nonce, body.nonce))).limit(1);
-  if (!run || run.status !== "pending" || run.expiresAt <= new Date()) return NextResponse.json({ error: "Expired run" }, { status: 409 });
-  const dispatched = new Set(run.fallbackEndpoints.map((endpoint) => `${endpoint.serverId}:${endpoint.edition}`));
-  if (body.results.some((result) => !dispatched.has(`${result.serverId}:${result.edition}`))) {
-    return NextResponse.json({ error: "Result is not part of this monitor run." }, { status: 400 });
-  }
-  await db.transaction(async (tx) => {
-    for (const result of body.results) {
+  const results = [...new Map(body.results.map((result) => [`${result.serverId}:${result.edition}`, result])).values()];
+  const outcome = await db.transaction(async (tx) => {
+    const [run] = await tx
+      .select()
+      .from(monitorRuns)
+      .where(and(eq(monitorRuns.runId, body.runId), eq(monitorRuns.nonce, body.nonce)))
+      .for("update")
+      .limit(1);
+    if (!run || run.expiresAt <= new Date()) return { error: "Expired run", status: 409 as const };
+    if (run.status !== "pending") return { error: "Expired run", status: 409 as const };
+    const dispatched = new Set(run.fallbackEndpoints.map((endpoint) => `${endpoint.serverId}:${endpoint.edition}`));
+    if (results.some((result) => !dispatched.has(`${result.serverId}:${result.edition}`))) {
+      return { error: "Result is not part of this monitor run.", status: 400 as const };
+    }
+    for (const result of results) {
       const [current] = await tx
         .select({ healthStatus: serverEndpoints.healthStatus, consecutiveFailures: serverEndpoints.consecutiveFailures })
         .from(serverEndpoints)
@@ -88,6 +95,8 @@ export async function POST(request: Request) {
       }
     }
     await tx.update(monitorRuns).set({ status: "done" }).where(eq(monitorRuns.runId, run.runId));
+    return { processed: results.length };
   });
-  return NextResponse.json({ ok: true, processed: body.results.length });
+  if ("error" in outcome) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+  return NextResponse.json({ ok: true, processed: outcome.processed });
 }
