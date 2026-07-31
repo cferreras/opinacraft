@@ -1,0 +1,4 @@
+import Link from "next/link";
+
+export const metadata = { title: "Términos · OpinaCraft", description: "Términos provisionales de uso de OpinaCraft.", robots: { index: false } };
+export default function TermsPage() { return <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-12"><Link href="/" className="text-sm underline">OpinaCraft</Link><h1 className="mt-8 text-3xl font-semibold">Términos de uso</h1><p className="mt-4 text-sm text-amber-700">Página provisional pendiente de revisión legal.</p><div className="mt-6 space-y-4 text-sm leading-6"><p>Publica únicamente servidores y contenidos sobre los que tengas autorización. Mantén los endpoints actualizados y no intentes eludir la moderación.</p><p>OpinaCraft puede ocultar contenido que infrinja estos términos o la legislación aplicable.</p></div></main>; }

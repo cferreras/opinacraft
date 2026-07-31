@@ -1,0 +1,1 @@
+ALTER TYPE "media_cleanup_status" ADD VALUE 'processing' BEFORE 'done';

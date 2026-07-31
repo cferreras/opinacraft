@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { AuthShell } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
 import { clientEnv } from "@/env/client";
+import { safeCallbackUrl } from "@/lib/callback-url";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -20,12 +21,16 @@ export default function SignInPage() {
     event.preventDefault();
     setError(null);
     setIsPending(true);
+    const callbackURL = safeCallbackUrl(
+      new URLSearchParams(window.location.search).get("callbackURL"),
+      "/profile",
+    );
 
     try {
       const { error: signInError } = await authClient.signIn.email({
         email,
         password,
-        callbackURL: "/profile",
+        callbackURL,
       });
 
       if (signInError) {
@@ -33,7 +38,7 @@ export default function SignInPage() {
         return;
       }
 
-      router.push("/profile");
+      router.push(callbackURL);
       router.refresh();
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to sign in.");
@@ -44,9 +49,13 @@ export default function SignInPage() {
 
   async function handleDiscordSignIn() {
     setError(null);
+    const callbackURL = safeCallbackUrl(
+      new URLSearchParams(window.location.search).get("callbackURL"),
+      "/profile",
+    );
     await authClient.signIn.social({
       provider: "discord",
-      callbackURL: "/profile",
+      callbackURL,
     });
   }
 

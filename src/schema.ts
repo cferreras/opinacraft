@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
   varchar,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -35,6 +36,7 @@ export const serverVerificationAttemptStatus = pgEnum(
 
 export const serverVerificationMethod = pgEnum("server_verification_method", [
   "motd_java",
+  "motd_bedrock",
 ]);
 
 export const serverVerificationFailureCode = pgEnum(
@@ -55,6 +57,34 @@ export const serverMemberRole = pgEnum("server_member_role", [
   "editor",
 ]);
 
+export const serverTagStatus = pgEnum("server_tag_status", [
+  "active",
+  "blocked",
+  "merged",
+]);
+
+export const serverMediaKind = pgEnum("server_media_kind", ["logo", "banner"]);
+
+export const serverMediaStatus = pgEnum("server_media_status", [
+  "pending",
+  "active",
+  "failed",
+  "deleted",
+]);
+
+export const serverEndpointHealth = pgEnum("server_endpoint_health", [
+  "unknown",
+  "online",
+  "offline",
+]);
+
+export const platformRoleName = pgEnum("platform_role_name", ["moderator", "admin"]);
+export const serverReportReason = pgEnum("server_report_reason", ["inappropriate", "misleading", "offline", "copyright", "other"]);
+export const serverReportStatus = pgEnum("server_report_status", ["open", "dismissed", "actioned"]);
+export const moderationAction = pgEnum("moderation_action", ["report_created", "dismissed", "hidden", "restored"]);
+export const serverModerationStatus = pgEnum("server_moderation_status", ["active", "blocked"]);
+export const mediaCleanupStatus = pgEnum("media_cleanup_status", ["pending", "processing", "done", "failed"]);
+
 export const minecraftEdition = pgEnum("minecraft_edition", [
   "java",
   "bedrock",
@@ -69,6 +99,8 @@ export const servers = pgTable(
     description: text("description"),
     websiteUrl: text("website_url"),
     discordUrl: text("discord_url"),
+    moderationStatus: serverModerationStatus("moderation_status").default("active").notNull(),
+    availabilityHiddenAt: timestamp("availability_hidden_at", { withTimezone: true }),
     publicationStatus: serverPublicationStatus("publication_status")
       .default("draft")
       .notNull(),
@@ -115,6 +147,14 @@ export const serverEndpoints = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
+    healthStatus: serverEndpointHealth("health_status").default("unknown").notNull(),
+    playersCurrent: integer("players_current"),
+    playersMax: integer("players_max"),
+    version: varchar("version", { length: 100 }),
+    latencyMs: integer("latency_ms"),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    lastOnlineAt: timestamp("last_online_at", { withTimezone: true }),
+    consecutiveFailures: smallint("consecutive_failures").default(0).notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.serverId, table.edition] }),
@@ -165,6 +205,7 @@ export const serverVerifications = pgTable(
     requestedByUserId: text("requested_by_user_id").references(() => user.id, {
       onDelete: "set null",
     }),
+    edition: minecraftEdition("edition").default("java").notNull(),
     method: serverVerificationMethod("method").default("motd_java").notNull(),
     endpointHost: varchar("endpoint_host", { length: 253 }).notNull(),
     endpointPort: integer("endpoint_port").notNull(),
@@ -213,7 +254,193 @@ export const serverVerifications = pgTable(
       table.createdAt,
     ),
     uniqueIndex("server_verifications_one_pending_idx")
-      .on(table.serverId)
+      .on(table.serverId, table.edition)
       .where(sql`${table.status} = 'pending'`),
   ],
+);
+
+export const serverTags = pgTable(
+  "server_tags",
+  {
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.serverId, table.tagId] }),
+    index("server_tags_tag_id_idx").on(table.tagId),
+  ],
+);
+
+export const tags = pgTable(
+  "tags",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    label: varchar("label", { length: 40 }).notNull(),
+    slug: varchar("slug", { length: 64 }).notNull().unique(),
+    status: serverTagStatus("status").default("active").notNull(),
+    usageCount: integer("usage_count").default(0).notNull(),
+    aliasOf: uuid("alias_of"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("tags_active_slug_idx").on(table.status, table.slug),
+    index("tags_usage_count_idx").on(table.status, table.usageCount),
+  ],
+);
+
+export const serverMedia = pgTable(
+  "server_media",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    kind: serverMediaKind("kind").notNull(),
+    blobKey: varchar("blob_key", { length: 512 }).notNull(),
+    blobUrl: text("blob_url").notNull(),
+    contentType: varchar("content_type", { length: 100 }).notNull(),
+    bytes: integer("bytes").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    status: serverMediaStatus("status").default("pending").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("server_media_server_kind_idx").on(table.serverId, table.kind),
+    uniqueIndex("server_media_one_active_kind_idx")
+      .on(table.serverId, table.kind)
+      .where(sql`${table.status} = 'active'`),
+  ],
+);
+
+export const platformRoles = pgTable(
+  "platform_roles",
+  {
+    userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+    role: platformRoleName("role").notNull(),
+    grantedByUserId: text("granted_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+export const serverReports = pgTable(
+  "server_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    serverId: uuid("server_id").notNull().references(() => servers.id, { onDelete: "cascade" }),
+    reporterUserId: text("reporter_user_id").references(() => user.id, { onDelete: "set null" }),
+    reason: serverReportReason("reason").notNull(),
+    details: text("details"),
+    status: serverReportStatus("status").default("open").notNull(),
+    assignedToUserId: text("assigned_to_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (table) => [
+    index("server_reports_queue_idx").on(table.status, table.createdAt),
+    uniqueIndex("server_reports_one_open_per_user_server_idx").on(table.serverId, table.reporterUserId).where(sql`${table.status} = 'open'`),
+  ],
+);
+
+export const moderationEvents = pgTable(
+  "moderation_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    serverId: uuid("server_id").notNull().references(() => servers.id, { onDelete: "cascade" }),
+    reportId: uuid("report_id").references(() => serverReports.id, { onDelete: "set null" }),
+    actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
+    action: moderationAction("action").notNull(),
+    details: text("details"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("moderation_events_server_created_idx").on(table.serverId, table.createdAt)],
+);
+
+export const mediaCleanupJobs = pgTable(
+  "media_cleanup_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    blobKey: varchar("blob_key", { length: 512 }).notNull().unique(),
+    status: mediaCleanupStatus("status").default("pending").notNull(),
+    attempts: smallint("attempts").default(0).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (table) => [index("media_cleanup_jobs_queue_idx").on(table.status, table.nextAttemptAt)],
+);
+
+export const mediaUsageCounters = pgTable(
+  "media_usage_counters",
+  {
+    period: varchar("period", { length: 7 }).primaryKey(),
+    storedBytes: integer("stored_bytes").default(0).notNull(),
+    advancedOperations: integer("advanced_operations").default(0).notNull(),
+    alerted70: timestamp("alerted_70", { withTimezone: true }),
+    alerted85: timestamp("alerted_85", { withTimezone: true }),
+    alerted95: timestamp("alerted_95", { withTimezone: true }),
+    blockedAt: timestamp("blocked_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+export const notificationJobStatus = pgEnum("notification_job_status", ["pending", "processing", "sent", "failed"]);
+
+export const notificationJobs = pgTable(
+  "notification_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    dedupeKey: varchar("dedupe_key", { length: 255 }).notNull().unique(),
+    recipientUserId: text("recipient_user_id").references(() => user.id, { onDelete: "set null" }),
+    recipientEmail: varchar("recipient_email", { length: 320 }).notNull(),
+    template: varchar("template", { length: 80 }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
+    status: notificationJobStatus("status").default("pending").notNull(),
+    attempts: smallint("attempts").default(0).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (table) => [index("notification_jobs_queue_idx").on(table.status, table.nextAttemptAt)],
+);
+
+export const monitorRuns = pgTable(
+  "monitor_runs",
+  {
+    runId: varchar("run_id", { length: 100 }).primaryKey(),
+    nonce: varchar("nonce", { length: 128 }).notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+);
+
+export const tagAliases = pgTable(
+  "tag_aliases",
+  {
+    aliasSlug: varchar("alias_slug", { length: 64 }).primaryKey(),
+    tagId: uuid("tag_id").notNull().references(() => tags.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
 );

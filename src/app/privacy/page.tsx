@@ -1,0 +1,4 @@
+import Link from "next/link";
+
+export const metadata = { title: "Privacidad · OpinaCraft", description: "Información provisional sobre privacidad en OpinaCraft.", robots: { index: false } };
+export default function PrivacyPage() { return <main className="mx-auto min-h-screen w-full max-w-3xl px-6 py-12"><Link href="/" className="text-sm underline">OpinaCraft</Link><h1 className="mt-8 text-3xl font-semibold">Política de privacidad</h1><p className="mt-4 text-sm text-amber-700">Página provisional pendiente de revisión legal.</p><div className="mt-6 space-y-4 text-sm leading-6"><p>Tratamos los datos necesarios para crear tu cuenta, gestionar servidores, verificar endpoints y moderar reportes.</p><p>Puedes exportar o borrar tu cuenta desde el perfil. Conservamos eventos de moderación anonimizados para proteger la integridad del servicio.</p><p>Solo usamos cookies técnicas necesarias para la sesión. No hay cookies publicitarias.</p></div></main>; }

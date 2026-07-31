@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { db } from "@/db";
+import { user } from "@/auth-schema";
 import {
   serverEndpoints,
   serverMembers,
   serverVerifications,
+  serverMedia,
   servers,
 } from "@/schema";
 import {
@@ -16,13 +18,46 @@ import {
   type CreateServerInput,
   type UpdateServerInput,
   type NormalizedCreateServerInput,
+  minecraftEditions,
 } from "@/lib/servers/validation";
 import { requireServerCapability } from "@/lib/servers/permissions";
+import { replaceServerTagsForServer } from "@/lib/servers/tags";
 import { databaseConstraint, databaseErrorCode } from "@/lib/db-errors";
+import { mediaStorage } from "@/lib/media/storage";
+import { enqueueMediaCleanup } from "@/lib/media/cleanup";
 
 const RESERVED_SLUGS = new Set(["new"]);
 const MAX_SLUG_ATTEMPTS = 8;
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export class UnverifiedEmailError extends Error {
+  constructor() {
+    super("Verify your email before creating or publishing a server.");
+    this.name = "UnverifiedEmailError";
+  }
+}
+
+export class NoVerifiedEndpointError extends Error {
+  constructor() {
+    super("Verify at least one Minecraft endpoint before publishing this server.");
+    this.name = "NoVerifiedEndpointError";
+  }
+}
+
+async function requireVerifiedEmail(
+  userId: string,
+  reader: Pick<typeof db, "select"> = db,
+) {
+  const [account] = await reader
+    .select({ emailVerified: user.emailVerified })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+
+  if (!account || !account.emailVerified) {
+    throw new UnverifiedEmailError();
+  }
+}
 
 export class DuplicateEndpointError extends Error {
   constructor() {
@@ -116,11 +151,13 @@ async function insertServerBundle(
     userId,
     role: "owner",
   });
+  await replaceServerTagsForServer(tx, serverId, input.tags, { allowCreate: true });
 
   return { id: serverId, slug };
 }
 
 export async function createServer(userId: string, rawInput: CreateServerInput) {
+  await requireVerifiedEmail(userId);
   const input = normalizeCreateServerInput(rawInput);
 
   const baseSlug = slugifyServerName(input.name);
@@ -190,6 +227,15 @@ export async function updateServer(
 
     if (publicationStatus !== undefined) {
       await requireServerCapability(serverId, userId, "publication:edit", tx);
+      if (publicationStatus === "published") {
+        await requireVerifiedEmail(userId, tx);
+        const [verifiedEndpoint] = await tx
+          .select({ serverId: serverEndpoints.serverId })
+          .from(serverEndpoints)
+          .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.verificationStatus, "verified")))
+          .limit(1);
+        if (!verifiedEndpoint) throw new NoVerifiedEndpointError();
+      }
     }
 
     const currentEndpoints = await tx
@@ -212,6 +258,11 @@ export async function updateServer(
         const current = currentEndpoints.find((item) => item.edition === next.edition);
         return !current || current.host !== next.host || current.port !== next.port;
       });
+    const changedEditions = minecraftEditions.filter((edition) => {
+      const next = input.endpoints.find((endpoint) => endpoint.edition === edition);
+      const current = currentEndpoints.find((endpoint) => endpoint.edition === edition);
+      return current?.host !== next?.host || current?.port !== next?.port;
+    });
 
     if (input.name !== server.name) {
       await requireServerCapability(serverId, userId, "identity:edit", tx);
@@ -230,13 +281,14 @@ export async function updateServer(
         websiteUrl: input.websiteUrl,
         discordUrl: input.discordUrl,
         ...(publicationStatus ? { publicationStatus } : {}),
+        ...(publicationStatus === "published" ? { availabilityHiddenAt: null } : {}),
         ...(javaChanged
           ? { verificationStatus: "unverified" as const, verifiedAt: null }
           : {}),
       })
       .where(eq(servers.id, serverId));
 
-    if (javaChanged) {
+    if (changedEditions.length) {
       await tx
         .update(serverVerifications)
         .set({ status: "superseded", lastFailureCode: "endpoint_changed" })
@@ -244,6 +296,7 @@ export async function updateServer(
           and(
             eq(serverVerifications.serverId, serverId),
             eq(serverVerifications.status, "pending"),
+            inArray(serverVerifications.edition, changedEditions),
           ),
         );
     }
@@ -258,9 +311,8 @@ export async function updateServer(
           host: endpoint.host,
           port: endpoint.port,
           verificationStatus:
-            endpoint.edition === "java" &&
             current?.verificationStatus === "verified" &&
-            !javaChanged &&
+            !changedEditions.includes(endpoint.edition) &&
             current?.host === endpoint.host &&
             current?.port === endpoint.port
               ? "verified"
@@ -269,6 +321,24 @@ export async function updateServer(
       }
     }
 
+    if (role === "owner" && input.tags?.length) await requireVerifiedEmail(userId, tx);
+
+    await replaceServerTagsForServer(tx, serverId, input.tags, { allowCreate: role === "owner" });
+
+    const [verifiedEndpoint] = await tx.select({ serverId: serverEndpoints.serverId }).from(serverEndpoints).where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.verificationStatus, "verified"))).limit(1);
+    await tx.update(servers).set(verifiedEndpoint ? { verificationStatus: "verified", verifiedAt: sql`coalesce(${servers.verifiedAt}, now())` } : { verificationStatus: "unverified", verifiedAt: null }).where(eq(servers.id, serverId));
+
     return { role, javaChanged };
   });
+}
+
+export async function deleteServer(userId: string, serverId: string, confirmation: string) {
+  if (confirmation !== "DELETE") throw new Error("Type DELETE to confirm server deletion.");
+  const media = await db.transaction(async (tx) => {
+    await requireServerCapability(serverId, userId, "identity:edit", tx);
+    const rows = await tx.select({ blobKey: serverMedia.blobKey }).from(serverMedia).where(eq(serverMedia.serverId, serverId));
+    await tx.delete(servers).where(eq(servers.id, serverId));
+    return rows;
+  });
+  await Promise.all(media.map(({ blobKey }) => mediaStorage.remove(blobKey).catch((error) => enqueueMediaCleanup(blobKey, error))));
 }

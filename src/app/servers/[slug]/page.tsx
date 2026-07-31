@@ -5,6 +5,8 @@ import { cache } from "react";
 
 import { getPublishedServerBySlug } from "@/lib/servers/queries";
 import { formatEndpoint } from "@/lib/servers/format";
+import { ReportForm } from "@/components/report-form";
+import { CopyAddressButton } from "@/components/copy-address-button";
 
 type PublicServerPageProps = {
   params: Promise<{ slug: string }>;
@@ -22,6 +24,8 @@ export async function generateMetadata({ params }: PublicServerPageProps): Promi
     ? {
         title: `${server.name} | OpinaCraft`,
         description: server.description ?? `Discover ${server.name} on OpinaCraft.`,
+        alternates: { canonical: `/servers/${server.slug}` },
+        openGraph: { title: server.name, description: server.description ?? undefined, type: "website", images: server.media.find((media) => media.kind === "banner" || media.kind === "logo")?.url ? [{ url: server.media.find((media) => media.kind === "banner" || media.kind === "logo")!.url }] : undefined },
       }
     : { title: "Server not found | OpinaCraft" };
 }
@@ -52,20 +56,22 @@ export default async function PublicServerPage({
           All servers
         </Link>
         <div className="mt-8">
+          {server.media.find((media) => media.kind === "logo") ? <img src={server.media.find((media) => media.kind === "logo")?.url} alt={`${server.name} logo`} className="mb-6 h-20 w-20 rounded-2xl object-cover" /> : null}
           <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
             Minecraft server
           </p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-white">
             {server.name}
           </h1>
-          <span className={`mt-4 inline-flex rounded-full px-3 py-1 text-xs font-medium ${server.verificationStatus === "verified" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-            {server.verificationStatus === "verified" ? "Verified server" : "Not verified"}
+          <span className={`mt-4 inline-flex rounded-full px-3 py-1 text-xs font-medium ${server.aggregateStatus === "online" ? "bg-emerald-100 text-emerald-800" : server.aggregateStatus === "offline" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>
+            {server.aggregateStatus === "online" ? "Online" : server.aggregateStatus === "offline" ? "Offline" : "Estado desconocido"}
           </span>
           {server.description ? (
             <p className="mt-5 whitespace-pre-wrap text-base leading-7 text-zinc-600 dark:text-zinc-400">
               {server.description}
             </p>
           ) : null}
+          {server.tags.length > 0 ? <div className="mt-5 flex flex-wrap gap-2">{server.tags.map((tag) => <span key={tag.slug} className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-200">{tag.label}</span>)}</div> : null}
         </div>
 
         <section className="mt-10">
@@ -84,8 +90,10 @@ export default async function PublicServerPage({
                 <code className="text-sm text-zinc-950 dark:text-white">
                   {formatEndpoint(endpoint)}
                 </code>
+                <CopyAddressButton value={formatEndpoint(endpoint)} />
                 <span className="text-xs capitalize text-zinc-500">
-                  {endpoint.verificationStatus === "verified" ? "verified" : "not verified"}
+                  {endpoint.verificationStatus === "verified" ? "verified" : "not verified"} · {endpoint.healthStatus}
+                  {endpoint.playersCurrent !== null && endpoint.playersMax !== null ? ` · ${endpoint.playersCurrent}/${endpoint.playersMax} players` : ""}
                 </span>
               </div>
             ))}
@@ -116,6 +124,8 @@ export default async function PublicServerPage({
             ) : null}
           </section>
         ) : null}
+
+        <ReportForm serverId={server.id} />
 
         <p className="mt-10 text-xs text-zinc-500">
           Listed on OpinaCraft on {server.createdAt.toLocaleDateString("en-US")}.

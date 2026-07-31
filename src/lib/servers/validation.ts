@@ -21,6 +21,7 @@ export type CreateServerInput = {
   description?: string;
   websiteUrl?: string;
   discordUrl?: string;
+  tags?: string[];
   endpoints: RawServerEndpoint[];
 };
 
@@ -37,6 +38,7 @@ export type NormalizedCreateServerInput = {
   description: string | null;
   websiteUrl: string | null;
   discordUrl: string | null;
+  tags: string[];
   endpoints: NormalizedServerEndpoint[];
 };
 
@@ -54,6 +56,7 @@ export const createServerInputSchema = z
     description: z.string().trim().max(2_000).optional(),
     websiteUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     discordUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
+    tags: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
     endpoints: z.array(endpointSchema).min(1).max(2),
   })
   .strict()
@@ -250,6 +253,7 @@ export function normalizeCreateServerInput(
     discordUrl: parsed.discordUrl
       ? normalizeHttpUrl(parsed.discordUrl, "discordUrl")
       : null,
+    tags: parsed.tags ?? [],
     endpoints,
   };
 }

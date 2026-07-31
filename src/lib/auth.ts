@@ -5,7 +5,10 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import * as authSchema from "@/auth-schema";
 import { db } from "@/db";
 import { serverEnv } from "@/env/server";
-import { sendPasswordResetEmail } from "@/lib/email";
+import {
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from "@/lib/email";
 
 const discordClientId = serverEnv.DISCORD_CLIENT_ID;
 const discordClientSecret = serverEnv.DISCORD_CLIENT_SECRET;
@@ -37,6 +40,7 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
+    requireEmailVerification: true,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
       after(async () => {
@@ -45,6 +49,22 @@ export const auth = betterAuth({
         } catch (error) {
           console.error(
             "Failed to send password reset email",
+            error instanceof Error ? `${error.name}: ${error.message}` : "unknown",
+          );
+        }
+      });
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    sendOnSignIn: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      after(async () => {
+        try {
+          await sendVerificationEmail({ to: user.email, url });
+        } catch (error) {
+          console.error(
+            "Failed to send email verification",
             error instanceof Error ? `${error.name}: ${error.message}` : "unknown",
           );
         }

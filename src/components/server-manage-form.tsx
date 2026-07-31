@@ -6,6 +6,7 @@ import {
   updateServerAction,
   type ManageState,
 } from "@/app/servers/[slug]/manage/actions";
+import { TagCombobox } from "@/components/tag-combobox";
 
 type Endpoint = { edition: "java" | "bedrock"; host: string; port: number };
 
@@ -19,6 +20,7 @@ export function ServerManageForm({
     description: string | null;
     websiteUrl: string | null;
     discordUrl: string | null;
+    tags: Array<{ label: string; slug: string }>;
     publicationStatus: "draft" | "published" | "hidden";
     endpoints: Endpoint[];
     role: "owner" | "admin" | "editor";
@@ -61,6 +63,11 @@ export function ServerManageForm({
           {state?.fieldErrors?.discordUrl ? <ErrorText>{state.fieldErrors.discordUrl}</ErrorText> : null}
         </label>
       </div>
+      <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+        Tags
+        <TagCombobox name="tags" initialTags={server.tags.map((tag) => tag.label)} allowCreate={server.role === "owner"} />
+        {state?.fieldErrors?.tags ? <ErrorText>{state.fieldErrors.tags}</ErrorText> : null}
+      </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <EndpointFields edition="java" endpoint={java} disabled={!canEditEndpoints} />
         <EndpointFields edition="bedrock" endpoint={bedrock} disabled={!canEditEndpoints} />

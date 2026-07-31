@@ -18,10 +18,12 @@ export function VerificationPanel({
   serverId,
   slug,
   verification,
+  edition = "java",
 }: {
   serverId: string;
   slug: string;
   verification: Display;
+  edition?: "java" | "bedrock";
 }) {
   const active = verification?.status === "pending" && verification.code;
 
@@ -29,9 +31,9 @@ export function VerificationPanel({
     <section className="rounded-2xl bg-white p-6 dark:bg-zinc-900">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Ownership verification</h2>
+          <h2 className="text-lg font-semibold">Verificación de propiedad · {edition === "java" ? "Java" : "Bedrock"}</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Add the temporary code to the Java server MOTD.
+            Añade el código temporal al MOTD del servidor {edition === "java" ? "Java" : "Bedrock"}.
           </p>
         </div>
         <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs capitalize dark:bg-zinc-800">
@@ -62,8 +64,9 @@ export function VerificationPanel({
                 name="verificationId"
                 value={verification.id}
               />
+              <input type="hidden" name="edition" value={edition} />
               <button className="h-10 rounded-lg bg-zinc-950 px-4 text-sm text-white dark:bg-white dark:text-zinc-950">
-                Check MOTD
+                Comprobar MOTD
               </button>
             </form>
             <button
@@ -71,23 +74,17 @@ export function VerificationPanel({
               onClick={() => navigator.clipboard?.writeText(verification.code ?? "")}
               className="h-10 rounded-lg border border-zinc-300 px-4 text-sm dark:border-zinc-700"
             >
-              Copy code
+              Copiar código
             </button>
-            <form action={startVerificationAction}>
-              <input type="hidden" name="serverId" value={serverId} />
-              <input type="hidden" name="slug" value={slug} />
-              <button className="h-10 rounded-lg border border-zinc-300 px-4 text-sm dark:border-zinc-700">
-                Regenerate
-              </button>
-            </form>
           </div>
         </div>
       ) : (
         <form action={startVerificationAction} className="mt-5">
           <input type="hidden" name="serverId" value={serverId} />
           <input type="hidden" name="slug" value={slug} />
+          <input type="hidden" name="edition" value={edition} />
           <button className="h-10 rounded-lg bg-zinc-950 px-4 text-sm text-white dark:bg-zinc-950 dark:text-white">
-            Generate verification code
+            Generar código de verificación
           </button>
         </form>
       )}

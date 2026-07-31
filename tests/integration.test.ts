@@ -61,7 +61,7 @@ function uniqueSlug() {
 async function createUser() {
   const id = `integration-user-${randomUUID()}`;
   await database().query(
-    'insert into "user" (id, name, email) values ($1, $2, $3)',
+    'insert into "user" (id, name, email, email_verified) values ($1, $2, $3, true)',
     [id, "Integration Test User", uniqueEmail()],
   );
   createdUserIds.add(id);
@@ -170,7 +170,7 @@ test("server creation rolls back when the owner insert fails", testOptions, asyn
         name,
         endpoints: [{ edition: "java", host: "atomic.example.invalid", port: 25565 }],
       }),
-    (error: unknown) => (error as { code?: string }).code === "23503",
+    (error: unknown) => (error as { code?: string; name?: string }).code === "23503" || (error as { name?: string }).name === "UnverifiedEmailError",
   );
 
   const result = await database().query("select count(*)::int as count from servers where name = $1", [name]);
@@ -229,6 +229,35 @@ test("a server can have only one pending verification", testOptions, async () =>
   await assert.rejects(
     () => createVerification(serverId),
     (error: unknown) => (error as { code?: string }).code === "23505",
+  );
+});
+
+test("an already verified endpoint cannot generate another MOTD code", testOptions, async () => {
+  const ownerId = await createUser();
+  const serverId = await createServerRecord({
+    ownerId,
+    endpoint: { host: "already-verified.example.invalid", port: 25565, verificationStatus: "verified" },
+  });
+  const { startServerVerification, EndpointAlreadyVerifiedError } = await import("../src/lib/servers/verification.ts");
+
+  await assert.rejects(
+    () => startServerVerification(serverId, ownerId, "java"),
+    (error: unknown) => error instanceof EndpointAlreadyVerifiedError,
+  );
+});
+
+test("an unchanged endpoint keeps one pending MOTD code", testOptions, async () => {
+  const ownerId = await createUser();
+  const serverId = await createServerRecord({
+    ownerId,
+    endpoint: { host: "pending-code.example.invalid", port: 25565 },
+  });
+  const { startServerVerification, VerificationAlreadyPendingError } = await import("../src/lib/servers/verification.ts");
+
+  await startServerVerification(serverId, ownerId, "java");
+  await assert.rejects(
+    () => startServerVerification(serverId, ownerId, "java"),
+    (error: unknown) => error instanceof VerificationAlreadyPendingError,
   );
 });
 
