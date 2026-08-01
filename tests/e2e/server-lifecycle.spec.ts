@@ -83,7 +83,7 @@ test("owner can create a complete Java/Bedrock listing, upload media, edit visib
   await expect(page.getByText(serverName)).toHaveCount(0);
 });
 
-test("invalid media is rejected without contacting external storage", async ({ page }) => {
+test("a non-image media file is rejected", async ({ page }) => {
   const owner = await createAccount(page, "media-validation");
   createdEmails.push(owner.email);
   const { slug } = await createServer(page, { name: `E2E Media Validation ${Date.now()}` });

@@ -3,6 +3,10 @@ import { sql } from "drizzle-orm";
 import { rateLimitDb } from "@/db";
 import { rateLimit } from "@/auth-schema";
 
+const RATE_LIMIT_PRUNE_INTERVAL_MS = 60_000;
+let longestWindowMs = 0;
+let lastPrunedAt = 0;
+
 export class RateLimitExceededError extends Error {
   readonly retryAfterSeconds: number;
 
@@ -19,6 +23,7 @@ export async function consumeRateLimit(
   windowMs: number,
 ) {
   const now = Date.now();
+  longestWindowMs = Math.max(longestWindowMs, windowMs);
   const windowStart = now - windowMs;
   const namespacedKey = `opinacraft:${key}`;
   const [row] = await rateLimitDb
@@ -32,6 +37,14 @@ export async function consumeRateLimit(
       },
     })
     .returning({ count: rateLimit.count, lastRequest: rateLimit.lastRequest });
+
+  if (now - lastPrunedAt >= RATE_LIMIT_PRUNE_INTERVAL_MS) {
+    lastPrunedAt = now;
+    void rateLimitDb
+      .delete(rateLimit)
+      .where(sql`${rateLimit.lastRequest} < ${now - longestWindowMs}`)
+      .catch((error) => console.error("[rate-limit] failed to prune stale rows", error));
+  }
 
   if (!row || row.count <= limit) return row;
 

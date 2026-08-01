@@ -25,8 +25,8 @@ test("an account can verify its email without sending a real message", async ({ 
   await page.getByLabel("Email").fill(account.email);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).not.toHaveURL(/\/profile$/);
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  const verificationError = page.locator("form > p").filter({ hasText: "Email not verified" });
+  await expect(verificationError).toHaveText("Email not verified");
 
   const token = makeEmailVerificationToken(account.email);
   await page.goto(
@@ -79,7 +79,7 @@ test("a user can export and delete the account from the profile", async ({ page 
   await page.getByRole("button", { name: "Exportar mis datos" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("opinacraft-cuenta.json");
-  await expect(page.locator("p").filter({ hasText: /Export|descarg/i })).toBeVisible();
+  await expect(page.locator("section p").filter({ hasText: /Export|descarg/i })).toBeVisible();
 
   page.once("dialog", async (dialog) => {
     expect(dialog.type()).toBe("prompt");

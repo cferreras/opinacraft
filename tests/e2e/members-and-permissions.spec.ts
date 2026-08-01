@@ -31,9 +31,10 @@ test("owner can add, promote and remove a member while permissions stay scoped",
 
   await page.goto(`/servers/${slug}/manage`);
   const membersPanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Members", exact: true }) });
-  await membersPanel.locator('input[name="email"]').fill(memberAccount.email);
-  await membersPanel.locator('select[name="role"]').last().selectOption("editor");
-  await membersPanel.getByRole("button", { name: "Add" }).click();
+  const addMemberForm = membersPanel.locator("form").filter({ has: page.getByRole("button", { name: "Add" }) });
+  await addMemberForm.locator('input[name="email"]').fill(memberAccount.email);
+  await addMemberForm.locator('select[name="role"]').selectOption("editor");
+  await addMemberForm.getByRole("button", { name: "Add" }).click();
   await expect(membersPanel.getByText(memberAccount.email)).toBeVisible();
 
   await member.goto(`/servers/${slug}/manage`);
@@ -43,10 +44,9 @@ test("owner can add, promote and remove a member while permissions stay scoped",
   await expect(member.getByText("Delete server")).toHaveCount(0);
 
   await page.goto(`/servers/${slug}/manage`);
-  const ownerMembersPanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Members", exact: true }) });
-  const memberRoleSelect = ownerMembersPanel.locator('select[name="role"]').first();
-  await memberRoleSelect.selectOption("admin");
-  await memberRoleSelect.locator("xpath=..").getByRole("button", { name: "Save" }).click();
+  const memberRow = membersPanel.locator("div.rounded-xl.border").filter({ hasText: memberAccount.email });
+  await memberRow.locator('select[name="role"]').selectOption("admin");
+  await memberRow.getByRole("button", { name: "Save" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?memberUpdated=1$`));
 
   await member.goto(`/servers/${slug}/manage`);
@@ -60,7 +60,7 @@ test("owner can add, promote and remove a member while permissions stay scoped",
   await expect(member.getByText(/miembros no pueden puntuar/i)).toBeVisible();
 
   await page.goto(`/servers/${slug}/manage`);
-  await page.locator("section").filter({ has: page.getByRole("heading", { name: "Members", exact: true }) }).getByRole("button", { name: "Remove" }).click();
+  await memberRow.getByRole("button", { name: "Remove" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?memberUpdated=1$`));
   await member.goto(`/servers/${slug}/manage`);
   await expect(member.getByText(/not found|no encontrado/i)).toBeVisible();

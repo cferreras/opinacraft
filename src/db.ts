@@ -42,7 +42,7 @@ const lockPool = globalForDb.opinacraftLockPool ?? new Pool({
 });
 const rateLimitPool = globalForDb.opinacraftRateLimitPool ?? new Pool({
   connectionString: secureConnectionString(serverEnv.DATABASE_URL),
-  max: 1,
+  max: 2,
   idleTimeoutMillis: 10_000,
   connectionTimeoutMillis: 5_000,
   statement_timeout: 10_000,

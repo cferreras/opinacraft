@@ -88,11 +88,17 @@ test("verified player can publish, edit, delete and receive an official reply", 
     page.getByRole("paragraph").filter({ hasText: "Gracias por compartir tu experiencia" }),
   ).toBeVisible();
 
+  const officialReply = page
+    .locator("article")
+    .filter({ has: page.getByLabel("Editar respuesta oficial") })
+    .locator("div")
+    .filter({ has: page.getByLabel("Editar respuesta oficial") })
+    .first();
   await page.getByLabel("Editar respuesta oficial").fill("Respuesta oficial actualizada desde E2E");
-  await page.getByRole("button", { name: "Editar" }).click();
+  await officialReply.getByRole("button", { name: "Editar" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}\\?reply=updated`));
   await expect(page.getByRole("paragraph").filter({ hasText: "Respuesta oficial actualizada desde E2E" })).toBeVisible();
-  await page.getByRole("button", { name: "Eliminar" }).click();
+  await officialReply.getByRole("button", { name: "Eliminar" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}\\?reply=deleted`));
 
   await reviewer.getByLabel("Comentario").fill("Una comunidad todavía mejor organizada");

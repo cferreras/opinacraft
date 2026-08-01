@@ -171,6 +171,21 @@ async function getReviewForUpdate(tx: DatabaseTransaction, reviewId: string) {
   return review;
 }
 
+async function getReviewTarget(tx: DatabaseTransaction, reviewId: string) {
+  const [review] = await tx
+    .select({
+      serverId: serverReviews.serverId,
+      userId: serverReviews.userId,
+      status: serverReviews.status,
+    })
+    .from(serverReviews)
+    .where(eq(serverReviews.id, reviewId))
+    .limit(1);
+
+  if (!review) throw new ReviewNotFoundError();
+  return review;
+}
+
 export async function createReview(userId: string, serverId: string, input: ReviewInput) {
   const parsed = parseReviewInput(input);
 
@@ -203,10 +218,13 @@ export async function updateReview(userId: string, reviewId: string, input: Revi
 
   return db.transaction(async (tx) => {
     await consumeRateLimit(`review:edit:${userId}`, 10, 60 * 60 * 1000);
+    const target = await getReviewTarget(tx, reviewId);
+    if (target.userId !== userId) throw new ReviewPermissionError();
+    if (target.status !== "published") throw new ReviewStateError();
+    await requireReviewableServer(tx, target.serverId, userId);
     const review = await getReviewForUpdate(tx, reviewId);
     if (review.userId !== userId) throw new ReviewPermissionError();
     if (review.status !== "published") throw new ReviewStateError();
-    await requireReviewableServer(tx, review.serverId, userId);
 
     const [updated] = await tx
       .update(serverReviews)

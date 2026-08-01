@@ -40,10 +40,7 @@ class VercelBlobStorage implements MediaStorage {
 }
 
 class E2EMemoryStorage implements MediaStorage {
-  private readonly objects = new Map<string, Buffer>();
-
   async upload(key: string, body: Buffer, contentType: string) {
-    this.objects.set(key, body);
     return {
       key,
       url: `data:${contentType};base64,${body.toString("base64")}`,
@@ -51,11 +48,22 @@ class E2EMemoryStorage implements MediaStorage {
   }
 
   async remove(key: string) {
-    this.objects.delete(key);
+    void key;
   }
 }
 
-export const mediaStorage: MediaStorage =
-  process.env.E2E_MEDIA_STORAGE === "memory"
-    ? new E2EMemoryStorage()
-    : new VercelBlobStorage();
+function createMediaStorage(): MediaStorage {
+  if (serverEnv.E2E_MEDIA_STORAGE === "memory") {
+    if (serverEnv.NODE_ENV === "production") {
+      throw new Error("E2E memory media storage is not allowed in production.");
+    }
+    return new E2EMemoryStorage();
+  }
+
+  if (serverEnv.NODE_ENV === "production" && !serverEnv.BLOB_READ_WRITE_TOKEN) {
+    throw new MediaStorageNotConfiguredError();
+  }
+  return new VercelBlobStorage();
+}
+
+export const mediaStorage = createMediaStorage();

@@ -65,6 +65,7 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   await moderator.goto("/admin");
   await moderator.locator("article").filter({ hasText: serverName }).getByRole("button", { name: "Descartar" }).click();
   await expect(moderator).toHaveURL(/\/admin\?updated=1$/);
+  await reporter.reload();
   await expect(reporter.getByRole("heading", { name: serverName })).toBeVisible();
 
   await reporterContext.close();
@@ -73,10 +74,11 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
 
 test("an admin can grant a platform role and a moderator cannot see role management", async ({ page, browser }) => {
   const admin = await createAccount(page, "admin");
+  createdEmails.push(admin.email);
   const targetContext = await browser.newContext();
   const target = await targetContext.newPage();
   const targetAccount = await createAccount(target, "role-target");
-  createdEmails.push(admin.email, targetAccount.email);
+  createdEmails.push(targetAccount.email);
   await grantPlatformRole(admin.email, "admin");
 
   await page.goto("/admin");
