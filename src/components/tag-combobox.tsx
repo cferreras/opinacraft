@@ -29,6 +29,7 @@ type TagComboboxProps = {
   compact?: boolean;
   ariaLabel?: string;
   submitOnChange?: boolean;
+  resetPagination?: boolean;
 };
 
 export function TagCombobox({
@@ -37,6 +38,7 @@ export function TagCombobox({
   allowCreate = true,
   compact = false,
   submitOnChange = false,
+  resetPagination = false,
   ariaLabel = "Añadir etiqueta",
 }: TagComboboxProps) {
   const [selected, setSelected] = useState<string[]>(initialTags);
@@ -56,23 +58,25 @@ export function TagCombobox({
       const form = inputRef.current?.form;
       if (!form) return;
 
-      const page = new URL(window.location.href).searchParams.get("page");
-      if (page) {
-        const pageField = form.querySelector<HTMLInputElement>('input[name="page"]');
-        if (pageField) {
-          pageField.value = page;
-        } else {
-          const hiddenPage = document.createElement("input");
-          hiddenPage.type = "hidden";
-          hiddenPage.name = "page";
-          hiddenPage.value = page;
-          form.appendChild(hiddenPage);
+      if (!resetPagination) {
+        const page = new URL(window.location.href).searchParams.get("page");
+        if (page) {
+          const pageField = form.querySelector<HTMLInputElement>('input[name="page"]');
+          if (pageField) {
+            pageField.value = page;
+          } else {
+            const hiddenPage = document.createElement("input");
+            hiddenPage.type = "hidden";
+            hiddenPage.name = "page";
+            hiddenPage.value = page;
+            form.appendChild(hiddenPage);
+          }
         }
       }
 
       form.requestSubmit();
     });
-  }, [selected, submitOnChange]);
+  }, [selected, submitOnChange, resetPagination]);
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);

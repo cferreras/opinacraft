@@ -12,6 +12,7 @@
     "test:integration": "node scripts/bootstrap-test-database.mjs && node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/integration.test.ts",
     "test:e2e": "playwright test",
     "db:inspect": "node scripts/inspect-database.mjs",
+    "db:seed": "node scripts/seed-local.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",

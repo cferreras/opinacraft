@@ -111,7 +111,7 @@ export default async function PublicServersPage({
                   <option value="offline">Fuera de línea</option>
                   <option value="unknown">Desconocido</option>
                 </FilterSelect>
-                <TagCombobox name="tags" initialTags={initialTags} compact ariaLabel="Modalidad" submitOnChange />
+                <TagCombobox name="tags" initialTags={initialTags} compact ariaLabel="Modalidad" submitOnChange resetPagination />
                 <FilterSelect id="sort-filter" name="sort" label="Ordenar" defaultValue={sort} submitOnChange>
                   {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </FilterSelect>
