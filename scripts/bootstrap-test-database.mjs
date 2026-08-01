@@ -73,6 +73,16 @@ async function main() {
       "other",
     ]);
     await ensureEnum(client, "server_report_status", ["open", "dismissed", "actioned"]);
+    await ensureEnum(client, "server_review_status", ["published", "hidden", "deleted"]);
+    await ensureEnum(client, "server_review_report_reason", [
+      "spam",
+      "harassment",
+      "offensive",
+      "false_information",
+      "conflict_of_interest",
+      "other",
+    ]);
+    await ensureEnum(client, "server_review_report_status", ["open", "dismissed", "actioned"]);
     await ensureEnum(client, "moderation_action", ["report_created", "dismissed", "hidden", "restored"]);
     await ensureEnum(client, "server_moderation_status", ["active", "blocked"]);
     await ensureEnum(client, "media_cleanup_status", ["pending", "processing", "done", "failed"]);
@@ -221,19 +231,81 @@ async function main() {
       )
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS "server_reviews" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "server_id" uuid NOT NULL REFERENCES "servers"("id") ON DELETE CASCADE,
+        "user_id" text REFERENCES "user"("id") ON DELETE SET NULL,
+        "rating" smallint NOT NULL CHECK ("rating" between 1 and 5),
+        "content" text NOT NULL CHECK (char_length(btrim("content")) between 10 and 2000),
+        "status" "server_review_status" DEFAULT 'published'::"server_review_status" NOT NULL,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "review_replies" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "review_id" uuid NOT NULL REFERENCES "server_reviews"("id") ON DELETE CASCADE,
+        "user_id" text REFERENCES "user"("id") ON DELETE SET NULL,
+        "content" text NOT NULL CHECK (char_length(btrim("content")) between 10 and 2000),
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "server_review_reports" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "server_id" uuid NOT NULL REFERENCES "servers"("id") ON DELETE CASCADE,
+        "review_id" uuid REFERENCES "server_reviews"("id") ON DELETE SET NULL,
+        "reporter_user_id" text REFERENCES "user"("id") ON DELETE SET NULL,
+        "reason" "server_review_report_reason" NOT NULL,
+        "details" text CHECK ("details" is null or char_length("details") <= 1000),
+        "status" "server_review_report_status" DEFAULT 'open'::"server_review_report_status" NOT NULL,
+        "assigned_to_user_id" text REFERENCES "user"("id") ON DELETE SET NULL,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+      )
+    `);
+    await createIndex(client, 'CREATE UNIQUE INDEX IF NOT EXISTS "server_reviews_one_per_user_idx" ON "server_reviews" ("server_id", "user_id")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_reviews_server_status_created_idx" ON "server_reviews" ("server_id", "status", "created_at")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_reviews_user_id_idx" ON "server_reviews" ("user_id")');
+    await createIndex(client, 'CREATE UNIQUE INDEX IF NOT EXISTS "review_replies_one_per_review_idx" ON "review_replies" ("review_id")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "review_replies_user_id_idx" ON "review_replies" ("user_id")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_review_reports_queue_idx" ON "server_review_reports" ("status", "created_at")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_review_reports_review_idx" ON "server_review_reports" ("review_id", "status")');
+    await createIndex(client, 'CREATE UNIQUE INDEX IF NOT EXISTS "server_review_reports_one_open_per_user_review_idx" ON "server_review_reports" ("review_id", "reporter_user_id") WHERE "status" = \'open\' and "review_id" is not null and "reporter_user_id" is not null');
+    await client.query(`
       CREATE TABLE IF NOT EXISTS "moderation_events" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         "server_id" uuid NOT NULL REFERENCES "servers"("id") ON DELETE CASCADE,
         "report_id" uuid REFERENCES "server_reports"("id") ON DELETE SET NULL,
+        "review_id" uuid REFERENCES "server_reviews"("id") ON DELETE SET NULL,
+        "review_report_id" uuid REFERENCES "server_review_reports"("id") ON DELETE SET NULL,
         "actor_user_id" text REFERENCES "user"("id") ON DELETE SET NULL,
         "action" "moderation_action" NOT NULL,
         "details" text,
         "created_at" timestamp with time zone DEFAULT now() NOT NULL
       )
     `);
+    await addColumn(client, "moderation_events", '"review_id" uuid');
+    await addColumn(client, "moderation_events", '"review_report_id" uuid');
+    await client.query(`
+      DO $do$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'moderation_events_review_id_server_reviews_id_fkey') THEN
+          ALTER TABLE "moderation_events" ADD CONSTRAINT "moderation_events_review_id_server_reviews_id_fkey" FOREIGN KEY ("review_id") REFERENCES "server_reviews"("id") ON DELETE SET NULL;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'moderation_events_review_report_id_server_review_reports_id_fkey') THEN
+          ALTER TABLE "moderation_events" ADD CONSTRAINT "moderation_events_review_report_id_server_review_reports_id_fkey" FOREIGN KEY ("review_report_id") REFERENCES "server_review_reports"("id") ON DELETE SET NULL;
+        END IF;
+      END
+      $do$;
+    `);
     await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_reports_queue_idx" ON "server_reports" ("status", "created_at")');
     await createIndex(client, 'CREATE UNIQUE INDEX IF NOT EXISTS "server_reports_one_open_per_user_server_idx" ON "server_reports" ("server_id", "reporter_user_id") WHERE "status" = \'open\'');
     await createIndex(client, 'CREATE INDEX IF NOT EXISTS "moderation_events_server_created_idx" ON "moderation_events" ("server_id", "created_at")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "moderation_events_review_created_idx" ON "moderation_events" ("review_id", "created_at")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "moderation_events_review_report_created_idx" ON "moderation_events" ("review_report_id", "created_at")');
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS "media_cleanup_jobs" (
@@ -276,6 +348,7 @@ async function main() {
         "sent_at" timestamp with time zone
       )
     `);
+    await addColumn(client, "notification_jobs", '"processing_started_at" timestamp with time zone');
     await createIndex(client, 'CREATE INDEX IF NOT EXISTS "notification_jobs_queue_idx" ON "notification_jobs" ("status", "next_attempt_at")');
     await client.query(`
       CREATE TABLE IF NOT EXISTS "monitor_runs" (

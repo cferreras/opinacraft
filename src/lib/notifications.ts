@@ -42,6 +42,20 @@ export async function runNotificationOutbox(limit = 25) {
           subject: "Actualización de tu reporte en OpinaCraft",
           text: `La decisión de moderación es: ${decision}.`,
         },
+        review_report_decision: {
+          subject: "Actualización de tu reporte de opinión en OpinaCraft",
+          text: `La decisión sobre tu reporte de opinión es: ${decision}.`,
+        },
+        review_moderation: {
+          subject: "Actualización de tu opinión en OpinaCraft",
+          text: decision === "hidden"
+            ? "Tu opinión ha sido ocultada temporalmente por moderación."
+            : "Tu opinión ha sido restaurada y vuelve a estar visible.",
+        },
+        review_reply: {
+          subject: "Has recibido una respuesta oficial en OpinaCraft",
+          text: "El equipo del servidor ha respondido a tu opinión.",
+        },
         blob_quota: {
           subject: "Aviso de cuota Blob de OpinaCraft",
           text: `La cuota interna de Blob ha alcanzado el ${String(payload.level ?? "")}% de uso.`,

@@ -26,7 +26,7 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: "pnpm dev -- --hostname 127.0.0.1",
+        command: "pnpm exec next dev --hostname 127.0.0.1",
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
@@ -38,6 +38,9 @@ export default defineConfig({
           SERVER_VERIFICATION_SECRET: "e2e-verification-secret-that-is-at-least-32-characters",
           DISCORD_CLIENT_ID: "",
           DISCORD_CLIENT_SECRET: "",
+          // E2E verifies accounts directly in the dedicated database; never send real email.
+          RESEND_API_KEY: "",
+          EMAIL_FROM: "",
         },
       },
 });

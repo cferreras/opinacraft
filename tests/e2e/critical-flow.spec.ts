@@ -31,20 +31,27 @@ test.afterAll(async () => {
 async function createAccount(page: Page) {
   const email = `e2e-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.invalid`;
   createdEmails.push(email);
+  const rateLimitPool = new Pool({ connectionString: testDatabaseUrl, max: 1 });
+  try { await rateLimitPool.query("delete from rate_limit"); } finally { await rateLimitPool.end(); }
   await page.goto("/sign-up");
   await page.getByLabel("Name").fill("E2E Owner");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("e2e-password-123");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/profile$/);
+  await expect(page.getByText("Cuenta creada")).toBeVisible();
   const pool = new Pool({ connectionString: testDatabaseUrl, max: 1 });
   try { await pool.query('update "user" set email_verified = true where email = $1', [email]); } finally { await pool.end(); }
+  await page.goto("/sign-in");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("e2e-password-123");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/profile$/);
   return email;
 }
 
 async function createAndPublishServer(page: Page, name: string, host: string) {
   await page.goto("/servers/new");
-  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel("Nombre", { exact: true }).fill(name);
   await page.getByLabel("Host", { exact: true }).fill(host);
   await page.getByRole("button", { name: "Crear servidor" }).click();
   await expect(page).toHaveURL(/\/servers\/[^/]+\/manage\?created=1$/);
@@ -82,11 +89,17 @@ test("verification reports a controlled offline error without a Minecraft server
   await createAccount(page);
   const serverName = `E2E Offline ${Date.now()}`;
   const { slug } = await createAndPublishServer(page, serverName, "offline.example.invalid");
+  const pool = new Pool({ connectionString: testDatabaseUrl, max: 1 });
+  try {
+    await pool.query("update server_endpoints set verification_status = 'unverified' where server_id = (select id from servers where slug = $1)", [slug]);
+    await pool.query("update servers set verification_status = 'unverified', verified_at = null where slug = $1", [slug]);
+  } finally { await pool.end(); }
 
   await page.goto(`/servers/${slug}/manage`);
-  await page.getByRole("button", { name: "Generate verification code" }).click();
-  await expect(page.getByRole("button", { name: "Check MOTD" })).toBeVisible();
-  await page.getByRole("button", { name: "Check MOTD" }).click();
+  const javaVerification = page.locator("section.rounded-2xl").filter({ hasText: "Verificación de propiedad · Java" });
+  await javaVerification.getByRole("button", { name: "Generar código de verificación" }).click();
+  await expect(javaVerification.getByRole("button", { name: "Comprobar MOTD" })).toBeVisible();
+  await javaVerification.getByRole("button", { name: "Comprobar MOTD" }).click();
 
   await expect(page.getByText(/offline or did not respond in time/i)).toBeVisible();
 });

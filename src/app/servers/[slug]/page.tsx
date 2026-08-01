@@ -7,9 +7,13 @@ import { getPublishedServerBySlug } from "@/lib/servers/queries";
 import { formatEndpoint } from "@/lib/servers/format";
 import { ReportForm } from "@/components/report-form";
 import { CopyAddressButton } from "@/components/copy-address-button";
+import { ReviewSection } from "@/components/review-section";
+import { getServerSession } from "@/lib/session";
+import { getReviewSummary, getReviewViewerState, listServerReviews } from "@/lib/servers/reviews";
 
 type PublicServerPageProps = {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ reviewPage?: string; review?: string; reviewError?: string; reply?: string; replyError?: string }>;
 };
 
 export const dynamic = "force-dynamic";
@@ -32,6 +36,7 @@ export async function generateMetadata({ params }: PublicServerPageProps): Promi
 
 export default async function PublicServerPage({
   params,
+  searchParams,
 }: PublicServerPageProps) {
   const { slug } = await params;
   const server = await getPublishedServer(slug);
@@ -39,6 +44,17 @@ export default async function PublicServerPage({
   if (!server) {
     notFound();
   }
+
+  const query = await searchParams;
+  const requestedReviewPage = Number.parseInt(query.reviewPage ?? "1", 10);
+  const session = await getServerSession();
+  const [reviewSummary, reviewPage] = await Promise.all([
+    getReviewSummary(server.id),
+    listServerReviews(server.id, Number.isFinite(requestedReviewPage) ? requestedReviewPage : 1, session?.user.id),
+  ]);
+  const viewer = session ? await getReviewViewerState(server.id, session.user.id) : null;
+  const notice = query.review === "created" ? "Opinión publicada." : query.review === "updated" ? "Opinión actualizada." : query.review === "deleted" ? "Opinión eliminada." : query.reply === "created" ? "Respuesta oficial publicada." : query.reply === "updated" ? "Respuesta oficial actualizada." : query.reply === "deleted" ? "Respuesta oficial eliminada." : undefined;
+  const errorNotice = query.reviewError ?? query.replyError;
 
   return (
     <main className="min-h-screen bg-zinc-100 px-6 py-12 dark:bg-zinc-950">
@@ -124,6 +140,8 @@ export default async function PublicServerPage({
             ) : null}
           </section>
         ) : null}
+
+        <ReviewSection serverId={server.id} slug={server.slug} summary={reviewSummary} reviews={reviewPage.reviews} page={reviewPage.page} hasNextPage={reviewPage.hasNextPage} viewer={viewer} notice={notice} errorNotice={errorNotice} />
 
         <ReportForm serverId={server.id} />
 

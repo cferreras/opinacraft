@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { moderationEvents, serverMembers, serverMedia, serverReports, servers } from "@/schema";
+import { moderationEvents, reviewReplies, serverMembers, serverMedia, serverReports, serverReviewReports, serverReviews, servers } from "@/schema";
 import { user } from "@/auth-schema";
 import { mediaStorage } from "@/lib/media/storage";
 import { enqueueMediaCleanup } from "@/lib/media/cleanup";
@@ -21,7 +21,11 @@ export async function POST(request: Request) {
     const keys = owned.length ? await tx.select({ blobKey: serverMedia.blobKey }).from(serverMedia).where(inArray(serverMedia.serverId, owned.map((server) => server.id))) : [];
     for (const server of owned) await tx.delete(servers).where(eq(servers.id, server.id));
     await tx.update(serverReports).set({ reporterUserId: null }).where(eq(serverReports.reporterUserId, session.user.id));
+    await tx.update(serverReviewReports).set({ reporterUserId: null }).where(eq(serverReviewReports.reporterUserId, session.user.id));
+    await tx.update(serverReviewReports).set({ assignedToUserId: null }).where(eq(serverReviewReports.assignedToUserId, session.user.id));
     await tx.update(moderationEvents).set({ actorUserId: null }).where(eq(moderationEvents.actorUserId, session.user.id));
+    await tx.update(serverReviews).set({ userId: null, content: "Opinión anónima", updatedAt: new Date() }).where(eq(serverReviews.userId, session.user.id));
+    await tx.update(reviewReplies).set({ userId: null, content: "Respuesta oficial anónima", updatedAt: new Date() }).where(eq(reviewReplies.userId, session.user.id));
     await tx.delete(serverMembers).where(eq(serverMembers.userId, session.user.id));
     await tx.delete(user).where(eq(user.id, session.user.id));
     return keys.map((row) => row.blobKey);
