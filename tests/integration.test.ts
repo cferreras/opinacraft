@@ -30,6 +30,7 @@ const pool = testDatabaseUrl
 const createdServerIds = new Set<string>();
 const createdUserIds = new Set<string>();
 let serverServices: typeof import("../src/lib/servers/service.ts") | null = null;
+let reviewServices: typeof import("../src/lib/servers/reviews.ts") | null = null;
 let closeDatabase: (() => Promise<void>) | null = null;
 
 const testOptions = { skip: !integrationEnabled };
@@ -48,6 +49,17 @@ async function loadServerServices() {
     ({ closeDatabase } = await import("../src/db.ts"));
   }
   return serverServices;
+}
+
+async function loadReviewServices() {
+  if (!reviewServices) {
+    process.env.DATABASE_URL = testDatabaseUrl;
+    process.env.BETTER_AUTH_SECRET ??= "integration-test-secret-that-is-at-least-32-characters";
+    process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
+    reviewServices = await import("../src/lib/servers/reviews.ts");
+    ({ closeDatabase } = await import("../src/db.ts"));
+  }
+  return reviewServices;
 }
 
 function uniqueEmail() {
@@ -103,6 +115,17 @@ async function createServerRecord({
   } finally {
     client.release();
   }
+}
+
+async function publishServer(serverId: string) {
+  await database().query(
+    "update servers set publication_status = 'published', verification_status = 'verified', verified_at = now() where id = $1",
+    [serverId],
+  );
+  await database().query(
+    "update server_endpoints set verification_status = 'verified' where server_id = $1",
+    [serverId],
+  );
 }
 
 async function createVerification(serverId: string, status = "pending") {
@@ -327,4 +350,101 @@ test("permissions are revalidated inside the update transaction", testOptions, a
 
   const unchanged = await database().query("select name from servers where id = $1", [serverId]);
   assert.equal(unchanged.rows[0].name, server.rows[0].name);
+});
+
+test("reviews create, aggregate, edit, hide, restore and delete safely", testOptions, async () => {
+  const ownerId = await createUser();
+  const reviewerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `reviews-${randomUUID()}.example.invalid`, port: 25565 } });
+  await publishServer(serverId);
+  const { createReview, updateReview, deleteReview, getReviewSummary, ReviewStateError } = await loadReviewServices();
+
+  const created = await createReview(reviewerId, serverId, { rating: 5, content: "  Una comunidad excelente  " });
+  assert.ok(created?.id);
+  let summary = await getReviewSummary(serverId);
+  assert.deepEqual(summary.distribution, [0, 0, 0, 0, 1]);
+  assert.equal(summary.total, 1);
+  assert.equal(summary.average, 5);
+
+  await updateReview(reviewerId, created!.id, { rating: 3, content: "Experiencia correcta y estable" });
+  summary = await getReviewSummary(serverId);
+  assert.deepEqual(summary.distribution, [0, 0, 1, 0, 0]);
+  assert.equal(summary.average, 3);
+
+  await database().query("update server_reviews set status = 'hidden' where id = $1", [created!.id]);
+  summary = await getReviewSummary(serverId);
+  assert.equal(summary.total, 0);
+  await database().query("update server_reviews set status = 'published' where id = $1", [created!.id]);
+  summary = await getReviewSummary(serverId);
+  assert.equal(summary.total, 1);
+
+  await deleteReview(reviewerId, created!.id);
+  summary = await getReviewSummary(serverId);
+  assert.equal(summary.total, 0);
+  const recreated = await createReview(reviewerId, serverId, { rating: 4, content: "Una nueva opinión tras borrar" });
+  assert.ok(recreated?.id);
+  assert.notEqual(recreated?.id, created?.id);
+  await assert.rejects(() => updateReview(reviewerId, created!.id, { rating: 4, content: "No debería editarse" }), ReviewStateError);
+});
+
+test("adding a player to the server team invalidates their review", testOptions, async () => {
+  const ownerId = await createUser();
+  const reviewerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `member-review-${randomUUID()}.example.invalid`, port: 25565 } });
+  await publishServer(serverId);
+  const { createReview, getReviewSummary } = await loadReviewServices();
+  const { rows: reviewerRows } = await database().query('select email from "user" where id = $1', [reviewerId]);
+
+  const review = await createReview(reviewerId, serverId, { rating: 5, content: "Una comunidad excelente" });
+  const { addServerMember } = await import("../src/lib/servers/members.ts");
+  await addServerMember(serverId, ownerId, reviewerRows[0].email, "editor");
+
+  const summary = await getReviewSummary(serverId);
+  assert.equal(summary.total, 0);
+  const deleted = await database().query("select status from server_reviews where id = $1", [review?.id]);
+  assert.equal(deleted.rows[0].status, "deleted");
+});
+
+test("the unique review constraint wins a concurrent duplicate", testOptions, async () => {
+  const ownerId = await createUser();
+  const reviewerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `race-${randomUUID()}.example.invalid`, port: 25565 } });
+  await publishServer(serverId);
+  const { createReview, ReviewAlreadyExistsError } = await loadReviewServices();
+
+  const results = await Promise.allSettled([
+    createReview(reviewerId, serverId, { rating: 4, content: "Primera opinión válida" }),
+    createReview(reviewerId, serverId, { rating: 5, content: "Segunda opinión inválida" }),
+  ]);
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(results.filter((result) => result.status === "rejected" && result.reason instanceof ReviewAlreadyExistsError).length, 1);
+});
+
+test("only one official reply is allowed and editors cannot create it", testOptions, async () => {
+  const ownerId = await createUser();
+  const adminId = await createUser();
+  const editorId = await createUser();
+  const reviewerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `replies-${randomUUID()}.example.invalid`, port: 25565 } });
+  await publishServer(serverId);
+  await database().query("insert into server_members (server_id, user_id, role) values ($1, $2, 'admin'), ($1, $3, 'editor')", [serverId, adminId, editorId]);
+  const { createReview, createOfficialReply, OfficialReplyAlreadyExistsError, OfficialReplyPermissionError } = await loadReviewServices();
+  const review = await createReview(reviewerId, serverId, { rating: 4, content: "Buen servidor para jugar" });
+  await createOfficialReply(adminId, review!.id, "Gracias por compartir tu experiencia");
+  await assert.rejects(() => createOfficialReply(adminId, review!.id, "Otra respuesta oficial"), OfficialReplyAlreadyExistsError);
+  await assert.rejects(() => createOfficialReply(editorId, review!.id, "No debería responder"), OfficialReplyPermissionError);
+});
+
+test("review reports reject self reports and open duplicates", testOptions, async () => {
+  const ownerId = await createUser();
+  const reviewerId = await createUser();
+  const reporterId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `reports-${randomUUID()}.example.invalid`, port: 25565 } });
+  await publishServer(serverId);
+  const { createReview, createReviewReport, ReviewReportAlreadyOpenError, ReviewReportSelfError } = await loadReviewServices();
+  const review = await createReview(reviewerId, serverId, { rating: 2, content: "No me ha convencido la experiencia" });
+
+  await assert.rejects(() => createReviewReport(reviewerId, serverId, review!.id, { reason: "other" }), ReviewReportSelfError);
+  await createReviewReport(reporterId, serverId, review!.id, { reason: "offensive", details: "Detalle del reporte" });
+  await assert.rejects(() => createReviewReport(reporterId, serverId, review!.id, { reason: "offensive" }), ReviewReportAlreadyOpenError);
 });

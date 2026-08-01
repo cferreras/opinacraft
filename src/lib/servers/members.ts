@@ -1,8 +1,8 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { user } from "@/auth-schema";
-import { serverMembers, servers } from "@/schema";
+import { reviewReplies, serverMembers, serverReviews, servers } from "@/schema";
 import {
   requireServerCapability,
 } from "@/lib/servers/permissions";
@@ -80,6 +80,26 @@ export async function addServerMember(
         throw new DuplicateMemberError();
       }
       throw error;
+    }
+
+    const reviewsToInvalidate = await tx
+      .select({ id: serverReviews.id })
+      .from(serverReviews)
+      .where(
+        and(
+          eq(serverReviews.serverId, serverId),
+          eq(serverReviews.userId, target.id),
+          inArray(serverReviews.status, ["published", "hidden"]),
+        ),
+      )
+      .for("update");
+    if (reviewsToInvalidate.length) {
+      const reviewIds = reviewsToInvalidate.map((review) => review.id);
+      await tx
+        .update(serverReviews)
+        .set({ status: "deleted", content: "Opinión eliminada al unirse al equipo", updatedAt: new Date() })
+        .where(inArray(serverReviews.id, reviewIds));
+      await tx.delete(reviewReplies).where(inArray(reviewReplies.reviewId, reviewIds));
     }
 
     return target.id;

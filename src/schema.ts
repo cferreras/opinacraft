@@ -86,6 +86,16 @@ export const serverReportStatus = pgEnum("server_report_status", ["open", "dismi
 export const moderationAction = pgEnum("moderation_action", ["report_created", "dismissed", "hidden", "restored"]);
 export const serverModerationStatus = pgEnum("server_moderation_status", ["active", "blocked"]);
 export const mediaCleanupStatus = pgEnum("media_cleanup_status", ["pending", "processing", "done", "failed"]);
+export const serverReviewStatus = pgEnum("server_review_status", ["published", "hidden", "deleted"]);
+export const serverReviewReportReason = pgEnum("server_review_report_reason", [
+  "spam",
+  "harassment",
+  "offensive",
+  "false_information",
+  "conflict_of_interest",
+  "other",
+]);
+export const serverReviewReportStatus = pgEnum("server_review_report_status", ["open", "dismissed", "actioned"]);
 
 export const minecraftEdition = pgEnum("minecraft_edition", [
   "java",
@@ -363,18 +373,116 @@ export const serverReports = pgTable(
   ],
 );
 
+export const serverReviews = pgTable(
+  "server_reviews",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    rating: smallint("rating").notNull(),
+    content: text("content").notNull(),
+    status: serverReviewStatus("status").default("published").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("server_reviews_one_per_user_idx")
+      .on(table.serverId, table.userId)
+      .where(sql`${table.status} <> 'deleted'`),
+    index("server_reviews_server_status_created_idx").on(table.serverId, table.status, table.createdAt),
+    index("server_reviews_user_id_idx").on(table.userId),
+    check("server_reviews_rating_check", sql`${table.rating} between 1 and 5`),
+    check(
+      "server_reviews_content_length_check",
+      sql`char_length(btrim(${table.content})) between 10 and 2000`,
+    ),
+  ],
+);
+
+export const reviewReplies = pgTable(
+  "review_replies",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reviewId: uuid("review_id")
+      .notNull()
+      .references(() => serverReviews.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("review_replies_one_per_review_idx").on(table.reviewId),
+    index("review_replies_user_id_idx").on(table.userId),
+    check(
+      "review_replies_content_length_check",
+      sql`char_length(btrim(${table.content})) between 10 and 2000`,
+    ),
+  ],
+);
+
+export const serverReviewReports = pgTable(
+  "server_review_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    reviewId: uuid("review_id").references(() => serverReviews.id, { onDelete: "set null" }),
+    reporterUserId: text("reporter_user_id").references(() => user.id, { onDelete: "set null" }),
+    reason: serverReviewReportReason("reason").notNull(),
+    details: text("details"),
+    status: serverReviewReportStatus("status").default("open").notNull(),
+    assignedToUserId: text("assigned_to_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("server_review_reports_queue_idx").on(table.status, table.createdAt),
+    index("server_review_reports_review_idx").on(table.reviewId, table.status),
+    uniqueIndex("server_review_reports_one_open_per_user_review_idx")
+      .on(table.reviewId, table.reporterUserId)
+      .where(sql`${table.status} = 'open' and ${table.reviewId} is not null and ${table.reporterUserId} is not null`),
+    check(
+      "server_review_reports_details_length_check",
+      sql`${table.details} is null or char_length(${table.details}) <= 1000`,
+    ),
+  ],
+);
+
 export const moderationEvents = pgTable(
   "moderation_events",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     serverId: uuid("server_id").notNull().references(() => servers.id, { onDelete: "cascade" }),
     reportId: uuid("report_id").references(() => serverReports.id, { onDelete: "set null" }),
+    reviewId: uuid("review_id").references(() => serverReviews.id, { onDelete: "set null" }),
+    reviewReportId: uuid("review_report_id").references(() => serverReviewReports.id, { onDelete: "set null" }),
     actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
     action: moderationAction("action").notNull(),
     details: text("details"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("moderation_events_server_created_idx").on(table.serverId, table.createdAt)],
+  (table) => [
+    index("moderation_events_server_created_idx").on(table.serverId, table.createdAt),
+    index("moderation_events_review_created_idx").on(table.reviewId, table.createdAt),
+    index("moderation_events_review_report_created_idx").on(table.reviewReportId, table.createdAt),
+  ],
 );
 
 export const mediaCleanupJobs = pgTable(

@@ -3,6 +3,7 @@ import * as z from "zod";
 
 export const serverEnv = createEnv({
   server: {
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     DATABASE_URL: z.url(),
     DIRECT_DATABASE_URL: z.url().optional(),
     BETTER_AUTH_SECRET: z.string().min(32),
@@ -13,6 +14,8 @@ export const serverEnv = createEnv({
     RESEND_API_KEY: z.string().min(1).optional(),
     EMAIL_FROM: z.string().min(1).optional(),
     BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
+    E2E_DISABLE_EMAIL: z.enum(["true", "false"]).default("false"),
+    E2E_MEDIA_STORAGE: z.enum(["memory", "blob"]).default("blob"),
     BLOB_OPERATOR_EMAIL: z.email().optional(),
     DISCORD_CLIENT_ID: z.string().min(1).optional(),
     DISCORD_CLIENT_SECRET: z.string().min(1).optional(),
