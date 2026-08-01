@@ -49,6 +49,16 @@ pnpm db:migrate
 
 Migrations are not executed automatically during a Vercel build. Review the generated SQL, confirm the target database or Neon branch, and keep a recovery point when the provider makes one available before applying changes.
 
+### Production migration workflow
+
+Production migrations can be applied with the manual `Production database migration` GitHub Actions workflow. Before its first run:
+
+1. Create a GitHub environment named `production` and configure required reviewers when available.
+2. Add an environment secret named `DIRECT_DATABASE_URL` containing the direct, non-pooled URL for the Production Neon branch.
+3. Run the workflow from `main` and enter `migrate-production` when prompted.
+
+The workflow serializes migration runs, rejects Neon pooler URLs, applies all pending migrations, and inspects the resulting schema. The Vercel `DATABASE_URL` remains the pooled runtime connection and is not needed by this workflow.
+
 The repository currently contains migrations for Better Auth, server management, Java/Bedrock MOTD verification, verified endpoint claims, tags/media, pg_trgm search, endpoint health, availability hiding, Blob quota counters, notification outbox and moderation/reporting. Review every generated migration before applying it to a database.
 
 ## Tests
@@ -108,7 +118,7 @@ vercel build
 vercel deploy --prebuilt
 ```
 
-For Production, use the Production environment values, run reviewed migrations separately against the Production direct connection, and then deploy the same build without adding migration commands to the build step.
+For Production, use the Production environment values, run reviewed migrations through the manual GitHub Actions workflow, and then deploy the same build without adding migration commands to the build step.
 
 ## Current phase notes
 

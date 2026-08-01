@@ -1,0 +1,76 @@
+name: Production database migration
+
+run-name: Production database migration by @${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type migrate-production to confirm
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+
+    steps:
+      - name: Confirm production migration
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "$CONFIRMATION" = "migrate-production"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate direct database connection
+        run: |
+          node --input-type=module <<'NODE'
+          const rawUrl = process.env.DIRECT_DATABASE_URL;
+          if (!rawUrl) throw new Error("The production environment secret DIRECT_DATABASE_URL is required.");
+
+          const url = new URL(rawUrl);
+          if (!["postgres:", "postgresql:"].includes(url.protocol)) {
+            throw new Error("DIRECT_DATABASE_URL must use the postgres or postgresql protocol.");
+          }
+          if (/-pooler(?:\.|$)/i.test(url.hostname)) {
+            throw new Error("DIRECT_DATABASE_URL must be a direct, non-pooled connection.");
+          }
+
+          console.log(`Validated migration target: ${url.hostname}${url.pathname}`);
+          NODE
+
+      - name: Apply production migrations
+        run: pnpm db:migrate
+
+      - name: Inspect migrated database
+        run: pnpm db:inspect
