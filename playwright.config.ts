@@ -38,9 +38,13 @@ export default defineConfig({
           SERVER_VERIFICATION_SECRET: "e2e-verification-secret-that-is-at-least-32-characters",
           DISCORD_CLIENT_ID: "",
           DISCORD_CLIENT_SECRET: "",
-          // E2E verifies accounts directly in the dedicated database; never send real email.
+          // E2E captures verification/reset flows without contacting Resend.
+          E2E_DISABLE_EMAIL: "true",
+          E2E_MEDIA_STORAGE: "memory",
           RESEND_API_KEY: "",
           EMAIL_FROM: "",
+          BLOB_READ_WRITE_TOKEN: "",
+          BLOB_OPERATOR_EMAIL: "",
         },
       },
 });

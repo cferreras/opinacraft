@@ -39,4 +39,23 @@ class VercelBlobStorage implements MediaStorage {
   }
 }
 
-export const mediaStorage: MediaStorage = new VercelBlobStorage();
+class E2EMemoryStorage implements MediaStorage {
+  private readonly objects = new Map<string, Buffer>();
+
+  async upload(key: string, body: Buffer, contentType: string) {
+    this.objects.set(key, body);
+    return {
+      key,
+      url: `data:${contentType};base64,${body.toString("base64")}`,
+    };
+  }
+
+  async remove(key: string) {
+    this.objects.delete(key);
+  }
+}
+
+export const mediaStorage: MediaStorage =
+  process.env.E2E_MEDIA_STORAGE === "memory"
+    ? new E2EMemoryStorage()
+    : new VercelBlobStorage();

@@ -13,6 +13,7 @@ type VerificationEmail = {
 };
 
 export async function sendNotificationEmail({ to, subject, text, html }: { to: string; subject: string; text: string; html: string }) {
+  if (process.env.E2E_DISABLE_EMAIL === "true") return;
   const apiKey = serverEnv.RESEND_API_KEY;
   const from = serverEnv.EMAIL_FROM;
   if (!apiKey || !from) throw new Error("El correo no está configurado.");
@@ -24,6 +25,7 @@ export async function sendPasswordResetEmail({
   to,
   url,
 }: PasswordResetEmail) {
+  if (process.env.E2E_DISABLE_EMAIL === "true") return;
   const apiKey = serverEnv.RESEND_API_KEY;
   const from = serverEnv.EMAIL_FROM;
 
@@ -51,6 +53,7 @@ export async function sendVerificationEmail({
   to,
   url,
 }: VerificationEmail) {
+  if (process.env.E2E_DISABLE_EMAIL === "true") return;
   const apiKey = serverEnv.RESEND_API_KEY;
   const from = serverEnv.EMAIL_FROM;
 
