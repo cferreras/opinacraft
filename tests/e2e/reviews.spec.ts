@@ -129,7 +129,8 @@ test("a reported opinion can be hidden and restored by moderation", async ({ pag
   await expect(page).toHaveURL(/\/admin\?updated=1/);
 
   await reviewer.goto(`/servers/${slug}#reviews`);
-  await expect(reviewer.getByText("—")).toBeVisible();
+  const reviewsSection = reviewer.locator("#reviews");
+  await expect(reviewsSection.getByText("—", { exact: true })).toBeVisible();
 
   await page.goto("/admin?status=actioned");
   const resolved = page.locator("article").filter({ hasText: "La experiencia merece una revisión" });

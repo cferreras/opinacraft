@@ -52,7 +52,7 @@ export function ReviewForm({
 
       <fieldset>
         <legend className="text-sm font-semibold text-zinc-950 dark:text-white">Tu puntuación</legend>
-        <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Puntuación de 1 a 5 estrellas">
+        <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Puntuación de 1 a 5 estrellas" aria-describedby={state?.fieldErrors?.rating ? "review-rating-error" : undefined}>
           {[1, 2, 3, 4, 5].map((value) => (
             <label key={value} className="group relative cursor-pointer">
               <input

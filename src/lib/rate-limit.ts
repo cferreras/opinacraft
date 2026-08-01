@@ -1,9 +1,7 @@
 import { sql } from "drizzle-orm";
 
-import { db } from "@/db";
+import { rateLimitDb } from "@/db";
 import { rateLimit } from "@/auth-schema";
-
-type RateLimitReader = Pick<typeof db, "insert">;
 
 export class RateLimitExceededError extends Error {
   readonly retryAfterSeconds: number;
@@ -19,19 +17,18 @@ export async function consumeRateLimit(
   key: string,
   limit: number,
   windowMs: number,
-  reader: RateLimitReader = db,
 ) {
   const now = Date.now();
   const windowStart = now - windowMs;
   const namespacedKey = `opinacraft:${key}`;
-  const [row] = await reader
+  const [row] = await rateLimitDb
     .insert(rateLimit)
     .values({ id: namespacedKey, key: namespacedKey, count: 1, lastRequest: now })
     .onConflictDoUpdate({
       target: rateLimit.key,
       set: {
         count: sql`case when ${rateLimit.lastRequest} <= ${windowStart} then 1 else ${rateLimit.count} + 1 end`,
-        lastRequest: now,
+        lastRequest: sql`case when ${rateLimit.lastRequest} <= ${windowStart} then ${now} else ${rateLimit.lastRequest} end`,
       },
     })
     .returning({ count: rateLimit.count, lastRequest: rateLimit.lastRequest });

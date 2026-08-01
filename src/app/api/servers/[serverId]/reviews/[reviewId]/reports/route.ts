@@ -14,6 +14,8 @@ import {
 
 export const runtime = "nodejs";
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ serverId: string; reviewId: string }> },
@@ -22,6 +24,9 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Inicia sesión para reportar una opinión." }, { status: 401 });
 
   const { serverId, reviewId } = await params;
+  if (!uuidPattern.test(serverId) || !uuidPattern.test(reviewId)) {
+    return NextResponse.json({ error: "La opinión indicada no existe." }, { status: 400 });
+  }
   const body = await request.json().catch(() => null) as { reason?: string; details?: string } | null;
   try {
     const report = await createReviewReport(session.user.id, serverId, reviewId, {

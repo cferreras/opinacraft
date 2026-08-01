@@ -26,7 +26,16 @@ function Composer({ serverId, slug, viewer }: { serverId: string; slug: string; 
   if (!viewer) return <div className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600 dark:bg-zinc-950/60 dark:text-zinc-400"><p className="font-semibold text-zinc-900 dark:text-zinc-100">¿Has jugado en este servidor?</p><p className="mt-1">Inicia sesión con una cuenta verificada para compartir tu experiencia.</p><Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`} className="mt-3 inline-flex font-semibold text-zinc-950 underline underline-offset-4 dark:text-white">Iniciar sesión</Link></div>;
   if (!viewer.emailVerified) return <div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100"><p className="font-semibold">Verifica tu email para opinar.</p><p className="mt-1">Puedes reenviar el enlace desde tu perfil.</p><Link href="/profile" className="mt-3 inline-flex font-semibold underline underline-offset-4">Ir al perfil</Link></div>;
   if (viewer.membershipRole) return <div className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600 dark:bg-zinc-950/60 dark:text-zinc-400"><p className="font-semibold text-zinc-900 dark:text-zinc-100">Formas parte del equipo</p><p className="mt-1">Los miembros no pueden puntuar su propio servidor.</p></div>;
-  if (viewer.review?.status === "hidden" || viewer.review?.status === "deleted") return <DeletedReviewNotice status={viewer.review.status} content={viewer.review.content} />;
+  if (viewer.review?.status === "hidden") return <DeletedReviewNotice status="hidden" content={viewer.review.content} />;
+  if (viewer.review?.status === "deleted") return (
+    <div className="space-y-4">
+      <DeletedReviewNotice status="deleted" content={viewer.review.content} />
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+        <p className="mb-4 text-sm font-semibold text-zinc-950 dark:text-white">Publica una nueva opinión</p>
+        <ReviewForm action={createReviewAction} serverId={serverId} slug={slug} />
+      </div>
+    </div>
+  );
   if (viewer.review) return <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60"><p className="mb-4 text-sm font-semibold text-zinc-950 dark:text-white">Edita tu opinión</p><ReviewForm action={updateReviewAction} serverId={serverId} slug={slug} reviewId={viewer.review.id} initialRating={viewer.review.rating} initialContent={viewer.review.content} editing /><form action={deleteReviewAction} className="mt-3 flex justify-end"><input type="hidden" name="reviewId" value={viewer.review.id} /><input type="hidden" name="slug" value={slug} /><button type="submit" className="text-xs font-semibold text-red-700 underline decoration-red-300 underline-offset-4 dark:text-red-300">Eliminar opinión</button></form></div>;
   return <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60"><p className="mb-4 text-sm font-semibold text-zinc-950 dark:text-white">Comparte tu experiencia</p><ReviewForm action={createReviewAction} serverId={serverId} slug={slug} /></div>;
 }
@@ -42,6 +51,6 @@ export function ReviewSection({ serverId, slug, summary, reviews, page, hasNextP
     <div className="mt-6"><Summary summary={summary} /></div>
     <div className="mt-6"><Composer serverId={serverId} slug={slug} viewer={viewer} /></div>
     <div className="mt-6 grid gap-4">{reviews.length ? reviews.map((review) => <ReviewCard key={review.id} review={review} serverId={serverId} slug={slug} canReport={canReport && !review.isMine} canReply={canReply} canManageReplies={canManageReplies} />) : <div className="rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">Todavía no hay opiniones. Sé el primero en contar tu experiencia.</div>}</div>
-    {(page > 1 || hasNextPage) ? <nav className="mt-6 flex items-center justify-between" aria-label="Páginas de opiniones">{page > 1 ? <Link href={`/servers/${slug}?reviewPage=${page - 1}#reviews`} className="min-h-10 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold dark:border-zinc-700">Anteriores</Link> : <span />}{hasNextPage ? <Link href={`/servers/${slug}?reviewPage=${page + 1}#reviews`} className="min-h-10 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold dark:border-zinc-700">Más recientes</Link> : null}</nav> : null}
+    {(page > 1 || hasNextPage) ? <nav className="mt-6 flex items-center justify-between" aria-label="Páginas de opiniones">{page > 1 ? <Link href={`/servers/${slug}?reviewPage=${page - 1}#reviews`} className="min-h-10 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold dark:border-zinc-700">Página anterior</Link> : <span />}{hasNextPage ? <Link href={`/servers/${slug}?reviewPage=${page + 1}#reviews`} className="min-h-10 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold dark:border-zinc-700">Página siguiente</Link> : null}</nav> : null}
   </section>;
 }

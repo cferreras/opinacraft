@@ -121,6 +121,7 @@ async function requireReviewableServer(
   serverId: string,
   userId: string,
 ) {
+  await requireVerifiedEmail(userId, tx);
   const [server] = await tx
     .select({
       id: servers.id,
@@ -128,16 +129,13 @@ async function requireReviewableServer(
       verificationStatus: servers.verificationStatus,
       moderationStatus: servers.moderationStatus,
       availabilityHiddenAt: servers.availabilityHiddenAt,
-      emailVerified: user.emailVerified,
     })
     .from(servers)
-    .innerJoin(user, eq(user.id, userId))
     .where(eq(servers.id, serverId))
     .for("update")
     .limit(1);
 
   if (!server) throw new ReviewNotFoundError();
-  if (!server.emailVerified) throw new ReviewPermissionError();
   if (server.publicationStatus !== "published" || server.verificationStatus !== "verified") {
     throw new ReviewNotEligibleError("El servidor debe estar publicado y verificado para opinar.");
   }
@@ -178,7 +176,7 @@ export async function createReview(userId: string, serverId: string, input: Revi
 
   try {
     return await db.transaction(async (tx) => {
-      await consumeRateLimit(`review:create:${userId}`, 5, 60 * 60 * 1000, tx);
+      await consumeRateLimit(`review:create:${userId}`, 5, 60 * 60 * 1000);
       await requireReviewableServer(tx, serverId, userId);
 
       try {
@@ -204,7 +202,7 @@ export async function updateReview(userId: string, reviewId: string, input: Revi
   const parsed = parseReviewInput(input);
 
   return db.transaction(async (tx) => {
-    await consumeRateLimit(`review:edit:${userId}`, 10, 60 * 60 * 1000, tx);
+    await consumeRateLimit(`review:edit:${userId}`, 10, 60 * 60 * 1000);
     const review = await getReviewForUpdate(tx, reviewId);
     if (review.userId !== userId) throw new ReviewPermissionError();
     if (review.status !== "published") throw new ReviewStateError();
@@ -221,7 +219,7 @@ export async function updateReview(userId: string, reviewId: string, input: Revi
 
 export async function deleteReview(userId: string, reviewId: string) {
   return db.transaction(async (tx) => {
-    await consumeRateLimit(`review:edit:${userId}`, 10, 60 * 60 * 1000, tx);
+    await consumeRateLimit(`review:edit:${userId}`, 10, 60 * 60 * 1000);
     const review = await getReviewForUpdate(tx, reviewId);
     if (review.userId !== userId) throw new ReviewPermissionError();
     if (review.status === "deleted") throw new ReviewStateError("Esta opinión ya está eliminada.");
@@ -240,7 +238,7 @@ export async function createOfficialReply(userId: string, reviewId: string, cont
   const parsed = reviewContentSchema.parse(parsedContent);
 
   return db.transaction(async (tx) => {
-    await consumeRateLimit(`review:reply:${userId}`, 10, 60 * 60 * 1000, tx);
+    await consumeRateLimit(`review:reply:${userId}`, 10, 60 * 60 * 1000);
     await requireVerifiedEmail(userId, tx);
     const [review] = await tx
       .select({
@@ -314,7 +312,7 @@ export async function updateOfficialReply(userId: string, replyId: string, conte
   const validated = reviewContentSchema.parse(parsed);
 
   return db.transaction(async (tx) => {
-    await consumeRateLimit(`review:reply:${userId}`, 10, 60 * 60 * 1000, tx);
+    await consumeRateLimit(`review:reply:${userId}`, 10, 60 * 60 * 1000);
     const [reply] = await tx
       .select({ id: reviewReplies.id, serverId: serverReviews.serverId })
       .from(reviewReplies)
@@ -336,7 +334,7 @@ export async function updateOfficialReply(userId: string, replyId: string, conte
 
 export async function deleteOfficialReply(userId: string, replyId: string) {
   return db.transaction(async (tx) => {
-    await consumeRateLimit(`review:reply:${userId}`, 10, 60 * 60 * 1000, tx);
+    await consumeRateLimit(`review:reply:${userId}`, 10, 60 * 60 * 1000);
     const [reply] = await tx
       .select({ id: reviewReplies.id, serverId: serverReviews.serverId })
       .from(reviewReplies)
@@ -363,7 +361,7 @@ export async function createReviewReport(
 
   try {
     return await db.transaction(async (tx) => {
-      await consumeRateLimit(`review:report:${userId}`, 10, 60 * 60 * 1000, tx);
+      await consumeRateLimit(`review:report:${userId}`, 10, 60 * 60 * 1000);
       const [review] = await tx
         .select({
           id: serverReviews.id,
@@ -577,6 +575,11 @@ export async function getReviewViewerState(serverId: string, userId: string) {
       })
       .from(serverReviews)
       .where(and(eq(serverReviews.serverId, serverId), eq(serverReviews.userId, userId)))
+      .orderBy(
+        asc(sql`case when ${serverReviews.status} = 'deleted' then 1 else 0 end`),
+        desc(serverReviews.createdAt),
+        desc(serverReviews.id),
+      )
       .limit(1),
   ]);
 

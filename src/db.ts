@@ -21,7 +21,7 @@ function secureConnectionString(connectionString: string) {
   return `${connectionString}${separator}sslmode=verify-full`;
 }
 
-const globalForDb = globalThis as typeof globalThis & { opinacraftPool?: Pool; opinacraftLockPool?: Pool };
+const globalForDb = globalThis as typeof globalThis & { opinacraftPool?: Pool; opinacraftLockPool?: Pool; opinacraftRateLimitPool?: Pool };
 const pool = globalForDb.opinacraftPool ?? new Pool({
   connectionString: secureConnectionString(serverEnv.DATABASE_URL),
   max: 2,
@@ -40,15 +40,27 @@ const lockPool = globalForDb.opinacraftLockPool ?? new Pool({
   query_timeout: 10_000,
   keepAlive: true,
 });
+const rateLimitPool = globalForDb.opinacraftRateLimitPool ?? new Pool({
+  connectionString: secureConnectionString(serverEnv.DATABASE_URL),
+  max: 1,
+  idleTimeoutMillis: 10_000,
+  connectionTimeoutMillis: 5_000,
+  statement_timeout: 10_000,
+  query_timeout: 10_000,
+  keepAlive: true,
+});
 if (process.env.NODE_ENV !== "production") {
   globalForDb.opinacraftPool = pool;
   globalForDb.opinacraftLockPool = lockPool;
+  globalForDb.opinacraftRateLimitPool = rateLimitPool;
 }
 
 export const db = drizzle({
   client: pool,
   relations: { ...relations, ...authRelations },
 });
+
+export const rateLimitDb = drizzle({ client: rateLimitPool });
 
 export async function withAdvisoryLock<T>(lockName: string, operation: () => Promise<T>) {
   const client = await lockPool.connect();
@@ -75,11 +87,13 @@ export async function withAdvisoryLock<T>(lockName: string, operation: () => Pro
 }
 
 export async function closeDatabase() {
-  if (!globalForDb.opinacraftPool && !globalForDb.opinacraftLockPool) return;
+  if (!globalForDb.opinacraftPool && !globalForDb.opinacraftLockPool && !globalForDb.opinacraftRateLimitPool) return;
   await Promise.all([
     globalForDb.opinacraftPool?.end(),
     globalForDb.opinacraftLockPool?.end(),
+    globalForDb.opinacraftRateLimitPool?.end(),
   ]);
   globalForDb.opinacraftPool = undefined;
   globalForDb.opinacraftLockPool = undefined;
+  globalForDb.opinacraftRateLimitPool = undefined;
 }

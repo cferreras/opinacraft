@@ -381,6 +381,9 @@ test("reviews create, aggregate, edit, hide, restore and delete safely", testOpt
   await deleteReview(reviewerId, created!.id);
   summary = await getReviewSummary(serverId);
   assert.equal(summary.total, 0);
+  const recreated = await createReview(reviewerId, serverId, { rating: 4, content: "Una nueva opinión tras borrar" });
+  assert.ok(recreated?.id);
+  assert.notEqual(recreated?.id, created?.id);
   await assert.rejects(() => updateReview(reviewerId, created!.id, { rating: 4, content: "No debería editarse" }), ReviewStateError);
 });
 

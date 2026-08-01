@@ -35,6 +35,14 @@ function formValue(formData: FormData, key: string) {
   return typeof value === "string" ? value : "";
 }
 
+const serverSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function formSlug(formData: FormData) {
+  const slug = formValue(formData, "slug");
+  if (slug.length > 100 || !serverSlugPattern.test(slug)) redirect("/servers");
+  return slug;
+}
+
 function reviewFields(formData: FormData) {
   return reviewInputSchema.safeParse({
     rating: formValue(formData, "rating"),
@@ -72,12 +80,27 @@ function replyStateError(error: unknown) {
   return known ?? "No se pudo guardar la respuesta oficial.";
 }
 
+function reviewErrorCode(error: unknown) {
+  if (error instanceof RateLimitExceededError) return "rate-limit";
+  if (error instanceof ReviewPermissionError) return "permission";
+  if (error instanceof ReviewStateError) return "state";
+  if (error instanceof ReviewNotFoundError) return "not-found";
+  return "unknown";
+}
+
+function replyErrorCode(error: unknown) {
+  if (error instanceof RateLimitExceededError) return "rate-limit";
+  if (error instanceof OfficialReplyPermissionError) return "permission";
+  if (error instanceof OfficialReplyNotFoundError) return "not-found";
+  return "unknown";
+}
+
 export async function createReviewAction(
   _previousState: ReviewActionState | null,
   formData: FormData,
 ): Promise<ReviewActionState | null> {
   const session = await getServerSession();
-  const slug = formValue(formData, "slug");
+  const slug = formSlug(formData);
   if (!session) redirect(`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}`)}`);
 
   const parsed = reviewFields(formData);
@@ -102,7 +125,7 @@ export async function updateReviewAction(
   formData: FormData,
 ): Promise<ReviewActionState | null> {
   const session = await getServerSession();
-  const slug = formValue(formData, "slug");
+  const slug = formSlug(formData);
   if (!session) redirect(`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}`)}`);
 
   const parsed = reviewFields(formData);
@@ -124,14 +147,13 @@ export async function updateReviewAction(
 
 export async function deleteReviewAction(formData: FormData) {
   const session = await getServerSession();
-  const slug = formValue(formData, "slug");
+  const slug = formSlug(formData);
   if (!session) redirect(`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}`)}`);
 
   try {
     await deleteReview(session.user.id, formValue(formData, "reviewId"));
   } catch (error) {
-    const message = serverError(error);
-    if (message) redirect(`/servers/${slug}?reviewError=${encodeURIComponent(message)}#reviews`);
+    if (serverError(error)) redirect(`/servers/${slug}?reviewError=${reviewErrorCode(error)}#reviews`);
     console.error("Failed to delete review", error instanceof Error ? error.name : "unknown");
     redirect(`/servers/${slug}?reviewError=delete#reviews`);
   }
@@ -146,7 +168,7 @@ export async function createOfficialReplyAction(
   formData: FormData,
 ): Promise<ReviewActionState | null> {
   const session = await getServerSession();
-  const slug = formValue(formData, "slug");
+  const slug = formSlug(formData);
   if (!session) redirect(`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}`)}`);
 
   const content = reviewContentSchema.safeParse(formValue(formData, "content"));
@@ -164,16 +186,16 @@ export async function createOfficialReplyAction(
 
 export async function updateOfficialReplyAction(formData: FormData) {
   const session = await getServerSession();
-  const slug = formValue(formData, "slug");
+  const slug = formSlug(formData);
   if (!session) redirect(`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}`)}`);
 
   const content = reviewContentSchema.safeParse(formValue(formData, "content"));
-  if (!content.success) redirect(`/servers/${slug}?replyError=${encodeURIComponent(content.error.issues[0]?.message ?? "Respuesta inválida")}#reviews`);
+  if (!content.success) redirect(`/servers/${slug}?replyError=invalid#reviews`);
 
   try {
     await updateOfficialReply(session.user.id, formValue(formData, "replyId"), content.data);
   } catch (error) {
-    redirect(`/servers/${slug}?replyError=${encodeURIComponent(replyStateError(error))}#reviews`);
+    redirect(`/servers/${slug}?replyError=${replyErrorCode(error)}#reviews`);
   }
 
   revalidatePath(`/servers/${slug}`);
@@ -182,13 +204,13 @@ export async function updateOfficialReplyAction(formData: FormData) {
 
 export async function deleteOfficialReplyAction(formData: FormData) {
   const session = await getServerSession();
-  const slug = formValue(formData, "slug");
+  const slug = formSlug(formData);
   if (!session) redirect(`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}`)}`);
 
   try {
     await deleteOfficialReply(session.user.id, formValue(formData, "replyId"));
   } catch (error) {
-    redirect(`/servers/${slug}?replyError=${encodeURIComponent(replyStateError(error))}#reviews`);
+    redirect(`/servers/${slug}?replyError=${replyErrorCode(error)}#reviews`);
   }
 
   revalidatePath(`/servers/${slug}`);

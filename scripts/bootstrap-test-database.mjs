@@ -266,7 +266,8 @@ async function main() {
         "updated_at" timestamp with time zone DEFAULT now() NOT NULL
       )
     `);
-    await createIndex(client, 'CREATE UNIQUE INDEX IF NOT EXISTS "server_reviews_one_per_user_idx" ON "server_reviews" ("server_id", "user_id")');
+    await client.query('DROP INDEX IF EXISTS "server_reviews_one_per_user_idx"');
+    await createIndex(client, 'CREATE UNIQUE INDEX "server_reviews_one_per_user_idx" ON "server_reviews" ("server_id", "user_id") WHERE "status" <> \'deleted\'');
     await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_reviews_server_status_created_idx" ON "server_reviews" ("server_id", "status", "created_at")');
     await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_reviews_user_id_idx" ON "server_reviews" ("user_id")');
     await createIndex(client, 'CREATE UNIQUE INDEX IF NOT EXISTS "review_replies_one_per_review_idx" ON "review_replies" ("review_id")');
@@ -292,11 +293,23 @@ async function main() {
     await client.query(`
       DO $do$
       BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'moderation_events_review_id_server_reviews_id_fkey') THEN
-          ALTER TABLE "moderation_events" ADD CONSTRAINT "moderation_events_review_id_server_reviews_id_fkey" FOREIGN KEY ("review_id") REFERENCES "server_reviews"("id") ON DELETE SET NULL;
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint c
+          WHERE c.conrelid = 'moderation_events'::regclass
+            AND c.confrelid = 'server_reviews'::regclass
+            AND pg_get_constraintdef(c.oid) LIKE 'FOREIGN KEY (review_id)%'
+        ) THEN
+          ALTER TABLE "moderation_events" ADD CONSTRAINT "moderation_events_review_fk" FOREIGN KEY ("review_id") REFERENCES "server_reviews"("id") ON DELETE SET NULL;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'moderation_events_review_report_id_server_review_reports_id_fkey') THEN
-          ALTER TABLE "moderation_events" ADD CONSTRAINT "moderation_events_review_report_id_server_review_reports_id_fkey" FOREIGN KEY ("review_report_id") REFERENCES "server_review_reports"("id") ON DELETE SET NULL;
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint c
+          WHERE c.conrelid = 'moderation_events'::regclass
+            AND c.confrelid = 'server_review_reports'::regclass
+            AND pg_get_constraintdef(c.oid) LIKE 'FOREIGN KEY (review_report_id)%'
+        ) THEN
+          ALTER TABLE "moderation_events" ADD CONSTRAINT "moderation_events_review_report_fk" FOREIGN KEY ("review_report_id") REFERENCES "server_review_reports"("id") ON DELETE SET NULL;
         END IF;
       END
       $do$;

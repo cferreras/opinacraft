@@ -20,6 +20,36 @@ export const dynamic = "force-dynamic";
 
 const getPublishedServer = cache(getPublishedServerBySlug);
 
+const reviewNotices: Record<string, string> = {
+  created: "Opinión publicada.",
+  updated: "Opinión actualizada.",
+  deleted: "Opinión eliminada.",
+};
+
+const replyNotices: Record<string, string> = {
+  created: "Respuesta oficial publicada.",
+  updated: "Respuesta oficial actualizada.",
+  deleted: "Respuesta oficial eliminada.",
+};
+
+const reviewErrors: Record<string, string> = {
+  delete: "No se pudo eliminar la opinión. Inténtalo de nuevo.",
+  invalid: "La opinión no es válida.",
+  permission: "No tienes permiso para realizar esta acción sobre la opinión.",
+  state: "Esta opinión no se puede editar en su estado actual.",
+  "not-found": "La opinión ya no está disponible.",
+  "rate-limit": "Has alcanzado el límite temporal. Inténtalo más tarde.",
+  unknown: "No se pudo completar la acción sobre la opinión.",
+};
+
+const replyErrors: Record<string, string> = {
+  invalid: "La respuesta oficial no es válida.",
+  permission: "No tienes permiso para gestionar esta respuesta oficial.",
+  "not-found": "La respuesta oficial ya no está disponible.",
+  "rate-limit": "Has alcanzado el límite temporal. Inténtalo más tarde.",
+  unknown: "No se pudo completar la acción sobre la respuesta oficial.",
+};
+
 export async function generateMetadata({ params }: PublicServerPageProps): Promise<Metadata> {
   const { slug } = await params;
   const server = await getPublishedServer(slug);
@@ -53,8 +83,8 @@ export default async function PublicServerPage({
     listServerReviews(server.id, Number.isFinite(requestedReviewPage) ? requestedReviewPage : 1, session?.user.id),
   ]);
   const viewer = session ? await getReviewViewerState(server.id, session.user.id) : null;
-  const notice = query.review === "created" ? "Opinión publicada." : query.review === "updated" ? "Opinión actualizada." : query.review === "deleted" ? "Opinión eliminada." : query.reply === "created" ? "Respuesta oficial publicada." : query.reply === "updated" ? "Respuesta oficial actualizada." : query.reply === "deleted" ? "Respuesta oficial eliminada." : undefined;
-  const errorNotice = query.reviewError ?? query.replyError;
+  const notice = (query.review ? reviewNotices[query.review] : undefined) ?? (query.reply ? replyNotices[query.reply] : undefined);
+  const errorNotice = query.reviewError ? reviewErrors[query.reviewError] : query.replyError ? replyErrors[query.replyError] : undefined;
 
   return (
     <main className="min-h-screen bg-zinc-100 px-6 py-12 dark:bg-zinc-950">

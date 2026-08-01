@@ -393,7 +393,9 @@ export const serverReviews = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("server_reviews_one_per_user_idx").on(table.serverId, table.userId),
+    uniqueIndex("server_reviews_one_per_user_idx")
+      .on(table.serverId, table.userId)
+      .where(sql`${table.status} <> 'deleted'`),
     index("server_reviews_server_status_created_idx").on(table.serverId, table.status, table.createdAt),
     index("server_reviews_user_id_idx").on(table.userId),
     check("server_reviews_rating_check", sql`${table.rating} between 1 and 5`),
