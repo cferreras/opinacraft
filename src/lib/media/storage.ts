@@ -60,9 +60,9 @@ function createMediaStorage(): MediaStorage {
     return new E2EMemoryStorage();
   }
 
-  if (serverEnv.NODE_ENV === "production" && !serverEnv.BLOB_READ_WRITE_TOKEN) {
-    throw new MediaStorageNotConfiguredError();
-  }
+  // Keep configuration validation inside the storage operations so importing
+  // a route does not fail during `next build`. Requests still receive the
+  // same MediaStorageNotConfiguredError through ensureConfigured().
   return new VercelBlobStorage();
 }
 
