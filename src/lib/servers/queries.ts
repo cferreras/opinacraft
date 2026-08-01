@@ -6,6 +6,7 @@ import {
   serverMembers,
   serverVerifications,
   serverMedia,
+  serverReviews,
   serverTags,
   servers,
   tags,
@@ -17,6 +18,7 @@ type ServerBase = {
   slug: string;
   description: string | null;
   websiteUrl: string | null;
+  storeUrl: string | null;
   discordUrl: string | null;
   publicationStatus: "draft" | "published" | "hidden";
   verificationStatus: "unverified" | "verified";
@@ -58,6 +60,14 @@ const MAX_PUBLIC_SERVER_PAGE = 10_000;
 
 export type PublicServer = Omit<ManagedServer, "role">;
 export type AggregateHealthStatus = "online" | "offline" | "unknown";
+export type PublicServerSort = "rating" | "players" | "recent";
+
+type ReviewSummaryLite = {
+  reviewAverage: number | null;
+  reviewCount: number;
+};
+
+export type CatalogServer = PublicServer & ReviewSummaryLite;
 
 type ServerRow = {
   server: ServerBase;
@@ -157,6 +167,27 @@ async function attachCatalogData<T extends { id: string; tags: ServerTag[]; medi
   return items.map((item) => ({ ...item, tags: tagsByServer.get(item.id) ?? [], media: mediaByServer.get(item.id) ?? [] }));
 }
 
+async function attachReviewSummaries<T extends { id: string }>(items: T[]): Promise<Array<T & ReviewSummaryLite>> {
+  if (items.length === 0) return [];
+
+  const rows = await db
+    .select({
+      serverId: serverReviews.serverId,
+      average: sql<string | null>`round(avg(${serverReviews.rating})::numeric, 1)`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(serverReviews)
+    .where(and(inArray(serverReviews.serverId, items.map((item) => item.id)), eq(serverReviews.status, "published")))
+    .groupBy(serverReviews.serverId);
+  const summaries = new Map(rows.map((row) => [row.serverId, { reviewAverage: row.average === null ? null : Number(row.average), reviewCount: row.count }]));
+
+  return items.map((item) => ({
+    ...item,
+    reviewAverage: summaries.get(item.id)?.reviewAverage ?? null,
+    reviewCount: summaries.get(item.id)?.reviewCount ?? 0,
+  }));
+}
+
 export async function listManagedServers(userId: string) {
   const rows = await db
     .select({
@@ -166,6 +197,7 @@ export async function listManagedServers(userId: string) {
         slug: servers.slug,
         description: servers.description,
         websiteUrl: servers.websiteUrl,
+        storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
         publicationStatus: servers.publicationStatus,
         verificationStatus: servers.verificationStatus,
@@ -197,10 +229,11 @@ export async function listManagedServers(userId: string) {
   return attachCatalogData(groupServerRows(rows));
 }
 
-export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status }: { page?: number; query?: string; tagSlugs?: string[]; edition?: "java" | "bedrock"; status?: AggregateHealthStatus } = {}) {
+export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating" }: { page?: number; query?: string; tagSlugs?: string[]; edition?: "java" | "bedrock"; status?: AggregateHealthStatus; sort?: PublicServerSort } = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; page: number }> {
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
     : 1;
+  const queryText = query.trim();
   const serverIds = await db
     .select({ id: servers.id })
     .from(servers)
@@ -209,14 +242,20 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
       eq(servers.moderationStatus, "active"),
       eq(servers.verificationStatus, "verified"),
       isNull(servers.availabilityHiddenAt),
-      query.trim() ? sql`(${ilike(servers.name, `%${query.trim().slice(0, 80)}%`)} or ${ilike(servers.description, `%${query.trim().slice(0, 80)}%`)} or similarity(lower(${servers.name}), lower(${query.trim().slice(0, 80)})) > 0.2 or similarity(lower(coalesce(${servers.description}, '')), lower(${query.trim().slice(0, 80)})) > 0.2 or exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.status = 'active' and (t.slug like ${`%${query.trim().slice(0, 80).toLowerCase()}%`} or similarity(lower(t.slug), lower(${query.trim().slice(0, 80)})) > 0.2)))` : undefined,
+      queryText ? sql`(${ilike(servers.name, `%${queryText.slice(0, 80)}%`)} or ${ilike(servers.description, `%${queryText.slice(0, 80)}%`)} or similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) > 0.2 or similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})) > 0.2 or exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.status = 'active' and (t.slug like ${`%${queryText.slice(0, 80).toLowerCase()}%`} or similarity(lower(t.slug), lower(${queryText.slice(0, 80)})) > 0.2)))` : undefined,
       edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition} and se.verification_status = 'verified')` : undefined,
       sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
       ...tagSlugs.slice(0, 8).map((slug) => sql`exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.slug = ${slug} and t.status = 'active')`),
       status ? sql`case when exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified' and se.health_status = 'online' and se.last_checked_at > now() - interval '30 minutes') then 'online' when not exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified' and (se.last_checked_at is null or se.last_checked_at <= now() - interval '30 minutes' or se.health_status <> 'offline')) then 'offline' else 'unknown' end = ${status}` : undefined,
     ))
     .orderBy(
-      query.trim() ? desc(sql`greatest(similarity(lower(${servers.name}), lower(${query.trim().slice(0, 80)})) * 3, coalesce((select max(similarity(lower(t.slug), lower(${query.trim().slice(0, 80)}))) * 2 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${query.trim().slice(0, 80)})))`) : desc(sql`case when exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.health_status = 'online' and se.last_checked_at > now() - interval '30 minutes') then 3 when exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and (se.last_checked_at is null or se.last_checked_at <= now() - interval '30 minutes' or se.health_status = 'unknown')) then 2 else 1 end`),
+      ...(queryText
+        ? [desc(sql`greatest(similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) * 3, coalesce((select max(similarity(lower(t.slug), lower(${queryText.slice(0, 80)}))) * 2 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})))`)]
+        : sort === "players"
+          ? [desc(sql`coalesce((select max(se.players_current) from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified'), 0)`)]
+          : sort === "recent"
+            ? [desc(servers.createdAt)]
+            : [desc(sql`coalesce((select avg(sr.rating) from server_reviews sr where sr.server_id = ${servers.id} and sr.status = 'published'), 0)`)]),
       desc(servers.createdAt), desc(servers.id),
     )
     .limit(PUBLIC_SERVER_PAGE_SIZE + 1)
@@ -224,7 +263,8 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
   const hasNextPage = serverIds.length > PUBLIC_SERVER_PAGE_SIZE;
   const ids = serverIds.slice(0, PUBLIC_SERVER_PAGE_SIZE).map(({ id }) => id);
   if (ids.length === 0) {
-    return { servers: [], hasNextPage: false, page: safePage };
+    const emptyServers: CatalogServer[] = [];
+    return { servers: emptyServers, hasNextPage: false, page: safePage };
   }
 
   const rows = await db
@@ -235,6 +275,7 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
         slug: servers.slug,
         description: servers.description,
         websiteUrl: servers.websiteUrl,
+        storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
         publicationStatus: servers.publicationStatus,
         verificationStatus: servers.verificationStatus,
@@ -258,14 +299,20 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
     })
     .from(servers)
     .leftJoin(serverEndpoints, eq(serverEndpoints.serverId, servers.id))
-    .where(and(inArray(servers.id, ids), eq(servers.moderationStatus, "active"), eq(serverEndpoints.verificationStatus, "verified")))
+    .where(and(
+      inArray(servers.id, ids),
+      eq(servers.moderationStatus, "active"),
+      eq(serverEndpoints.verificationStatus, "verified"),
+      edition ? eq(serverEndpoints.edition, edition) : undefined,
+    ))
     .orderBy(desc(servers.createdAt), desc(servers.id), asc(serverEndpoints.edition));
 
   const rank = new Map(ids.map((id, index) => [id, index]));
   const orderedServers = groupServerRows(rows).sort(
     (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
   );
-  return { servers: await attachCatalogData(orderedServers), hasNextPage, page: safePage };
+  const catalogServers = await attachCatalogData(orderedServers);
+  return { servers: await attachReviewSummaries(catalogServers), hasNextPage, page: safePage };
 }
 
 export async function getPublishedServerBySlug(slug: string) {
@@ -277,6 +324,7 @@ export async function getPublishedServerBySlug(slug: string) {
         slug: servers.slug,
         description: servers.description,
         websiteUrl: servers.websiteUrl,
+        storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
         publicationStatus: servers.publicationStatus,
         verificationStatus: servers.verificationStatus,
@@ -320,6 +368,7 @@ export async function getManagedServerBySlug(slug: string, userId: string) {
       slug: servers.slug,
       description: servers.description,
       websiteUrl: servers.websiteUrl,
+      storeUrl: servers.storeUrl,
       discordUrl: servers.discordUrl,
       publicationStatus: servers.publicationStatus,
       verificationStatus: servers.verificationStatus,

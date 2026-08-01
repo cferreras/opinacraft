@@ -61,7 +61,30 @@ test("creates an ASCII slug and validates external URLs", () => {
     normalizeHttpUrl("https://discord.gg/example#invite", "discordUrl"),
     "https://discord.gg/example",
   );
+  assert.equal(
+    normalizeHttpUrl(" https://shop.example.com/store#buy ", "storeUrl"),
+    "https://shop.example.com/store",
+  );
+  assert.equal(
+    normalizeCreateServerInput({
+      name: "A Minecraft Community",
+      storeUrl: "https://shop.example.com/store",
+      endpoints: [{ edition: "java", host: "play.example.com" }],
+    }).storeUrl,
+    "https://shop.example.com/store",
+  );
   assert.throws(() => normalizeHttpUrl("javascript:alert(1)", "websiteUrl"));
+  assert.throws(() => normalizeHttpUrl("shop.example.com", "storeUrl"));
+});
+
+test("normalizes omitted and blank store URLs to null", () => {
+  const baseInput = {
+    name: "A Minecraft Community",
+    endpoints: [{ edition: "java" as const, host: "play.example.com" }],
+  };
+
+  assert.equal(normalizeCreateServerInput(baseInput).storeUrl, null);
+  assert.equal(normalizeCreateServerInput({ ...baseInput, storeUrl: "   " }).storeUrl, null);
 });
 
 test("trims server tags and enforces the eight-tag limit", () => {

@@ -110,6 +110,7 @@ export const servers = pgTable(
     slug: varchar("slug", { length: 120 }).notNull().unique(),
     description: text("description"),
     websiteUrl: text("website_url"),
+    storeUrl: text("store_url"),
     discordUrl: text("discord_url"),
     moderationStatus: serverModerationStatus("moderation_status").default("active").notNull(),
     availabilityHiddenAt: timestamp("availability_hidden_at", { withTimezone: true }),

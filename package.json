@@ -12,15 +12,17 @@
     "test:integration": "node scripts/bootstrap-test-database.mjs && node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/integration.test.ts",
     "test:e2e": "playwright test",
     "db:inspect": "node scripts/inspect-database.mjs",
+    "db:seed": "node scripts/seed-local.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
-    ,"admin:grant": "node scripts/grant-admin.mjs"
+    "db:studio": "drizzle-kit studio",
+    "admin:grant": "node scripts/grant-admin.mjs"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.0-beta.10",
     "@t3-oss/env-nextjs": "^0.13.11",
+    "@tabler/icons-react": "^3.46.0",
     "@vercel/blob": "^2.6.1",
     "better-auth": "1.7.0-beta.10",
     "dotenv": "^17.4.2",

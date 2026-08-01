@@ -9,6 +9,7 @@ export const minecraftEditions = ["java", "bedrock"] as const;
 export type MinecraftEdition = (typeof minecraftEditions)[number];
 
 const MAX_URL_LENGTH = 2_048;
+type ServerUrlField = "websiteUrl" | "storeUrl" | "discordUrl";
 
 export type RawServerEndpoint = {
   edition: MinecraftEdition;
@@ -20,6 +21,7 @@ export type CreateServerInput = {
   name: string;
   description?: string;
   websiteUrl?: string;
+  storeUrl?: string;
   discordUrl?: string;
   tags?: string[];
   endpoints: RawServerEndpoint[];
@@ -37,6 +39,7 @@ export type NormalizedCreateServerInput = {
   name: string;
   description: string | null;
   websiteUrl: string | null;
+  storeUrl: string | null;
   discordUrl: string | null;
   tags: string[];
   endpoints: NormalizedServerEndpoint[];
@@ -55,6 +58,7 @@ export const createServerInputSchema = z
     name: z.string().trim().min(3).max(80),
     description: z.string().trim().max(2_000).optional(),
     websiteUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
+    storeUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     discordUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     tags: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
     endpoints: z.array(endpointSchema).min(1).max(2),
@@ -77,6 +81,7 @@ export class ServerInputError extends Error {
     | "name"
     | "description"
     | "websiteUrl"
+    | "storeUrl"
     | "discordUrl"
     | "endpoints"
     | "host"
@@ -88,6 +93,7 @@ export class ServerInputError extends Error {
       | "name"
       | "description"
       | "websiteUrl"
+      | "storeUrl"
       | "discordUrl"
       | "endpoints"
       | "host"
@@ -163,7 +169,7 @@ export function isPublicHost(value: string) {
   );
 }
 
-export function normalizeHttpUrl(value: string, field: "websiteUrl" | "discordUrl") {
+export function normalizeHttpUrl(value: string, field: ServerUrlField) {
   const candidate = value.trim();
 
   if (!candidate) {
@@ -226,6 +232,7 @@ export function normalizeCreateServerInput(
     ...input,
     description: emptyToUndefined(input.description),
     websiteUrl: emptyToUndefined(input.websiteUrl),
+    storeUrl: emptyToUndefined(input.storeUrl),
     discordUrl: emptyToUndefined(input.discordUrl),
   });
 
@@ -249,6 +256,9 @@ export function normalizeCreateServerInput(
     description: parsed.description || null,
     websiteUrl: parsed.websiteUrl
       ? normalizeHttpUrl(parsed.websiteUrl, "websiteUrl")
+      : null,
+    storeUrl: parsed.storeUrl
+      ? normalizeHttpUrl(parsed.storeUrl, "storeUrl")
       : null,
     discordUrl: parsed.discordUrl
       ? normalizeHttpUrl(parsed.discordUrl, "discordUrl")
