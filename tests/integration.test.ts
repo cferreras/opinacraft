@@ -387,6 +387,24 @@ test("reviews create, aggregate, edit, hide, restore and delete safely", testOpt
   await assert.rejects(() => updateReview(reviewerId, created!.id, { rating: 4, content: "No debería editarse" }), ReviewStateError);
 });
 
+test("adding a player to the server team invalidates their review", testOptions, async () => {
+  const ownerId = await createUser();
+  const reviewerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `member-review-${randomUUID()}.example.invalid`, port: 25565 } });
+  await publishServer(serverId);
+  const { createReview, getReviewSummary } = await loadReviewServices();
+  const { rows: reviewerRows } = await database().query('select email from "user" where id = $1', [reviewerId]);
+
+  const review = await createReview(reviewerId, serverId, { rating: 5, content: "Una comunidad excelente" });
+  const { addServerMember } = await import("../src/lib/servers/members.ts");
+  await addServerMember(serverId, ownerId, reviewerRows[0].email, "editor");
+
+  const summary = await getReviewSummary(serverId);
+  assert.equal(summary.total, 0);
+  const deleted = await database().query("select status from server_reviews where id = $1", [review?.id]);
+  assert.equal(deleted.rows[0].status, "deleted");
+});
+
 test("the unique review constraint wins a concurrent duplicate", testOptions, async () => {
   const ownerId = await createUser();
   const reviewerId = await createUser();

@@ -120,12 +120,32 @@ export async function moderateReviewReport(userId: string, reportId: string, dec
       reviewChanged = Boolean(changed);
     }
     if (review && decision === "restored" && review.status === "hidden") {
-      const [changed] = await tx
-        .update(serverReviews)
-        .set({ status: "published", updatedAt: new Date() })
-        .where(and(eq(serverReviews.id, review.id), eq(serverReviews.status, "hidden")))
-        .returning({ id: serverReviews.id });
-      reviewChanged = Boolean(changed);
+      const reviewEvents = await tx
+        .select({
+          id: moderationEvents.id,
+          reviewReportId: moderationEvents.reviewReportId,
+          action: moderationEvents.action,
+          createdAt: moderationEvents.createdAt,
+        })
+        .from(moderationEvents)
+        .where(eq(moderationEvents.reviewId, review.id))
+        .orderBy(desc(moderationEvents.createdAt), desc(moderationEvents.id));
+      const latestActionByReport = new Map<string, string>();
+      for (const event of reviewEvents) {
+        if (event.reviewReportId && !latestActionByReport.has(event.reviewReportId)) {
+          latestActionByReport.set(event.reviewReportId, event.action);
+        }
+      }
+      const anotherReportStillHides = [...latestActionByReport.entries()]
+        .some(([reviewReportId, action]) => reviewReportId !== report.id && action === "hidden");
+      if (!anotherReportStillHides) {
+        const [changed] = await tx
+          .update(serverReviews)
+          .set({ status: "published", updatedAt: new Date() })
+          .where(and(eq(serverReviews.id, review.id), eq(serverReviews.status, "hidden")))
+          .returning({ id: serverReviews.id });
+        reviewChanged = Boolean(changed);
+      }
     }
 
     await tx.insert(moderationEvents).values({
