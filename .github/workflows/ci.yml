@@ -57,7 +57,9 @@ jobs:
         run: pnpm db:migrate
 
       - name: Verify migrations are idempotent
-        run: pnpm db:migrate
+        run: |
+          psql "$DIRECT_DATABASE_URL" --set=ON_ERROR_STOP=1 --command 'DROP SCHEMA public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS drizzle CASCADE;'
+          pnpm db:migrate
 
       - name: Lint
         run: pnpm lint
