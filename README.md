@@ -53,9 +53,9 @@ Migrations are not executed automatically during a Vercel build. Review the gene
 
 Production migrations can be applied with the manual `Production database migration` GitHub Actions workflow. Before its first run:
 
-1. Create a GitHub environment named `production` and configure required reviewers when available.
+1. Create a GitHub environment named `production` and configure at least one required reviewer. Do not run the workflow until this protection is in place.
 2. Add an environment secret named `DIRECT_DATABASE_URL` containing the direct, non-pooled URL for the Production Neon branch.
-3. Run the workflow from `main` and enter `migrate-production` when prompted.
+3. After the reviewer protection is configured, run the workflow from `main` and enter `migrate-production` when prompted.
 
 The workflow serializes migration runs, rejects Neon pooler URLs, applies all pending migrations, and inspects the resulting schema. The Vercel `DATABASE_URL` remains the pooled runtime connection and is not needed by this workflow.
 
