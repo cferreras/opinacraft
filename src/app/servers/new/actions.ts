@@ -20,7 +20,7 @@ import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type CreateServerState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "discordUrl" | "tags" | "endpoints", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "tags" | "endpoints", string>>;
 };
 
 function formValue(formData: FormData, key: string) {
@@ -57,6 +57,7 @@ function getInput(formData: FormData): CreateServerInput {
     name: formValue(formData, "name") ?? "",
     description: formValue(formData, "description"),
     websiteUrl: formValue(formData, "websiteUrl"),
+    storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
     endpoints,
@@ -72,6 +73,7 @@ function zodFieldErrors(error: z.ZodError) {
       field === "name" ||
       field === "description" ||
       field === "websiteUrl" ||
+      field === "storeUrl" ||
       field === "discordUrl" ||
       field === "tags" ||
       field === "endpoints"

@@ -43,7 +43,7 @@ import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type ManageState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "discordUrl" | "tags" | "endpoints" | "publicationStatus", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "tags" | "endpoints" | "publicationStatus", string>>;
 };
 
 function formValue(formData: FormData, key: string) {
@@ -73,6 +73,7 @@ function getServerInput(formData: FormData): UpdateServerInput {
     name: formValue(formData, "name") ?? "",
     description: formValue(formData, "description"),
     websiteUrl: formValue(formData, "websiteUrl"),
+    storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
     endpoints,

@@ -19,6 +19,7 @@ export function ServerManageForm({
     name: string;
     description: string | null;
     websiteUrl: string | null;
+    storeUrl: string | null;
     discordUrl: string | null;
     tags: Array<{ label: string; slug: string }>;
     publicationStatus: "draft" | "published" | "hidden";
@@ -56,6 +57,11 @@ export function ServerManageForm({
           Website URL
           <input name="websiteUrl" type="url" defaultValue={server.websiteUrl ?? ""} className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
           {state?.fieldErrors?.websiteUrl ? <ErrorText>{state.fieldErrors.websiteUrl}</ErrorText> : null}
+        </label>
+        <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          Tienda del servidor
+          <input name="storeUrl" type="url" defaultValue={server.storeUrl ?? ""} placeholder="https://shop.example.com" className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950" />
+          {state?.fieldErrors?.storeUrl ? <ErrorText>{state.fieldErrors.storeUrl}</ErrorText> : null}
         </label>
         <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
           Discord invite URL

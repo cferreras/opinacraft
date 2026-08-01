@@ -82,6 +82,7 @@ export async function createServer(
     bedrockPort?: number;
     description?: string;
     websiteUrl?: string;
+    storeUrl?: string;
     discordUrl?: string;
     tags?: string[];
   },
@@ -90,6 +91,7 @@ export async function createServer(
   await page.getByLabel("Nombre", { exact: true }).fill(options.name);
   if (options.description) await page.getByLabel("Descripción", { exact: true }).fill(options.description);
   if (options.websiteUrl) await page.getByLabel("Sitio web", { exact: true }).fill(options.websiteUrl);
+  if (options.storeUrl) await page.getByLabel("Tienda del servidor", { exact: true }).fill(options.storeUrl);
   if (options.discordUrl) await page.getByLabel("Invitación de Discord", { exact: true }).fill(options.discordUrl);
 
   const javaHost = options.javaHost ?? `java-${Date.now()}.example.invalid`;

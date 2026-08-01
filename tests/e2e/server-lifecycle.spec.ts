@@ -25,6 +25,7 @@ test("owner can create a complete Java/Bedrock listing, upload media, edit visib
     bedrockHost: `bedrock-${Date.now()}.example.invalid`,
     description: "Una comunidad de prueba para cubrir el ciclo completo.",
     websiteUrl: "https://example.com/community",
+    storeUrl: "https://shop.example.com/store",
     discordUrl: "https://discord.gg/example",
     tags: ["survival", "community"],
   });
@@ -37,6 +38,7 @@ test("owner can create a complete Java/Bedrock listing, upload media, edit visib
   await expect(page.getByText("survival")).toBeVisible();
   await expect(page.getByText("community")).toBeVisible();
   await expect(page.getByRole("link", { name: "Website" })).toHaveAttribute("href", "https://example.com/community");
+  await expect(page.getByRole("link", { name: "Tienda oficial" })).toHaveAttribute("href", "https://shop.example.com/store");
   await expect(page.getByRole("link", { name: "Discord" })).toHaveAttribute("href", "https://discord.gg/example");
   await expect(page.getByText("java", { exact: true })).toBeVisible();
   await expect(page.getByText("bedrock", { exact: true })).toBeVisible();

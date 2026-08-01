@@ -135,6 +135,7 @@ async function insertServerBundle(
     slug,
     description: input.description,
     websiteUrl: input.websiteUrl,
+    storeUrl: input.storeUrl,
     discordUrl: input.discordUrl,
     publicationStatus: "draft",
   });
@@ -273,6 +274,7 @@ export async function updateServer(
         name: input.name,
         description: input.description,
         websiteUrl: input.websiteUrl,
+        storeUrl: input.storeUrl,
         discordUrl: input.discordUrl,
         ...(publicationStatus ? { publicationStatus } : {}),
         ...(publicationStatus === "published" ? { availabilityHiddenAt: null } : {}),

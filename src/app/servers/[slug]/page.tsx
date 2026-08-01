@@ -2,13 +2,30 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import {
+  IconBrandDiscord,
+  IconChartBar,
+  IconClock,
+  IconCode,
+  IconDeviceDesktop,
+  IconDeviceMobile,
+  IconExternalLink,
+  IconFileText,
+  IconShoppingBag,
+  IconStarFilled,
+  IconUsers,
+} from "@tabler/icons-react";
 
-import { getPublishedServerBySlug } from "@/lib/servers/queries";
-import { formatEndpoint } from "@/lib/servers/format";
-import { ReportForm } from "@/components/report-form";
 import { CopyAddressButton } from "@/components/copy-address-button";
+import { ReportForm } from "@/components/report-form";
 import { ReviewSection } from "@/components/review-section";
+import { ServerLogo } from "@/components/server-logo";
+import { ServerUtilityActions } from "@/components/server-utility-actions";
+import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
 import { getServerSession } from "@/lib/session";
+import { formatEndpoint } from "@/lib/servers/format";
+import { getPublishedServerBySlug } from "@/lib/servers/queries";
 import { getReviewSummary, getReviewViewerState, listServerReviews } from "@/lib/servers/reviews";
 
 type PublicServerPageProps = {
@@ -50,6 +67,66 @@ const replyErrors: Record<string, string> = {
   unknown: "No se pudo completar la acción sobre la respuesta oficial.",
 };
 
+function statusLabel(status: "online" | "offline" | "unknown") {
+  if (status === "online") return "En línea";
+  if (status === "offline") return "Fuera de línea";
+  return "Estado desconocido";
+}
+
+function statusTone(status: "online" | "offline" | "unknown") {
+  if (status === "online") return "text-[#0e9a55]";
+  if (status === "offline") return "text-[#d83a42]";
+  return "text-[#7c8797]";
+}
+
+function dateLabel(date: Date | null) {
+  if (!date) return "Aún no comprobado";
+  return date.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function Metric({ icon, label, value, tone = "text-[#162033]" }: { icon: React.ReactNode; label: string; value: string; tone?: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 border-[#e6eaf0] px-3 py-1.5 first:pl-0 sm:border-l sm:first:border-l-0 sm:first:pl-0">
+      <span className="shrink-0 text-[#65718c]">{icon}</span>
+      <span className="min-w-0">
+        <strong className={`block truncate text-[13px] font-semibold leading-4 ${tone}`}>{value}</strong>
+        <span className="block text-[10px] leading-4 text-[#7c8799]">{label}</span>
+      </span>
+    </div>
+  );
+}
+
+function EndpointRow({ endpoint }: { endpoint: { edition: "java" | "bedrock"; host: string; port: number; verificationStatus: "unverified" | "verified"; healthStatus: "unknown" | "online" | "offline"; playersCurrent: number | null; playersMax: number | null; version: string | null; latencyMs: number | null; lastCheckedAt: Date | null; consecutiveFailures: number } }) {
+  const isJava = endpoint.edition === "java";
+  const value = formatEndpoint(endpoint);
+
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isJava ? "bg-[#eef0ff] text-[#2c3be2]" : "bg-[#e9f8ff] text-[#16a0df]"}`}>
+        {isJava ? <IconDeviceDesktop aria-hidden="true" size={18} stroke={1.7} /> : <IconDeviceMobile aria-hidden="true" size={18} stroke={1.7} />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className={`text-[11px] font-semibold ${isJava ? "text-[#3537bf]" : "text-[#178cbf]"}`}>{isJava ? "Java" : "Bedrock"}</p>
+        <div className="mt-1 flex h-8 min-w-0 items-center rounded-lg border border-[#dce2e9] bg-white px-2.5">
+          <code className="min-w-0 flex-1 truncate text-[11px] text-[#202a42]">{value}</code>
+          <CopyAddressButton value={value} iconOnly className="-mr-1 text-[#64708a] hover:bg-[#f1f3ff] hover:text-[#2d2de4]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConnectionLink({ href, icon, label, external = false }: { href?: string | null; icon: React.ReactNode; label: string; external?: boolean }) {
+  if (!href) return null;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="flex min-h-10 items-center gap-2.5 rounded-lg border border-[#dde3ea] px-3 text-[11px] font-medium text-[#2d3bdb] transition hover:border-[#9fa8ff] hover:bg-[#f7f7ff]">
+      <span className="text-[#4d55f0]">{icon}</span>
+      <span className="flex-1">{label}</span>
+      {external ? <IconExternalLink aria-hidden="true" size={15} stroke={1.7} className="text-[#7b84a8]" /> : null}
+    </a>
+  );
+}
+
 export async function generateMetadata({ params }: PublicServerPageProps): Promise<Metadata> {
   const { slug } = await params;
   const server = await getPublishedServer(slug);
@@ -57,23 +134,18 @@ export async function generateMetadata({ params }: PublicServerPageProps): Promi
   return server
     ? {
         title: `${server.name} | OpinaCraft`,
-        description: server.description ?? `Discover ${server.name} on OpinaCraft.`,
+        description: server.description ?? `Descubre ${server.name} en OpinaCraft.`,
         alternates: { canonical: `/servers/${server.slug}` },
         openGraph: { title: server.name, description: server.description ?? undefined, type: "website", images: server.media.find((media) => media.kind === "banner" || media.kind === "logo")?.url ? [{ url: server.media.find((media) => media.kind === "banner" || media.kind === "logo")!.url }] : undefined },
       }
-    : { title: "Server not found | OpinaCraft" };
+    : { title: "Servidor no encontrado | OpinaCraft" };
 }
 
-export default async function PublicServerPage({
-  params,
-  searchParams,
-}: PublicServerPageProps) {
+export default async function PublicServerPage({ params, searchParams }: PublicServerPageProps) {
   const { slug } = await params;
   const server = await getPublishedServer(slug);
 
-  if (!server) {
-    notFound();
-  }
+  if (!server) notFound();
 
   const query = await searchParams;
   const requestedReviewPage = Number.parseInt(query.reviewPage ?? "1", 10);
@@ -85,100 +157,90 @@ export default async function PublicServerPage({
   const viewer = session ? await getReviewViewerState(server.id, session.user.id) : null;
   const notice = (query.review ? reviewNotices[query.review] : undefined) ?? (query.reply ? replyNotices[query.reply] : undefined);
   const errorNotice = query.reviewError ? reviewErrors[query.reviewError] : query.replyError ? replyErrors[query.replyError] : undefined;
+  const primaryEndpoint = server.endpoints.find((endpoint) => endpoint.edition === "java") ?? server.endpoints[0];
+  const copyAddress = primaryEndpoint ? formatEndpoint(primaryEndpoint) : server.slug;
+  const rating = reviewSummary.average === null ? "—" : reviewSummary.average.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   return (
-    <main className="min-h-screen bg-zinc-100 px-6 py-12 dark:bg-zinc-950">
-      <article className="mx-auto w-full max-w-3xl rounded-2xl bg-white p-8 shadow-xl shadow-zinc-200/60 dark:bg-zinc-900 dark:shadow-black/20 sm:p-10">
-        <Link
-          href="/"
-          className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-        >
-          OpinaCraft
-        </Link>
-        <Link
-          href="/servers"
-          className="ml-4 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-        >
-          All servers
-        </Link>
-        <div className="mt-8">
-          {server.media.find((media) => media.kind === "logo") ? <img src={server.media.find((media) => media.kind === "logo")?.url} alt={`${server.name} logo`} className="mb-6 h-20 w-20 rounded-2xl object-cover" /> : null}
-          <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
-            Minecraft server
-          </p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 dark:text-white">
-            {server.name}
-          </h1>
-          <span className={`mt-4 inline-flex rounded-full px-3 py-1 text-xs font-medium ${server.aggregateStatus === "online" ? "bg-emerald-100 text-emerald-800" : server.aggregateStatus === "offline" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>
-            {server.aggregateStatus === "online" ? "Online" : server.aggregateStatus === "offline" ? "Offline" : "Estado desconocido"}
-          </span>
-          {server.description ? (
-            <p className="mt-5 whitespace-pre-wrap text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              {server.description}
-            </p>
-          ) : null}
-          {server.tags.length > 0 ? <div className="mt-5 flex flex-wrap gap-2">{server.tags.map((tag) => <span key={tag.slug} className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-200">{tag.label}</span>)}</div> : null}
-        </div>
+    <div className="min-h-screen bg-[#f7f8fa] text-[#17202a]">
+      <SiteHeader />
+      <main className="mx-auto min-h-[calc(100vh-76px)] w-full max-w-[1180px] border-x border-[#edf0f3] bg-white px-4 pb-12 sm:px-6 lg:px-7">
+        <div className="pt-7 sm:pt-8">
+          <section className="grid gap-6 lg:grid-cols-[214px_minmax(0,1fr)_248px] lg:items-start lg:gap-8" aria-labelledby="server-name">
+            <ServerLogo name={server.name} media={server.media} className="h-[100px] w-[100px] justify-self-center rounded-2xl sm:h-[148px] sm:w-[148px] lg:h-[214px] lg:w-[214px] lg:justify-self-start" />
 
-        <section className="mt-10">
-          <h2 className="text-base font-semibold text-zinc-950 dark:text-white">
-            Connect
-          </h2>
-          <div className="mt-4 grid gap-3">
-            {server.endpoints.map((endpoint) => (
-              <div
-                key={endpoint.edition}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-800"
-              >
-                <span className="text-sm font-medium capitalize text-zinc-700 dark:text-zinc-300">
-                  {endpoint.edition}
-                </span>
-                <code className="text-sm text-zinc-950 dark:text-white">
-                  {formatEndpoint(endpoint)}
-                </code>
-                <CopyAddressButton value={formatEndpoint(endpoint)} />
-                <span className="text-xs capitalize text-zinc-500">
-                  {endpoint.verificationStatus === "verified" ? "verified" : "not verified"} · {endpoint.healthStatus}
-                  {endpoint.playersCurrent !== null && endpoint.playersMax !== null ? ` · ${endpoint.playersCurrent}/${endpoint.playersMax} players` : ""}
-                </span>
+            <div className="min-w-0 text-center lg:text-left">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 id="server-name" className="w-full text-[30px] font-semibold leading-none tracking-[-0.055em] text-[#101722] sm:text-[38px] lg:w-auto lg:text-[42px]">{server.name}</h1>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e6f8ef] px-2.5 py-1 text-[11px] font-medium text-[#0c8950]"><span aria-hidden="true" className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#0e9a55] text-white"><span className="text-[10px] leading-none">✓</span></span>Servidor verificado</span>
               </div>
-            ))}
-          </div>
-        </section>
+              <p className="mt-4 max-w-[540px] text-[13px] leading-[1.55] text-[#55627b]">{server.description ?? "Una comunidad de Minecraft lista para recibirte."}</p>
+              {server.tags.length > 0 ? <div className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start">{server.tags.map((tag) => <span key={tag.slug} className="rounded-md border border-[#e0e5ea] bg-[#fafbfc] px-2.5 py-1 text-[11px] text-[#35415b]">{tag.label}</span>)}</div> : null}
 
-        {server.websiteUrl || server.discordUrl ? (
-          <section className="mt-10 flex flex-wrap gap-3">
-            {server.websiteUrl ? (
-              <a
-                href={server.websiteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
-              >
-                Website
-              </a>
-            ) : null}
-            {server.discordUrl ? (
-              <a
-                href={server.discordUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
-              >
-                Discord
-              </a>
-            ) : null}
+              <div className="mt-5 grid grid-cols-2 gap-y-1 text-left sm:flex sm:flex-wrap sm:items-center sm:justify-center lg:justify-start">
+                <Metric icon={<span aria-hidden="true" className={`inline-block h-2.5 w-2.5 rounded-full ${server.aggregateStatus === "online" ? "bg-[#0e9a55]" : server.aggregateStatus === "offline" ? "bg-[#d83a42]" : "bg-[#adb6c2]"}`} />} label="Estado" value={statusLabel(server.aggregateStatus)} tone={statusTone(server.aggregateStatus)} />
+                <Metric icon={<IconUsers aria-hidden="true" size={20} stroke={1.7} />} label="jugadores" value={primaryEndpoint?.playersCurrent !== null && primaryEndpoint?.playersMax !== null && primaryEndpoint ? `${primaryEndpoint.playersCurrent} / ${primaryEndpoint.playersMax}` : "— / —"} />
+                <Metric icon={<IconCode aria-hidden="true" size={20} stroke={1.7} />} label="versión" value={primaryEndpoint?.version ?? "—"} />
+                <Metric icon={<IconChartBar aria-hidden="true" size={20} stroke={1.7} />} label="ping" value={primaryEndpoint?.latencyMs !== null && primaryEndpoint?.latencyMs !== undefined ? `${primaryEndpoint.latencyMs} ms` : "—"} tone={primaryEndpoint?.latencyMs !== null && primaryEndpoint?.latencyMs !== undefined && primaryEndpoint.latencyMs <= 60 ? "text-[#0e9a55]" : "text-[#162033]"} />
+                <Metric icon={<IconStarFilled aria-hidden="true" className="text-[#f4aa00]" size={19} />} label={`${reviewSummary.total} opiniones`} value={rating} />
+              </div>
+            </div>
+
+            <div className="lg:pt-11">
+              <CopyAddressButton value={copyAddress} showIcon label="Copiar dirección" className="h-12 w-full rounded-[10px] bg-[#3029e7] text-[13px] font-semibold text-white shadow-[0_5px_12px_rgba(48,41,231,0.16)] transition hover:bg-[#2821c8]" />
+              <ServerUtilityActions name={server.name} websiteUrl={server.websiteUrl} discordUrl={server.discordUrl} />
+            </div>
           </section>
-        ) : null}
 
-        <ReviewSection serverId={server.id} slug={server.slug} summary={reviewSummary} reviews={reviewPage.reviews} page={reviewPage.page} hasNextPage={reviewPage.hasNextPage} viewer={viewer} notice={notice} errorNotice={errorNotice} />
+          <section className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_348px] lg:items-start">
+            <div className="min-w-0">
+              <section className="rounded-2xl border border-[#e0e6eb] bg-white p-5 shadow-[0_1px_2px_rgba(16,30,45,0.02)] sm:p-6" aria-labelledby="about-server">
+                <h2 id="about-server" className="text-[18px] font-semibold tracking-[-0.025em] text-[#101722]">Sobre {server.name}</h2>
+                <p className="mt-4 whitespace-pre-wrap text-[13px] leading-[1.65] text-[#1f2b40]">{server.description ?? "Esta comunidad de Minecraft está preparada para recibirte. Consulta sus canales oficiales para conocer sus normas y novedades."}</p>
+                {server.tags.length > 0 ? <div className="mt-5"><p className="text-[12px] font-semibold text-[#1b2638]">Modalidades</p><div className="mt-2 flex flex-wrap gap-2">{server.tags.map((tag) => <span key={tag.slug} className="rounded-md bg-[#f3f5f7] px-2.5 py-1 text-[11px] text-[#35415b]">{tag.label}</span>)}</div></div> : null}
+              </section>
+              <ReviewSection serverId={server.id} slug={server.slug} summary={reviewSummary} reviews={reviewPage.reviews} page={reviewPage.page} hasNextPage={reviewPage.hasNextPage} viewer={viewer} notice={notice} errorNotice={errorNotice} />
+            </div>
 
-        <ReportForm serverId={server.id} />
+            <aside className="order-first min-w-0 rounded-2xl border border-[#e0e6eb] bg-white p-5 shadow-[0_1px_2px_rgba(16,30,45,0.02)] lg:order-none" aria-labelledby="connection-heading">
+              <h2 id="connection-heading" className="text-[18px] font-semibold tracking-[-0.025em] text-[#101722]">Conexión</h2>
+              <p className="mt-2 text-[12px] text-[#667287]">Elige tu edición y conéctate:</p>
+              <div className="mt-5 grid gap-4">
+                {server.endpoints.length ? server.endpoints.map((endpoint) => <EndpointRow key={endpoint.edition} endpoint={endpoint} />) : <p className="rounded-lg bg-[#f5f7f9] p-3 text-xs text-[#6c788b]">No hay direcciones verificadas disponibles.</p>}
+              </div>
 
-        <p className="mt-10 text-xs text-zinc-500">
-          Listed on OpinaCraft on {server.createdAt.toLocaleDateString("en-US")}.
-        </p>
-      </article>
-    </main>
+              <div className="my-6 border-t border-[#e7ebef]" />
+              <h3 className="text-[12px] font-semibold text-[#1b2638]">Estado del servidor</h3>
+              <div className="mt-3 grid gap-3 text-[12px] text-[#28354a]">
+                <div className="flex items-center gap-2.5"><span aria-hidden="true" className={`inline-block h-2.5 w-2.5 rounded-full ${server.aggregateStatus === "online" ? "bg-[#0e9a55]" : server.aggregateStatus === "offline" ? "bg-[#d83a42]" : "bg-[#adb6c2]"}`} /><span className={statusTone(server.aggregateStatus)}>{statusLabel(server.aggregateStatus)}</span></div>
+                <div className="flex items-center gap-2.5"><IconChartBar aria-hidden="true" size={18} stroke={1.7} className="text-[#67738b]" /><span>{primaryEndpoint?.latencyMs !== null && primaryEndpoint?.latencyMs !== undefined ? `${primaryEndpoint.latencyMs} ms` : "Sin latencia"}</span></div>
+                <div className="flex items-center gap-2.5"><IconClock aria-hidden="true" size={18} stroke={1.7} className="text-[#67738b]" /><span>Última comprobación: {dateLabel(primaryEndpoint?.lastCheckedAt ?? null)}</span></div>
+              </div>
+
+              <div className="mt-6 grid gap-2.5">
+                <ConnectionLink href={server.websiteUrl} icon={<IconFileText aria-hidden="true" size={17} stroke={1.7} />} label="Web del servidor" />
+                <ConnectionLink href={server.storeUrl} icon={<IconShoppingBag aria-hidden="true" size={17} stroke={1.7} />} label="Tienda oficial" />
+                <ConnectionLink href={server.discordUrl} icon={<IconBrandDiscord aria-hidden="true" size={17} stroke={1.7} />} label="Soporte en Discord" external />
+              </div>
+
+              <p className="mt-6 text-[10px] leading-4 text-[#6e7b8e]">Listado en OpinaCraft desde el {dateLabel(server.createdAt)}.</p>
+
+              {!viewer ? (
+                <div className="mt-5 rounded-lg border border-[#e2e7ec] bg-[#fbfcff] p-4">
+                  <h3 className="text-[14px] font-semibold text-[#17202a]">Sin iniciar sesión</h3>
+                  <p className="mt-2 text-[11px] leading-5 text-[#6e7b8e]">Inicia sesión para publicar tu opinión sobre {server.name}.</p>
+                  <Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${server.slug}#reviews`)}`} className="mt-3 inline-flex h-9 w-full items-center justify-between rounded-lg border border-[#cbd2ff] px-3 text-[11px] font-semibold text-[#2d34cf] transition hover:bg-[#f0f1ff]">Iniciar sesión <span aria-hidden="true" className="text-base leading-none">→</span></Link>
+                </div>
+              ) : null}
+            </aside>
+          </section>
+
+          <div id="report" className="mt-5">
+            <ReportForm serverId={server.id} />
+          </div>
+        </div>
+      </main>
+      <SiteFooter />
+    </div>
   );
 }

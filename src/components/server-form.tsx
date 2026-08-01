@@ -140,6 +140,17 @@ export function ServerForm() {
             <FieldError message={state?.fieldErrors?.websiteUrl} />
           </label>
           <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+            Tienda del servidor
+            <input
+              name="storeUrl"
+              type="url"
+              placeholder="https://shop.example.com"
+              autoComplete="url"
+              className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-zinc-300"
+            />
+            <FieldError message={state?.fieldErrors?.storeUrl} />
+          </label>
+          <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
             Invitación de Discord
             <input
               name="discordUrl"

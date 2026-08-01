@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { IconStarFilled } from "@tabler/icons-react";
 
 import { createReviewAction, deleteReviewAction, updateReviewAction } from "@/app/servers/[slug]/actions";
 import { DeletedReviewNotice, ReviewCard } from "@/components/review-card";
@@ -11,46 +12,148 @@ type ViewerState = {
   review: { id: string; rating: number; content: string; status: "published" | "hidden" | "deleted"; createdAt: Date; updatedAt: Date } | null;
 };
 
-function Summary({ summary }: { summary: ReviewSummary }) {
-  const maximum = Math.max(...summary.distribution, 1);
-  const averageLabel = summary.average === null ? "—" : summary.average.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
-  return <div className="grid gap-6 border-y border-zinc-200 py-6 sm:grid-cols-[180px_1fr] dark:border-zinc-800">
-    <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Puntuación media</p><p className="mt-2 text-5xl font-semibold tracking-tight tabular-nums text-zinc-950 dark:text-white">{averageLabel}</p><p className="mt-1 text-sm text-zinc-500">{summary.total === 1 ? "1 opinión" : `${summary.total} opiniones`}</p></div>
-    <div className="space-y-2 self-center" aria-label="Distribución de puntuaciones">
-      {[5, 4, 3, 2, 1].map((rating) => { const count = summary.distribution[rating - 1]; const width = `${Math.round((count / maximum) * 100)}%`; return <div key={rating} className="grid grid-cols-[46px_1fr_30px] items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400"><span>{rating} estrellas</span><div className="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"><div className="h-full rounded-full bg-amber-500" style={{ width }} /></div><span className="text-right tabular-nums">{count}</span></div>; })}
-    </div>
-  </div>;
+function RatingStars({ rating, size = 15 }: { rating: number; size?: number }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[#f4aa00]" aria-label={`${rating} de 5 estrellas`}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <IconStarFilled key={star} aria-hidden="true" size={size} className={star <= Math.round(rating) ? "opacity-100" : "opacity-25"} />
+      ))}
+      <span className="sr-only">{rating} de 5</span>
+    </span>
+  );
 }
 
-function Composer({ serverId, slug, viewer }: { serverId: string; slug: string; viewer: ViewerState | null }) {
-  if (!viewer) return <div className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600 dark:bg-zinc-950/60 dark:text-zinc-400"><p className="font-semibold text-zinc-900 dark:text-zinc-100">¿Has jugado en este servidor?</p><p className="mt-1">Inicia sesión con una cuenta verificada para compartir tu experiencia.</p><Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`} className="mt-3 inline-flex font-semibold text-zinc-950 underline underline-offset-4 dark:text-white">Iniciar sesión</Link></div>;
-  if (!viewer.emailVerified) return <div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100"><p className="font-semibold">Verifica tu email para opinar.</p><p className="mt-1">Puedes reenviar el enlace desde tu perfil.</p><Link href="/profile" className="mt-3 inline-flex font-semibold underline underline-offset-4">Ir al perfil</Link></div>;
-  if (viewer.membershipRole) return <div className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600 dark:bg-zinc-950/60 dark:text-zinc-400"><p className="font-semibold text-zinc-900 dark:text-zinc-100">Formas parte del equipo</p><p className="mt-1">Los miembros no pueden puntuar su propio servidor.</p></div>;
-  if (viewer.review?.status === "hidden") return <DeletedReviewNotice status="hidden" content={viewer.review.content} />;
-  if (viewer.review?.status === "deleted") return (
-    <div className="space-y-4">
-      <DeletedReviewNotice status="deleted" content={viewer.review.content} />
-      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-        <p className="mb-4 text-sm font-semibold text-zinc-950 dark:text-white">Publica una nueva opinión</p>
-        <ReviewForm action={createReviewAction} serverId={serverId} slug={slug} />
+function Summary({ summary }: { summary: ReviewSummary }) {
+  const maximum = Math.max(...summary.distribution, 1);
+  const averageLabel = summary.average === null
+    ? "—"
+    : summary.average.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  return (
+    <div className="grid gap-5 border-y border-[#e7ebef] py-5 sm:grid-cols-[154px_1fr] sm:gap-7">
+      <div>
+        <p className="text-[11px] font-medium text-[#6a7484]">Valoración media</p>
+        <p className="mt-1 text-[38px] font-semibold leading-none tracking-[-0.045em] text-[#101722]">{averageLabel}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <RatingStars rating={summary.average ?? 0} size={14} />
+          <span className="text-[11px] text-[#687386]">{summary.total} {summary.total === 1 ? "opinión" : "opiniones"}</span>
+        </div>
+      </div>
+      <div className="space-y-2 self-center" aria-label="Distribución de puntuaciones">
+        {[5, 4, 3, 2, 1].map((rating) => {
+          const count = summary.distribution[rating - 1];
+          const width = `${Math.round((count / maximum) * 100)}%`;
+          return (
+            <div key={rating} className="grid grid-cols-[18px_1fr_26px] items-center gap-2 text-[11px] text-[#687386]">
+              <span>{rating}</span>
+              <div className="h-1.5 overflow-hidden rounded-full bg-[#edf0f3]"><div className="h-full rounded-full bg-[#f5aa00]" style={{ width }} /></div>
+              <span className="text-right tabular-nums">{count}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
-  if (viewer.review) return <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60"><p className="mb-4 text-sm font-semibold text-zinc-950 dark:text-white">Edita tu opinión</p><ReviewForm action={updateReviewAction} serverId={serverId} slug={slug} reviewId={viewer.review.id} initialRating={viewer.review.rating} initialContent={viewer.review.content} editing /><form action={deleteReviewAction} className="mt-3 flex justify-end"><input type="hidden" name="reviewId" value={viewer.review.id} /><input type="hidden" name="slug" value={slug} /><button type="submit" className="text-xs font-semibold text-red-700 underline decoration-red-300 underline-offset-4 dark:text-red-300">Eliminar opinión</button></form></div>;
-  return <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60"><p className="mb-4 text-sm font-semibold text-zinc-950 dark:text-white">Comparte tu experiencia</p><ReviewForm action={createReviewAction} serverId={serverId} slug={slug} /></div>;
 }
 
-export function ReviewSection({ serverId, slug, summary, reviews, page, hasNextPage, viewer, notice, errorNotice }: { serverId: string; slug: string; summary: ReviewSummary; reviews: ReviewView[]; page: number; hasNextPage: boolean; viewer: ViewerState | null; notice?: string; errorNotice?: string }) {
+function Composer({ serverId, slug, viewer }: { serverId: string; slug: string; viewer: ViewerState | null }) {
+  if (!viewer) {
+    return (
+      <div className="flex flex-col gap-3 rounded-xl border border-[#e2e7ec] bg-[#fbfcff] p-3.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#182033] text-xs font-semibold text-white">N</span>
+          <div>
+            <p className="text-[12px] font-medium text-[#43506a]">Comparte tu opinión sobre este servidor...</p>
+            <p className="mt-0.5 text-[11px] text-[#8490a3]">Necesitas iniciar sesión para publicar.</p>
+          </div>
+        </div>
+        <Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`} className="inline-flex h-8 items-center justify-center rounded-md bg-[#a7a7ff] px-3.5 text-[11px] font-semibold text-white transition hover:bg-[#8f8ff4] sm:shrink-0">
+          Iniciar sesión
+        </Link>
+      </div>
+    );
+  }
+
+  if (!viewer.emailVerified) {
+    return <div className="rounded-xl bg-[#fff8e7] p-4 text-sm text-[#8a6200]"><p className="font-semibold">Verifica tu email para opinar.</p><p className="mt-1 text-[12px]">Puedes reenviar el enlace desde tu perfil.</p><Link href="/profile" className="mt-3 inline-flex font-semibold underline underline-offset-4">Ir al perfil</Link></div>;
+  }
+
+  if (viewer.membershipRole) {
+    return <div className="rounded-xl bg-[#f4f6f8] p-4 text-sm text-[#647080]"><p className="font-semibold text-[#17202a]">Formas parte del equipo</p><p className="mt-1 text-[12px]">Los miembros no pueden puntuar su propio servidor.</p></div>;
+  }
+
+  if (viewer.review?.status === "hidden") return <DeletedReviewNotice status="hidden" content={viewer.review.content} />;
+
+  if (viewer.review?.status === "deleted") {
+    return (
+      <div className="space-y-4">
+        <DeletedReviewNotice status="deleted" content={viewer.review.content} />
+        <div className="rounded-xl border border-[#e2e7ec] bg-[#fbfcff] p-4">
+          <p className="mb-4 text-sm font-semibold text-[#17202a]">Publica una nueva opinión</p>
+          <ReviewForm action={createReviewAction} serverId={serverId} slug={slug} />
+        </div>
+      </div>
+    );
+  }
+
+  if (viewer.review) {
+    return (
+      <div className="rounded-xl border border-[#e2e7ec] bg-[#fbfcff] p-4">
+        <p className="mb-4 text-sm font-semibold text-[#17202a]">Edita tu opinión</p>
+        <ReviewForm action={updateReviewAction} serverId={serverId} slug={slug} reviewId={viewer.review.id} initialRating={viewer.review.rating} initialContent={viewer.review.content} editing />
+        <form action={deleteReviewAction} className="mt-3 flex justify-end"><input type="hidden" name="reviewId" value={viewer.review.id} /><input type="hidden" name="slug" value={slug} /><button type="submit" className="text-xs font-semibold text-red-700 underline decoration-red-300 underline-offset-4">Eliminar opinión</button></form>
+      </div>
+    );
+  }
+
+  return <div className="rounded-xl border border-[#e2e7ec] bg-[#fbfcff] p-4"><p className="mb-4 text-sm font-semibold text-[#17202a]">Comparte tu experiencia</p><ReviewForm action={createReviewAction} serverId={serverId} slug={slug} /></div>;
+}
+
+export function ReviewSection({
+  serverId,
+  slug,
+  summary,
+  reviews,
+  page,
+  hasNextPage,
+  viewer,
+  notice,
+  errorNotice,
+}: {
+  serverId: string;
+  slug: string;
+  summary: ReviewSummary;
+  reviews: ReviewView[];
+  page: number;
+  hasNextPage: boolean;
+  viewer: ViewerState | null;
+  notice?: string;
+  errorNotice?: string;
+}) {
   const canReply = canPublishOfficialReply(viewer?.membershipRole ?? null);
   const canReport = Boolean(viewer?.emailVerified);
-  const canManageReplies = canReply;
-  return <section id="reviews" className="mt-12 scroll-mt-6">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Experiencias de la comunidad</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white">Opiniones del servidor</h2></div>{notice ? <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200" role="status">{notice}</p> : null}</div>
-    {errorNotice ? <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-200" role="alert">{errorNotice}</p> : null}
-    <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">Valoraciones de jugadores y respuestas oficiales del equipo. Las opiniones ocultas no forman parte de la puntuación.</p>
-    <div className="mt-6"><Summary summary={summary} /></div>
-    <div className="mt-6"><Composer serverId={serverId} slug={slug} viewer={viewer} /></div>
-    <div className="mt-6 grid gap-4">{reviews.length ? reviews.map((review) => <ReviewCard key={review.id} review={review} serverId={serverId} slug={slug} canReport={canReport && !review.isMine} canReply={canReply} canManageReplies={canManageReplies} />) : <div className="rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">Todavía no hay opiniones. Sé el primero en contar tu experiencia.</div>}</div>
-    {(page > 1 || hasNextPage) ? <nav className="mt-6 flex items-center justify-between" aria-label="Páginas de opiniones">{page > 1 ? <Link href={`/servers/${slug}?reviewPage=${page - 1}#reviews`} className="min-h-10 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold dark:border-zinc-700">Página anterior</Link> : <span />}{hasNextPage ? <Link href={`/servers/${slug}?reviewPage=${page + 1}#reviews`} className="min-h-10 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold dark:border-zinc-700">Página siguiente</Link> : null}</nav> : null}
-  </section>;
+
+  return (
+    <section id="reviews" className="mt-4 scroll-mt-8 rounded-2xl border border-[#e0e6eb] bg-white p-4 shadow-[0_1px_2px_rgba(16,30,45,0.02)] sm:p-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#7a8595]">La voz de la comunidad</p>
+          <h2 className="mt-1 text-[18px] font-semibold tracking-[-0.025em] text-[#101722]">Opiniones de jugadores</h2>
+        </div>
+        {notice ? <p className="rounded-md bg-[#eaf9f0] px-3 py-2 text-xs text-[#147644]" role="status">{notice}</p> : null}
+      </div>
+      {errorNotice ? <p className="mt-4 rounded-md bg-[#fff1f1] px-3 py-2 text-sm text-[#a22929]" role="alert">{errorNotice}</p> : null}
+      <div className="mt-4"><Summary summary={summary} /></div>
+      <div className="mt-4"><Composer serverId={serverId} slug={slug} viewer={viewer} /></div>
+      <div className="mt-4 grid gap-2.5">
+        {reviews.length ? reviews.map((review) => <ReviewCard key={review.id} review={review} serverId={serverId} slug={slug} canReport={canReport && !review.isMine} canReply={canReply} canManageReplies={canReply} />) : <div className="rounded-xl border border-dashed border-[#ccd5dd] p-8 text-center text-sm text-[#718092]">Todavía no hay opiniones. Sé el primero en contar tu experiencia.</div>}
+      </div>
+      {(page > 1 || hasNextPage) ? (
+        <nav className="mt-5 flex items-center justify-between" aria-label="Páginas de opiniones">
+          {page > 1 ? <Link href={`/servers/${slug}?reviewPage=${page - 1}#reviews`} className="inline-flex min-h-9 items-center rounded-md border border-[#d7dfe6] px-3 text-xs font-semibold text-[#42506a]">Página anterior</Link> : <span />}
+          {hasNextPage ? <Link href={`/servers/${slug}?reviewPage=${page + 1}#reviews`} className="inline-flex min-h-9 items-center rounded-md border border-[#d7dfe6] px-3 text-xs font-semibold text-[#42506a]">Página siguiente</Link> : null}
+        </nav>
+      ) : null}
+    </section>
+  );
 }
