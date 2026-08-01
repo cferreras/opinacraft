@@ -24,8 +24,8 @@ import { ServerUtilityActions } from "@/components/server-utility-actions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { getServerSession } from "@/lib/session";
-import { formatEndpoint } from "@/lib/servers/format";
-import { getPublishedServerBySlug } from "@/lib/servers/queries";
+import { formatEndpoint, latencyClass } from "@/lib/servers/format";
+import { getPublishedServerBySlug, type ManagedServer } from "@/lib/servers/queries";
 import { getReviewSummary, getReviewViewerState, listServerReviews } from "@/lib/servers/reviews";
 
 type PublicServerPageProps = {
@@ -96,7 +96,7 @@ function Metric({ icon, label, value, tone = "text-[#162033]" }: { icon: React.R
   );
 }
 
-function EndpointRow({ endpoint }: { endpoint: { edition: "java" | "bedrock"; host: string; port: number; verificationStatus: "unverified" | "verified"; healthStatus: "unknown" | "online" | "offline"; playersCurrent: number | null; playersMax: number | null; version: string | null; latencyMs: number | null; lastCheckedAt: Date | null; consecutiveFailures: number } }) {
+function EndpointRow({ endpoint }: { endpoint: ManagedServer["endpoints"][number] }) {
   const isJava = endpoint.edition === "java";
   const value = formatEndpoint(endpoint);
 
@@ -130,13 +130,14 @@ function ConnectionLink({ href, icon, label, external = false }: { href?: string
 export async function generateMetadata({ params }: PublicServerPageProps): Promise<Metadata> {
   const { slug } = await params;
   const server = await getPublishedServer(slug);
+  const socialMedia = server?.media.find((media) => media.kind === "banner" || media.kind === "logo");
 
   return server
     ? {
         title: `${server.name} | OpinaCraft`,
         description: server.description ?? `Descubre ${server.name} en OpinaCraft.`,
         alternates: { canonical: `/servers/${server.slug}` },
-        openGraph: { title: server.name, description: server.description ?? undefined, type: "website", images: server.media.find((media) => media.kind === "banner" || media.kind === "logo")?.url ? [{ url: server.media.find((media) => media.kind === "banner" || media.kind === "logo")!.url }] : undefined },
+        openGraph: { title: server.name, description: server.description ?? undefined, type: "website", images: socialMedia ? [{ url: socialMedia.url }] : undefined },
       }
     : { title: "Servidor no encontrado | OpinaCraft" };
 }
@@ -181,7 +182,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                 <Metric icon={<span aria-hidden="true" className={`inline-block h-2.5 w-2.5 rounded-full ${server.aggregateStatus === "online" ? "bg-[#0e9a55]" : server.aggregateStatus === "offline" ? "bg-[#d83a42]" : "bg-[#adb6c2]"}`} />} label="Estado" value={statusLabel(server.aggregateStatus)} tone={statusTone(server.aggregateStatus)} />
                 <Metric icon={<IconUsers aria-hidden="true" size={20} stroke={1.7} />} label="jugadores" value={primaryEndpoint?.playersCurrent !== null && primaryEndpoint?.playersMax !== null && primaryEndpoint ? `${primaryEndpoint.playersCurrent} / ${primaryEndpoint.playersMax}` : "— / —"} />
                 <Metric icon={<IconCode aria-hidden="true" size={20} stroke={1.7} />} label="versión" value={primaryEndpoint?.version ?? "—"} />
-                <Metric icon={<IconChartBar aria-hidden="true" size={20} stroke={1.7} />} label="ping" value={primaryEndpoint?.latencyMs !== null && primaryEndpoint?.latencyMs !== undefined ? `${primaryEndpoint.latencyMs} ms` : "—"} tone={primaryEndpoint?.latencyMs !== null && primaryEndpoint?.latencyMs !== undefined && primaryEndpoint.latencyMs <= 60 ? "text-[#0e9a55]" : "text-[#162033]"} />
+                <Metric icon={<IconChartBar aria-hidden="true" size={20} stroke={1.7} />} label="ping" value={primaryEndpoint?.latencyMs !== null && primaryEndpoint?.latencyMs !== undefined ? `${primaryEndpoint.latencyMs} ms` : "—"} tone={latencyClass(primaryEndpoint?.latencyMs ?? null)} />
                 <Metric icon={<IconStarFilled aria-hidden="true" className="text-[#f4aa00]" size={19} />} label={`${reviewSummary.total} opiniones`} value={rating} />
               </div>
             </div>

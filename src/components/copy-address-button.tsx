@@ -20,7 +20,11 @@ export function CopyAddressButton({
 
   async function copyAddress() {
     try {
-      await navigator.clipboard?.writeText(value);
+      const clipboard = navigator.clipboard;
+      if (!clipboard || typeof clipboard.writeText !== "function") {
+        throw new Error("Clipboard API unavailable");
+      }
+      await clipboard.writeText(value);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {

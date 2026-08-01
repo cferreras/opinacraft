@@ -67,6 +67,8 @@ type ReviewSummaryLite = {
   reviewCount: number;
 };
 
+export type CatalogServer = PublicServer & ReviewSummaryLite;
+
 type ServerRow = {
   server: ServerBase;
   role?: ManagedServer["role"] | null;
@@ -227,7 +229,7 @@ export async function listManagedServers(userId: string) {
   return attachCatalogData(groupServerRows(rows));
 }
 
-export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating" }: { page?: number; query?: string; tagSlugs?: string[]; edition?: "java" | "bedrock"; status?: AggregateHealthStatus; sort?: PublicServerSort } = {}) {
+export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating" }: { page?: number; query?: string; tagSlugs?: string[]; edition?: "java" | "bedrock"; status?: AggregateHealthStatus; sort?: PublicServerSort } = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; page: number }> {
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
     : 1;
@@ -261,7 +263,8 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
   const hasNextPage = serverIds.length > PUBLIC_SERVER_PAGE_SIZE;
   const ids = serverIds.slice(0, PUBLIC_SERVER_PAGE_SIZE).map(({ id }) => id);
   if (ids.length === 0) {
-    return { servers: [], hasNextPage: false, page: safePage };
+    const emptyServers: CatalogServer[] = [];
+    return { servers: emptyServers, hasNextPage: false, page: safePage };
   }
 
   const rows = await db

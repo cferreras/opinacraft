@@ -5,6 +5,23 @@ import { IconX } from "@tabler/icons-react";
 
 type Suggestion = { label: string; slug: string; usageCount: number };
 
+function isSuggestion(value: unknown): value is Suggestion {
+  if (typeof value !== "object" || value === null) return false;
+  const suggestion = value as { label?: unknown; slug?: unknown; usageCount?: unknown };
+  return (
+    typeof suggestion.label === "string" &&
+    typeof suggestion.slug === "string" &&
+    typeof suggestion.usageCount === "number" &&
+    Number.isFinite(suggestion.usageCount)
+  );
+}
+
+function parseSuggestions(value: unknown): Suggestion[] {
+  if (typeof value !== "object" || value === null) return [];
+  const tags = (value as { tags?: unknown }).tags;
+  return Array.isArray(tags) && tags.every(isSuggestion) ? tags : [];
+}
+
 type TagComboboxProps = {
   name: string;
   initialTags?: string[];
@@ -35,26 +52,57 @@ export function TagCombobox({
   useEffect(() => {
     if (!submitOnChange || !shouldSubmitRef.current) return;
     shouldSubmitRef.current = false;
-    queueMicrotask(() => inputRef.current?.form?.requestSubmit());
+    queueMicrotask(() => {
+      const form = inputRef.current?.form;
+      if (!form) return;
+
+      const page = new URL(window.location.href).searchParams.get("page");
+      if (page) {
+        const pageField = form.querySelector<HTMLInputElement>('input[name="page"]');
+        if (pageField) {
+          pageField.value = page;
+        } else {
+          const hiddenPage = document.createElement("input");
+          hiddenPage.type = "hidden";
+          hiddenPage.name = "page";
+          hiddenPage.value = page;
+          form.appendChild(hiddenPage);
+        }
+      }
+
+      form.requestSubmit();
+    });
   }, [selected, submitOnChange]);
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
+    const controller = new AbortController();
     if (!query.trim()) {
-      queueMicrotask(() => setSuggestions([]));
-      return;
+      queueMicrotask(() => {
+        if (controller.signal.aborted) return;
+        setSuggestions([]);
+        setActive(0);
+      });
+      return () => controller.abort();
     }
     timer.current = setTimeout(() => {
-      void fetch(`/api/tags/suggest?q=${encodeURIComponent(query)}`)
+      timer.current = null;
+      void fetch(`/api/tags/suggest?q=${encodeURIComponent(query)}`, { signal: controller.signal })
         .then((response) => (response.ok ? response.json() : { tags: [] }))
-        .then((result) => {
-          setSuggestions(result.tags ?? []);
+        .then((result: unknown) => {
+          if (controller.signal.aborted) return;
+          setSuggestions(parseSuggestions(result));
           setActive(0);
         })
-        .catch(() => setSuggestions([]));
+        .catch((error: unknown) => {
+          if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
+          setSuggestions([]);
+          setActive(0);
+        });
     }, 200);
     return () => {
       if (timer.current) clearTimeout(timer.current);
+      controller.abort();
     };
   }, [query]);
 
@@ -85,16 +133,18 @@ export function TagCombobox({
     : compact
       ? "Escribe una modalidad…"
       : "Buscar etiquetas…";
+  const optionId = (slug: string) => `${listId}-option-${encodeURIComponent(slug)}`;
+  const activeSuggestion = suggestions[active];
 
   return (
     <div className={compact ? "relative z-40" : undefined}>
       <div
-        className={`${controlClass} flex flex-wrap items-center gap-1.5 border border-[#e1e6e9] bg-white focus-within:border-[#4655e8] focus-within:ring-2 focus-within:ring-[#4655e8]/15 dark:border-zinc-700 dark:bg-zinc-950`}
+        className={`${controlClass} flex flex-wrap items-center gap-1.5 border border-[#e1e6e9] bg-white focus-within:border-[#4655e8] focus-within:ring-2 focus-within:ring-[#4655e8]/15`}
         role="group"
         aria-label="Etiquetas"
       >
         {selected.map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-[#e0e5ea] bg-[#fafbfc] px-2 py-1 text-[10px] font-medium text-[#35415b] dark:bg-zinc-800">
+          <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-[#e0e5ea] bg-[#fafbfc] px-2 py-1 text-[10px] font-medium text-[#35415b]">
             {tag}
             <button type="button" onClick={() => remove(tag)} aria-label={`Eliminar ${tag}`} className="rounded-full text-[#7b86a0] hover:bg-[#f0f1ff] hover:text-[#2d34cf]">
               <IconX aria-hidden="true" size={11} stroke={2} />
@@ -128,6 +178,7 @@ export function TagCombobox({
           aria-autocomplete="list"
           aria-controls={listId}
           aria-expanded={suggestions.length > 0}
+          aria-activedescendant={activeSuggestion ? optionId(activeSuggestion.slug) : undefined}
           aria-label={ariaLabel}
           className={`${inputClass} flex-1 bg-transparent px-1 outline-none placeholder:text-[#8b96a1]`}
           placeholder={placeholder}
@@ -138,15 +189,15 @@ export function TagCombobox({
         <ul
           id={listId}
           role="listbox"
-          className={`${compact ? "absolute inset-x-0 top-full" : "relative"} z-50 mt-1 max-h-52 overflow-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900`}
+          className={`${compact ? "absolute inset-x-0 top-full" : "relative"} z-50 mt-1 max-h-52 overflow-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-lg`}
         >
           {suggestions.map((suggestion, index) => (
-            <li key={suggestion.slug} role="option" aria-selected={index === active}>
+            <li id={optionId(suggestion.slug)} key={suggestion.slug} role="option" aria-selected={index === active}>
               <button
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => add(suggestion.label)}
-                className={`flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm ${index === active ? "bg-zinc-100 dark:bg-zinc-800" : ""}`}
+                className={`flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm ${index === active ? "bg-zinc-100" : ""}`}
               >
                 <span>{suggestion.label}</span>
                 <span className="text-xs text-zinc-500">({suggestion.usageCount})</span>

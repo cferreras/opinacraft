@@ -77,6 +77,16 @@ test("creates an ASCII slug and validates external URLs", () => {
   assert.throws(() => normalizeHttpUrl("shop.example.com", "storeUrl"));
 });
 
+test("normalizes omitted and blank store URLs to null", () => {
+  const baseInput = {
+    name: "A Minecraft Community",
+    endpoints: [{ edition: "java" as const, host: "play.example.com" }],
+  };
+
+  assert.equal(normalizeCreateServerInput(baseInput).storeUrl, null);
+  assert.equal(normalizeCreateServerInput({ ...baseInput, storeUrl: "   " }).storeUrl, null);
+});
+
 test("trims server tags and enforces the eight-tag limit", () => {
   const input = normalizeCreateServerInput({
     name: "A Minecraft Community",

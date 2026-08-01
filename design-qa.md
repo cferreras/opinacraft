@@ -2,11 +2,11 @@
 
 ## Evidence
 
-- Source visual truth: `C:\Users\carlo\AppData\Local\Temp\codex-clipboard-ba754e3b-02f0-472c-933f-a321c7ce9147.png`
+- Source visual truth: [mockup-server-detail-04.png](./mockup-server-detail-04.png)
 - Source pixels: 1536 × 1024 PNG; comparison density normalized to 1×.
-- Desktop implementation: `D:\code\opinacraft\design-qa-implementation-desktop.png`
-- Mobile implementation: `D:\code\opinacraft\design-qa-implementation-mobile.png`
-- Combined comparison: `D:\code\opinacraft\design-qa-comparison.png`
+- Desktop implementation: [design-qa-implementation-desktop.png](./design-qa-implementation-desktop.png)
+- Mobile implementation: [design-qa-implementation-mobile.png](./design-qa-implementation-mobile.png)
+- Combined comparison: [design-qa-comparison.png](./design-qa-comparison.png)
 - CSS viewports: 1536 × 1024 desktop and 390 × 844 mobile.
 - Browser capture pixels: 1521 × 1014 desktop and 375 × 812 mobile; the in-app browser excludes scrollbar/chrome pixels. The combined comparison downsamples both desktop artifacts to 768 × 512 content regions before judging.
 - State: light theme, `/servers/browser-qa-16096605`, local published server data, unknown health, no published reviews, owner session state.
@@ -31,10 +31,10 @@
 
 ## Functional verification
 
-- `npm.cmd run build`: passed.
-- `node_modules\\.bin\\tsc.cmd --noEmit`: passed.
-- `npm.cmd run lint`: passed; only four pre-existing `@next/next/no-img-element` warnings remain outside this route.
-- `npm.cmd test`: 17/17 passed.
+- `pnpm build`: passed.
+- `pnpm exec tsc --noEmit`: passed.
+- `pnpm lint`: passed; only four pre-existing `@next/next/no-img-element` warnings remain outside this route.
+- `pnpm test`: passed.
 - Browser interactions: copy action reaches the “Copiada” state; mobile menu opens/closes; mobile search control opens; primary route and connection links render; no horizontal overflow observed.
 - Fresh browser console: no errors or warnings on desktop or mobile capture.
 

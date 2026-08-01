@@ -3,7 +3,7 @@ import Link from "next/link";
 import { IconSearch } from "@tabler/icons-react";
 
 import { FilterSelect } from "@/components/filter-select";
-import { PublicServerRow, type CatalogServer } from "@/components/public-server-row";
+import { PublicServerRow } from "@/components/public-server-row";
 import { ServerSearchInput } from "@/components/server-search-input";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -68,6 +68,13 @@ export default async function PublicServersPage({
     .split(",")
     .map((tag) => tag.trim())
     .filter(Boolean);
+  const hasActiveFilters = Boolean(
+    query.q ||
+      query.tags ||
+      query.edition ||
+      query.status ||
+      (query.sort && query.sort !== "rating"),
+  );
 
   return (
     <div className="min-h-screen bg-[#f7f8fa] text-[#17202a]">
@@ -93,25 +100,25 @@ export default async function PublicServersPage({
 
             <div className="relative z-30 mt-6 overflow-visible border-y border-[#e0e6eb] bg-[#f7f8fa] px-3 py-3 sm:px-4">
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.05fr_1.2fr_1.35fr_1.16fr] lg:items-center">
-                <FilterSelect id="edition-filter" name="edition" label="Edición" accessibleLabel="EdiciÃ³n" defaultValue={query.edition ?? ""} submitOnChange>
-                  <option value="">Edición&nbsp;&nbsp;&nbsp; Todas</option>
-                  <option value="java">Edición&nbsp;&nbsp;&nbsp; Java</option>
-                  <option value="bedrock">Edición&nbsp;&nbsp;&nbsp; Bedrock</option>
+                <FilterSelect id="edition-filter" name="edition" label="Edición" defaultValue={query.edition ?? ""} submitOnChange>
+                  <option value="">Todas</option>
+                  <option value="java">Java</option>
+                  <option value="bedrock">Bedrock</option>
                 </FilterSelect>
                 <FilterSelect id="status-filter" name="status" label="Estado" defaultValue={query.status ?? ""} submitOnChange>
-                  <option value="">Estado&nbsp;&nbsp;&nbsp; Todos</option>
-                  <option value="online">Estado&nbsp;&nbsp;&nbsp; En línea</option>
-                  <option value="offline">Estado&nbsp;&nbsp;&nbsp; Fuera de línea</option>
-                  <option value="unknown">Estado&nbsp;&nbsp;&nbsp; Desconocido</option>
+                  <option value="">Todos</option>
+                  <option value="online">En línea</option>
+                  <option value="offline">Fuera de línea</option>
+                  <option value="unknown">Desconocido</option>
                 </FilterSelect>
                 <TagCombobox name="tags" initialTags={initialTags} compact ariaLabel="Modalidad" submitOnChange />
                 <FilterSelect id="sort-filter" name="sort" label="Ordenar" defaultValue={sort} submitOnChange>
-                  {sortOptions.map((option) => <option key={option.value} value={option.value}>{`Ordenar:   ${option.label}`}</option>)}
+                  {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </FilterSelect>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-[#e0e6eb] pt-3 text-[11px] text-[#77838e]">
-                <span>{countLabel(servers.length)}</span>
-                {(query.q || query.tags || query.edition || query.status || query.sort) ? (
+                <span>Mostrando {countLabel(servers.length)} en esta página</span>
+                {hasActiveFilters ? (
                   <Link href="/servers" className="font-medium text-[#2d34cf] hover:underline">Limpiar filtros</Link>
                 ) : null}
               </div>
@@ -139,7 +146,7 @@ export default async function PublicServersPage({
                 <span>Valoración</span>
                 <span className="text-left">IP</span>
               </div>
-              {(servers as CatalogServer[]).map((server) => <PublicServerRow key={server.id} server={server} />)}
+              {servers.map((server) => <PublicServerRow key={server.id} server={server} />)}
             </div>
             <nav className="mt-5 flex items-center justify-between text-xs" aria-label="Páginas de servidores">
               {page > 1 ? <Link href={pageHref(page - 1)} className="rounded-lg border border-[#cbd2ff] bg-white px-3.5 py-2 font-medium text-[#2d34cf] transition hover:bg-[#f0f1ff]">Anterior</Link> : <span />}

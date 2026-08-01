@@ -4,10 +4,10 @@ Servidor compartido: **NovaCraft** (`/servers/novacraft`). Las cuatro propuestas
 
 Archivos entregados:
 
-- [mockup-server-detail-01.png](D:/code/opinacraft/mockup-server-detail-01.png)
-- [mockup-server-detail-02.png](D:/code/opinacraft/mockup-server-detail-02.png)
-- [mockup-server-detail-03.png](D:/code/opinacraft/mockup-server-detail-03.png)
-- [mockup-server-detail-04.png](D:/code/opinacraft/mockup-server-detail-04.png)
+- [mockup-server-detail-01.png](./mockup-server-detail-01.png)
+- [mockup-server-detail-02.png](./mockup-server-detail-02.png)
+- [mockup-server-detail-03.png](./mockup-server-detail-03.png)
+- [mockup-server-detail-04.png](./mockup-server-detail-04.png)
 
 Cada imagen combina una vista de escritorio completa con una vista móvil compacta. Las resoluciones son las naturales de generación y mantienen un lienzo de escritorio amplio: 1536×1024, 1549×1015, 1608×978 y 1536×1024 px.
 
@@ -77,4 +77,4 @@ Rescataría de las demás propuestas:
 - del **Panel informativo**, la franja de métricas, la navegación `Resumen / Información / Opiniones / Equipo` y el rail de conexión;
 - de la **Identidad modular**, el logo como origen de la geometría, el fallback de monograma y los acentos visuales discretos.
 
-La exploración se ha mantenido en formato imagen. No se ha implementado React, no se ha conectado Neon, no se han cambiado consultas, esquema ni migraciones, y la ruta real `/servers/[slug]` no se ha sustituido.
+La exploración se ha mantenido en formato imagen y documenta la dirección visual. La ruta React real `/servers/[slug]` sigue siendo la implementación ejecutable; este PR también incluye cambios funcionales de presentación y datos, como media, endpoints, estados y reseñas. Las imágenes no sustituyen esa ruta.

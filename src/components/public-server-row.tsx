@@ -7,15 +7,10 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 
-import type { PublicServer } from "@/lib/servers/queries";
-import { formatEndpoint } from "@/lib/servers/format";
+import type { CatalogServer, PublicServer } from "@/lib/servers/queries";
+import { formatEndpoint, latencyClass } from "@/lib/servers/format";
 import { CopyAddressButton } from "@/components/copy-address-button";
 import { ServerLogo } from "@/components/server-logo";
-
-export type CatalogServer = PublicServer & {
-  reviewAverage: number | null;
-  reviewCount: number;
-};
 
 function statusLabel(status: PublicServer["aggregateStatus"]) {
   if (status === "online") return "En línea";
@@ -51,10 +46,16 @@ function ratingCount(server: CatalogServer) {
   return server.reviewCount > 0 ? `(${server.reviewCount})` : "";
 }
 
-function latencyClass(latency: number | null) {
-  if (latency === null) return "text-[#7c8799]";
-  if (latency >= 60) return "text-[#e48b18]";
-  return "text-[#0e9a55]";
+function Rating({ server, className }: { server: CatalogServer; className: string }) {
+  const count = ratingCount(server);
+
+  return (
+    <div className={className}>
+      {server.reviewAverage !== null ? <IconStarFilled aria-hidden="true" className="text-[#f4a51c]" size={13} /> : null}
+      <span className={server.reviewAverage !== null ? "text-[#3e4853]" : "text-[#89929b]"}>{ratingLabel(server)}</span>
+      {count ? <span className="text-[#89929b]">{count}</span> : null}
+    </div>
+  );
 }
 
 export function PublicServerRow({ server }: { server: CatalogServer }) {
@@ -67,11 +68,11 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
       <div className="flex min-w-0 items-start gap-3">
         <ServerLogo name={server.name} media={server.media} />
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[13px] font-semibold leading-5 text-[#101722]">
+          <h3 className="truncate text-[13px] font-semibold leading-5 text-[#101722]">
             <Link href={`/servers/${server.slug}`} className="rounded-sm outline-none hover:text-[#2d34cf] focus-visible:ring-2 focus-visible:ring-[#4655e8]/30">
               {server.name}
             </Link>
-          </h2>
+          </h3>
           <p className="mt-0.5 line-clamp-1 text-[10px] leading-4 text-[#55627b]">
             {server.description ?? "Una comunidad de Minecraft lista para recibirte."}
           </p>
@@ -114,11 +115,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
         {endpoint?.latencyMs !== null && endpoint?.latencyMs !== undefined ? `${endpoint.latencyMs} ms` : "—"}
       </div>
 
-      <div className="hidden items-center gap-1 text-[11px] text-[#67738b] lg:flex">
-        {server.reviewAverage !== null ? <IconStarFilled aria-hidden="true" className="text-[#f4a51c]" size={13} /> : null}
-        <span className={server.reviewAverage !== null ? "text-[#3e4853]" : "text-[#89929b]"}>{ratingLabel(server)}</span>
-        {ratingCount(server) ? <span className="text-[#89929b]">{ratingCount(server)}</span> : null}
-      </div>
+      <Rating server={server} className="hidden items-center gap-1 text-[11px] text-[#67738b] lg:flex" />
 
       <div className="hidden justify-end lg:flex">
         <CopyAddressButton value={endpointAddress} iconOnly className="text-[#68737e] hover:bg-[#f0f1ff] hover:text-[#2d34cf]" />
@@ -142,11 +139,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
         <div className={`flex min-w-0 items-center justify-end gap-1.5 text-[10px] ${latencyClass(endpoint?.latencyMs ?? null)}`}>
           <span>{endpoint?.latencyMs !== null && endpoint?.latencyMs !== undefined ? `${endpoint.latencyMs} ms` : "Sin latencia"}</span>
         </div>
-        <div className="col-span-2 flex items-center gap-1 text-[10px] text-[#58636f]">
-          {server.reviewAverage !== null ? <IconStarFilled aria-hidden="true" className="text-[#f4a51c]" size={13} /> : null}
-          <span className={server.reviewAverage !== null ? "text-[#3e4853]" : "text-[#89929b]"}>{ratingLabel(server)}</span>
-          {ratingCount(server) ? <span className="text-[#89929b]">{ratingCount(server)}</span> : null}
-        </div>
+        <Rating server={server} className="col-span-2 flex items-center gap-1 text-[10px] text-[#58636f]" />
       </div>
 
       <div className="flex items-center justify-between gap-3 lg:hidden">

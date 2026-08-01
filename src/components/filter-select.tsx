@@ -1,7 +1,8 @@
 "use client";
 
 import { IconChevronDown } from "@tabler/icons-react";
-import type { ChangeEvent, ReactNode } from "react";
+import { useRef } from "react";
+import type { FocusEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 
 type FilterSelectProps = {
   id: string;
@@ -22,8 +23,29 @@ export function FilterSelect({
   submitOnChange = false,
   children,
 }: FilterSelectProps) {
-  function handleChange(event: ChangeEvent<HTMLSelectElement>) {
-    if (submitOnChange) event.currentTarget.form?.requestSubmit();
+  const pendingSubmitRef = useRef(false);
+
+  function handleChange() {
+    if (submitOnChange) pendingSubmitRef.current = true;
+  }
+
+  function submitPending(form: HTMLFormElement | null) {
+    if (!pendingSubmitRef.current) return;
+    pendingSubmitRef.current = false;
+    form?.requestSubmit();
+  }
+
+  function handleBlur(event: FocusEvent<HTMLSelectElement>) {
+    submitPending(event.currentTarget.form);
+  }
+
+  function handlePointerUp(event: PointerEvent<HTMLSelectElement>) {
+    const form = event.currentTarget.form;
+    queueMicrotask(() => submitPending(form));
+  }
+
+  function handleClick(event: MouseEvent<HTMLSelectElement>) {
+    submitPending(event.currentTarget.form);
   }
 
   return (
@@ -32,9 +54,12 @@ export function FilterSelect({
       <select
         id={id}
         name={name}
-        aria-label={accessibleLabel ?? label}
+        aria-label={accessibleLabel && accessibleLabel !== label ? accessibleLabel : undefined}
         defaultValue={defaultValue}
         onChange={submitOnChange ? handleChange : undefined}
+        onBlur={submitOnChange ? handleBlur : undefined}
+        onPointerUp={submitOnChange ? handlePointerUp : undefined}
+        onClick={submitOnChange ? handleClick : undefined}
         className="h-9 w-full appearance-none rounded-lg border border-[#e1e6e9] bg-white px-3 pr-8 text-[11px] text-[#53606c] outline-none transition hover:border-[#cbd4d9] focus:border-[#4655e8] focus:ring-2 focus:ring-[#4655e8]/15"
       >
         {children}
