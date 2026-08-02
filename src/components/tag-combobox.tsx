@@ -27,6 +27,7 @@ type TagComboboxProps = {
   initialTags?: string[];
   allowCreate?: boolean;
   compact?: boolean;
+  label?: string;
   ariaLabel?: string;
   submitOnChange?: boolean;
   resetPagination?: boolean;
@@ -37,6 +38,7 @@ export function TagCombobox({
   initialTags = [],
   allowCreate = true,
   compact = false,
+  label,
   submitOnChange = false,
   resetPagination = false,
   ariaLabel = "Añadir etiqueta",
@@ -46,6 +48,7 @@ export function TagCombobox({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [active, setActive] = useState(0);
   const inputId = useId();
+  const labelId = `${inputId}-label`;
   const listId = `${inputId}-list`;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -135,15 +138,16 @@ export function TagCombobox({
       ? "Añadir otra…"
       : "Añadir…"
     : compact
-      ? "Escribe una modalidad…"
+      ? "Escribe una etiqueta…"
       : "Buscar etiquetas…";
   const optionId = (slug: string) => `${listId}-option-${encodeURIComponent(slug)}`;
   const activeSuggestion = suggestions[active];
 
   return (
     <div className={compact ? "relative z-40" : undefined}>
+      {label ? <label id={labelId} htmlFor={inputId} className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-zinc-500">{label}</label> : null}
       <div
-        className={`${controlClass} flex flex-wrap items-center gap-1.5 border border-[#e1e6e9] bg-white focus-within:border-[#4655e8] focus-within:ring-2 focus-within:ring-[#4655e8]/15`}
+        className={`${controlClass} flex flex-wrap items-center gap-1.5 border border-zinc-200 bg-white transition focus-within:border-zinc-950 focus-within:ring-2 focus-within:ring-zinc-950/10`}
         role="group"
         aria-label="Etiquetas"
       >
@@ -183,8 +187,9 @@ export function TagCombobox({
           aria-controls={listId}
           aria-expanded={suggestions.length > 0}
           aria-activedescendant={activeSuggestion ? optionId(activeSuggestion.slug) : undefined}
-          aria-label={ariaLabel}
-          className={`${inputClass} flex-1 bg-transparent px-1 outline-none placeholder:text-[#8b96a1]`}
+          aria-labelledby={label ? labelId : undefined}
+          aria-label={label ? undefined : ariaLabel}
+          className={`${inputClass} flex-1 bg-transparent px-1 outline-none placeholder:text-zinc-400`}
           placeholder={placeholder}
         />
       </div>

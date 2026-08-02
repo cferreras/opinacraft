@@ -2,12 +2,12 @@ import Link from "next/link";
 
 export default function ServerNotFound() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-100 px-6 dark:bg-zinc-950">
-      <section className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl dark:bg-zinc-900">
+    <main className="app-auth-page">
+      <section className="ui-card w-full max-w-md p-8 text-center">
         <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
           OpinaCraft
         </p>
-        <h1 className="mt-4 text-2xl font-semibold text-zinc-950 dark:text-white">
+        <h1 className="mt-4 text-3xl font-bold tracking-[-0.05em] text-zinc-950">
           Server not found
         </h1>
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
@@ -15,7 +15,7 @@ export default function ServerNotFound() {
         </p>
         <Link
           href="/"
-          className="mt-6 inline-flex h-10 items-center rounded-lg bg-zinc-950 px-4 text-sm font-medium text-white dark:bg-white dark:text-zinc-950"
+          className="ui-button-primary mt-6"
         >
           Back home
         </Link>

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { after } from "next/server";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
@@ -9,6 +11,7 @@ import {
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from "@/lib/email";
+import { notificationJobs } from "@/schema";
 
 const discordClientId = serverEnv.DISCORD_CLIENT_ID;
 const discordClientSecret = serverEnv.DISCORD_CLIENT_SECRET;
@@ -37,6 +40,21 @@ export const auth = betterAuth({
   },
   account: {
     encryptOAuthTokens: true,
+  },
+  user: {
+    changeEmail: {
+      enabled: true,
+      sendChangeEmailConfirmation: async ({ user, newEmail, url }) => {
+        const dedupeKey = `change-email:${createHash("sha256").update(`${user.id}:${url}`).digest("hex")}`;
+        await db.insert(notificationJobs).values({
+          dedupeKey,
+          recipientUserId: user.id,
+          recipientEmail: user.email,
+          template: "change_email_confirmation",
+          payload: { currentEmail: user.email, newEmail, url },
+        }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
+      },
+    },
   },
   emailAndPassword: {
     enabled: true,

@@ -64,7 +64,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
   const isUnknown = server.aggregateStatus === "unknown";
 
   return (
-    <article className="grid gap-3 border-t border-[#e7ebef] px-3 py-3.5 transition-colors first:border-t-0 hover:bg-[#fbfcff] sm:px-4 lg:grid-cols-[minmax(330px,1.65fr)_96px_118px_108px_82px_112px_30px] lg:items-center lg:gap-3 lg:px-4 lg:py-3.5">
+    <article className="grid gap-3 border-t border-[#e7ebef] px-3 py-3.5 transition-colors first:border-t-0 hover:bg-[#fbfcff] sm:px-4 xl:grid-cols-[minmax(250px,1.5fr)_72px_98px_82px_58px_72px_28px] xl:items-center xl:gap-2 xl:px-4 xl:py-3.5">
       <div className="flex min-w-0 items-start gap-3">
         <ServerLogo name={server.name} media={server.media} />
         <div className="min-w-0 flex-1">
@@ -88,14 +88,14 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
         </div>
       </div>
 
-      <div className="hidden items-center gap-2 text-[11px] text-[#52606d] lg:flex">
+      <div className="hidden items-center gap-2 text-[11px] text-[#52606d] xl:flex">
         <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#eef0ff] text-[#2c3be2]">
           <IconBrandMinecraft aria-hidden="true" size={14} stroke={1.7} />
         </span>
         <span>{endpoint?.edition === "bedrock" ? "Bedrock" : "Java"}</span>
       </div>
 
-      <div className="hidden min-w-0 flex-col gap-1 text-[11px] lg:flex">
+      <div className="hidden min-w-0 flex-col gap-1 text-[11px] xl:flex">
         <span className={`flex items-center gap-1.5 ${server.aggregateStatus === "online" ? "text-[#0e9a55]" : isUnknown ? "text-[#7c8799]" : "text-[#d83a42]"}`}>
           <StatusMark status={server.aggregateStatus} />
           <span>{statusLabel(server.aggregateStatus)}</span>
@@ -106,22 +106,22 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
         </span>
       </div>
 
-      <div className="hidden items-center gap-1.5 text-[11px] text-[#58636f] lg:flex">
+      <div className="hidden items-center gap-1.5 text-[11px] text-[#58636f] xl:flex">
         <IconCode aria-hidden="true" size={14} stroke={1.7} />
         <span className="truncate">{endpoint?.version ?? "—"}</span>
       </div>
 
-      <div className={`hidden text-[11px] tabular-nums lg:block ${latencyClass(endpoint?.latencyMs ?? null)}`}>
+      <div className={`hidden text-[11px] tabular-nums xl:block ${latencyClass(endpoint?.latencyMs ?? null)}`}>
         {endpoint?.latencyMs !== null && endpoint?.latencyMs !== undefined ? `${endpoint.latencyMs} ms` : "—"}
       </div>
 
-      <Rating server={server} className="hidden items-center gap-1 text-[11px] text-[#67738b] lg:flex" />
+      <Rating server={server} className="hidden items-center gap-1 text-[11px] text-[#67738b] xl:flex" />
 
-      <div className="hidden justify-end lg:flex">
+      <div className="hidden justify-end xl:flex">
         <CopyAddressButton value={endpointAddress} iconOnly className="text-[#68737e] hover:bg-[#f0f1ff] hover:text-[#2d34cf]" />
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[#eef1f2] pt-3 lg:hidden">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[#eef1f2] pt-3 xl:hidden">
         <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-[#5e6873]">
           <StatusMark status={server.aggregateStatus} />
           <span className={server.aggregateStatus === "online" ? "text-[#19845c]" : isUnknown ? "text-[#77818c]" : "text-[#d22b30]"}>{statusLabel(server.aggregateStatus)}</span>
@@ -142,7 +142,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
         <Rating server={server} className="col-span-2 flex items-center gap-1 text-[10px] text-[#58636f]" />
       </div>
 
-      <div className="flex items-center justify-between gap-3 lg:hidden">
+      <div className="flex items-center justify-between gap-3 xl:hidden">
         <span className="max-w-[65%] truncate text-[10px] text-[#89929b]">{endpointAddress}</span>
         <div className="flex items-center gap-2">
           <CopyAddressButton value={endpointAddress} iconOnly className="text-[#68737e] hover:bg-[#f0f1ff] hover:text-[#2d34cf]" />

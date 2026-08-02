@@ -8,6 +8,7 @@ const discordEnabled = Boolean(
 
 const nextConfig: NextConfig = {
   /* config options here */
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   reactCompiler: true,
   serverExternalPackages: ["minecraft-protocol"],
   env: {

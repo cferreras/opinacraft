@@ -24,7 +24,7 @@ import { ServerUtilityActions } from "@/components/server-utility-actions";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { getServerSession } from "@/lib/session";
-import { formatEndpoint, latencyClass } from "@/lib/servers/format";
+import { formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
 import { getPublishedServerBySlug, type ManagedServer } from "@/lib/servers/queries";
 import { getReviewSummary, getReviewViewerState, listServerReviews } from "@/lib/servers/reviews";
 
@@ -66,18 +66,6 @@ const replyErrors: Record<string, string> = {
   "rate-limit": "Has alcanzado el límite temporal. Inténtalo más tarde.",
   unknown: "No se pudo completar la acción sobre la respuesta oficial.",
 };
-
-function statusLabel(status: "online" | "offline" | "unknown") {
-  if (status === "online") return "En línea";
-  if (status === "offline") return "Fuera de línea";
-  return "Estado desconocido";
-}
-
-function statusTone(status: "online" | "offline" | "unknown") {
-  if (status === "online") return "text-[#0e9a55]";
-  if (status === "offline") return "text-[#d83a42]";
-  return "text-[#7c8797]";
-}
 
 function dateLabel(date: Date | null) {
   if (!date) return "Aún no comprobado";
@@ -158,31 +146,31 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
   const viewer = session ? await getReviewViewerState(server.id, session.user.id) : null;
   const notice = (query.review ? reviewNotices[query.review] : undefined) ?? (query.reply ? replyNotices[query.reply] : undefined);
   const errorNotice = query.reviewError ? reviewErrors[query.reviewError] : query.replyError ? replyErrors[query.replyError] : undefined;
-  const primaryEndpoint = server.endpoints.find((endpoint) => endpoint.edition === "java") ?? server.endpoints[0];
-  const copyAddress = primaryEndpoint ? formatEndpoint(primaryEndpoint) : server.slug;
+  const endpoint = primaryEndpoint(server);
+  const copyAddress = endpoint ? formatEndpoint(endpoint) : server.slug;
   const rating = reviewSummary.average === null ? "—" : reviewSummary.average.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa] text-[#17202a]">
+    <div className="app-shell">
       <SiteHeader />
-      <main className="mx-auto min-h-[calc(100vh-76px)] w-full max-w-[1180px] border-x border-[#edf0f3] bg-white px-4 pb-12 sm:px-6 lg:px-7">
+      <main className="app-main page-shell px-4 pb-12 sm:px-6 lg:px-7 2xl:px-8">
         <div className="pt-7 sm:pt-8">
           <section className="grid gap-6 lg:grid-cols-[214px_minmax(0,1fr)_248px] lg:items-start lg:gap-8" aria-labelledby="server-name">
             <ServerLogo name={server.name} media={server.media} className="h-[100px] w-[100px] justify-self-center rounded-2xl sm:h-[148px] sm:w-[148px] lg:h-[214px] lg:w-[214px] lg:justify-self-start" />
 
             <div className="min-w-0 text-center lg:text-left">
               <div className="flex flex-wrap items-center gap-3">
-                <h1 id="server-name" className="w-full text-[30px] font-semibold leading-none tracking-[-0.055em] text-[#101722] sm:text-[38px] lg:w-auto lg:text-[42px]">{server.name}</h1>
+                <h1 id="server-name" className="w-full text-[30px] font-bold leading-none tracking-[-0.06em] text-[#101722] sm:text-[38px] lg:w-auto lg:text-[42px]">{server.name}</h1>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e6f8ef] px-2.5 py-1 text-[11px] font-medium text-[#0c8950]"><span aria-hidden="true" className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#0e9a55] text-white"><span className="text-[10px] leading-none">✓</span></span>Servidor verificado</span>
               </div>
               <p className="mt-4 max-w-[540px] text-[13px] leading-[1.55] text-[#55627b]">{server.description ?? "Una comunidad de Minecraft lista para recibirte."}</p>
               {server.tags.length > 0 ? <div className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start">{server.tags.map((tag) => <span key={tag.slug} className="rounded-md border border-[#e0e5ea] bg-[#fafbfc] px-2.5 py-1 text-[11px] text-[#35415b]">{tag.label}</span>)}</div> : null}
 
               <div className="mt-5 grid grid-cols-2 gap-y-1 text-left sm:flex sm:flex-wrap sm:items-center sm:justify-center lg:justify-start">
-                <Metric icon={<span aria-hidden="true" className={`inline-block h-2.5 w-2.5 rounded-full ${server.aggregateStatus === "online" ? "bg-[#0e9a55]" : server.aggregateStatus === "offline" ? "bg-[#d83a42]" : "bg-[#adb6c2]"}`} />} label="Estado" value={statusLabel(server.aggregateStatus)} tone={statusTone(server.aggregateStatus)} />
-                <Metric icon={<IconUsers aria-hidden="true" size={20} stroke={1.7} />} label="jugadores" value={primaryEndpoint?.playersCurrent !== null && primaryEndpoint?.playersMax !== null && primaryEndpoint ? `${primaryEndpoint.playersCurrent} / ${primaryEndpoint.playersMax}` : "— / —"} />
-                <Metric icon={<IconCode aria-hidden="true" size={20} stroke={1.7} />} label="versión" value={primaryEndpoint?.version ?? "—"} />
-                <Metric icon={<IconChartBar aria-hidden="true" size={20} stroke={1.7} />} label="ping" value={primaryEndpoint?.latencyMs !== null && primaryEndpoint?.latencyMs !== undefined ? `${primaryEndpoint.latencyMs} ms` : "—"} tone={latencyClass(primaryEndpoint?.latencyMs ?? null)} />
+                <Metric icon={<span aria-hidden="true" className={`inline-block h-2.5 w-2.5 rounded-full ${statusDot(server.aggregateStatus)}`} />} label="Estado" value={statusLabel(server.aggregateStatus)} tone={statusClass(server.aggregateStatus)} />
+                <Metric icon={<IconUsers aria-hidden="true" size={20} stroke={1.7} />} label="jugadores" value={endpoint?.playersCurrent !== null && endpoint?.playersMax !== null && endpoint ? `${endpoint.playersCurrent} / ${endpoint.playersMax}` : "— / —"} />
+                <Metric icon={<IconCode aria-hidden="true" size={20} stroke={1.7} />} label="versión" value={endpoint?.version ?? "—"} />
+                <Metric icon={<IconChartBar aria-hidden="true" size={20} stroke={1.7} />} label="ping" value={endpoint?.latencyMs !== null && endpoint?.latencyMs !== undefined ? `${endpoint.latencyMs} ms` : "—"} tone={latencyClass(endpoint?.latencyMs ?? null)} />
                 <Metric icon={<IconStarFilled aria-hidden="true" className="text-[#f4aa00]" size={19} />} label={`${reviewSummary.total} opiniones`} value={rating} />
               </div>
             </div>
@@ -213,9 +201,9 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
               <div className="my-6 border-t border-[#e7ebef]" />
               <h3 className="text-[12px] font-semibold text-[#1b2638]">Estado del servidor</h3>
               <div className="mt-3 grid gap-3 text-[12px] text-[#28354a]">
-                <div className="flex items-center gap-2.5"><span aria-hidden="true" className={`inline-block h-2.5 w-2.5 rounded-full ${server.aggregateStatus === "online" ? "bg-[#0e9a55]" : server.aggregateStatus === "offline" ? "bg-[#d83a42]" : "bg-[#adb6c2]"}`} /><span className={statusTone(server.aggregateStatus)}>{statusLabel(server.aggregateStatus)}</span></div>
-                <div className="flex items-center gap-2.5"><IconChartBar aria-hidden="true" size={18} stroke={1.7} className="text-[#67738b]" /><span>{primaryEndpoint?.latencyMs !== null && primaryEndpoint?.latencyMs !== undefined ? `${primaryEndpoint.latencyMs} ms` : "Sin latencia"}</span></div>
-                <div className="flex items-center gap-2.5"><IconClock aria-hidden="true" size={18} stroke={1.7} className="text-[#67738b]" /><span>Última comprobación: {dateLabel(primaryEndpoint?.lastCheckedAt ?? null)}</span></div>
+                <div className="flex items-center gap-2.5"><span aria-hidden="true" className={`inline-block h-2.5 w-2.5 rounded-full ${statusDot(server.aggregateStatus)}`} /><span className={statusClass(server.aggregateStatus)}>{statusLabel(server.aggregateStatus)}</span></div>
+                <div className="flex items-center gap-2.5"><IconChartBar aria-hidden="true" size={18} stroke={1.7} className="text-[#67738b]" /><span>{endpoint?.latencyMs !== null && endpoint?.latencyMs !== undefined ? `${endpoint.latencyMs} ms` : "Sin latencia"}</span></div>
+                <div className="flex items-center gap-2.5"><IconClock aria-hidden="true" size={18} stroke={1.7} className="text-[#67738b]" /><span>Última comprobación: {dateLabel(endpoint?.lastCheckedAt ?? null)}</span></div>
               </div>
 
               <div className="mt-6 grid gap-2.5">

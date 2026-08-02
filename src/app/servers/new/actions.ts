@@ -21,6 +21,7 @@ import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 export type CreateServerState = {
   formError?: string;
   fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "tags" | "endpoints", string>>;
+  created?: { id: string; slug: string };
 };
 
 function formValue(formData: FormData, key: string) {
@@ -95,7 +96,7 @@ export async function createServerAction(
     redirect("/sign-in?callbackURL=/servers/new");
   }
 
-  let result: { slug: string };
+  let result: { id: string; slug: string };
 
   try {
     result = await createServer(session.user.id, getInput(formData));
@@ -136,5 +137,5 @@ export async function createServerAction(
   }
 
   revalidatePath("/dashboard/servers");
-  redirect(`/servers/${result.slug}/manage?created=1`);
+  return { created: result };
 }

@@ -43,6 +43,9 @@ export function ReviewForm({
   const [state, formAction] = useActionState<ReviewActionState | null, FormData>(action, null);
   const [rating, setRating] = useState(initialRating);
   const [content, setContent] = useState(initialContent);
+  const ratingLabelId = reviewId ? `review-rating-label-${reviewId}` : "review-rating-label-new";
+  const ratingHelpId = reviewId ? `review-rating-help-${reviewId}` : "review-rating-help-new";
+  const ratingErrorId = reviewId ? `review-rating-error-${reviewId}` : "review-rating-error-new";
 
   return (
     <form action={formAction} className="space-y-5">
@@ -51,8 +54,14 @@ export function ReviewForm({
       {reviewId ? <input type="hidden" name="reviewId" value={reviewId} /> : null}
 
       <fieldset>
-        <legend className="text-sm font-semibold text-zinc-950 dark:text-white">Tu puntuación</legend>
-        <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Puntuación de 1 a 5 estrellas" aria-describedby={state?.fieldErrors?.rating ? "review-rating-error" : undefined}>
+        <legend id={ratingLabelId} className="text-sm font-semibold text-zinc-950 dark:text-white">Tu puntuación</legend>
+        <p id={ratingHelpId} className="mt-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">Elige de 1 (muy mala) a 5 (excelente).</p>
+        <div
+          className="mt-3 flex flex-wrap items-center gap-2"
+          role="radiogroup"
+          aria-labelledby={ratingLabelId}
+          aria-describedby={[ratingHelpId, state?.fieldErrors?.rating ? ratingErrorId : null].filter(Boolean).join(" ")}
+        >
           {[1, 2, 3, 4, 5].map((value) => (
             <label key={value} className="group relative cursor-pointer">
               <input
@@ -64,14 +73,15 @@ export function ReviewForm({
                 className="peer sr-only"
                 aria-label={`${value} ${value === 1 ? "estrella" : "estrellas"}`}
               />
-              <span className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-zinc-300 px-3 text-lg text-zinc-400 transition group-hover:border-zinc-500 peer-checked:border-amber-500 peer-checked:bg-amber-50 peer-checked:text-amber-600 peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-900 peer-focus-visible:ring-offset-2 dark:border-zinc-700 dark:text-zinc-500 dark:peer-checked:border-amber-400 dark:peer-checked:bg-amber-950/30 dark:peer-checked:text-amber-300 dark:peer-focus-visible:ring-white">
-                <span aria-hidden="true">★</span>
-                <span className="sr-only">{value}</span>
+              <span className="flex min-h-11 min-w-12 items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-2.5 text-sm font-semibold tabular-nums text-zinc-500 transition group-hover:border-zinc-500 group-hover:bg-zinc-50 peer-checked:border-amber-500 peer-checked:bg-amber-50 peer-checked:text-amber-700 peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-900 peer-focus-visible:ring-offset-2 dark:border-zinc-700 dark:text-zinc-400 dark:group-hover:bg-zinc-900 dark:peer-checked:border-amber-400 dark:peer-checked:bg-amber-950/30 dark:peer-checked:text-amber-300 dark:peer-focus-visible:ring-white">
+                <span aria-hidden="true" className={`text-base leading-none ${value <= rating ? "text-amber-600 dark:text-amber-300" : "text-zinc-400 dark:text-zinc-500"}`}>{value <= rating ? "★" : "☆"}</span>
+                <span aria-hidden="true">{value}</span>
               </span>
             </label>
           ))}
         </div>
-        {state?.fieldErrors?.rating ? <p id="review-rating-error" className="mt-2 text-sm text-red-700 dark:text-red-300">{state.fieldErrors.rating}</p> : null}
+        <span className="ml-1 mt-2 block text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-live="polite">Puntuación: {rating} de 5</span>
+        {state?.fieldErrors?.rating ? <p id={ratingErrorId} className="mt-2 text-sm text-red-700 dark:text-red-300">{state.fieldErrors.rating}</p> : null}
       </fieldset>
 
       <label className="block text-sm font-semibold text-zinc-950 dark:text-white" htmlFor={editing ? `review-content-${reviewId}` : "review-content-new"}>

@@ -25,6 +25,7 @@ import { replaceServerTagsForServer } from "@/lib/servers/tags";
 import { databaseConstraint, databaseErrorCode } from "@/lib/db-errors";
 import { mediaStorage } from "@/lib/media/storage";
 import { enqueueMediaCleanup } from "@/lib/media/cleanup";
+import { releaseMediaQuota } from "@/lib/media/quota";
 
 const RESERVED_SLUGS = new Set(["new"]);
 const MAX_SLUG_ATTEMPTS = 8;
@@ -341,12 +342,19 @@ export async function deleteServer(userId: string, serverId: string, confirmatio
   if (confirmation !== "DELETE") throw new Error("Type DELETE to confirm server deletion.");
   const media = await db.transaction(async (tx) => {
     await requireServerCapability(serverId, userId, "identity:edit", tx);
-    const rows = await tx.select({ blobKey: serverMedia.blobKey }).from(serverMedia).where(eq(serverMedia.serverId, serverId));
+    const rows = await tx
+      .select({ blobKey: serverMedia.blobKey, bytes: serverMedia.bytes })
+      .from(serverMedia)
+      .where(eq(serverMedia.serverId, serverId));
     await tx.delete(servers).where(eq(servers.id, serverId));
-    return rows;
+    return {
+      rows,
+      mediaBytes: rows.reduce((total, row) => total + row.bytes, 0),
+    };
   });
+  if (media.mediaBytes > 0) await releaseMediaQuota(media.mediaBytes).catch(() => undefined);
   await Promise.all(
-    media.map(({ blobKey }) =>
+    media.rows.map(({ blobKey }) =>
       mediaStorage.remove(blobKey).catch((error) =>
         enqueueMediaCleanup(blobKey, error).catch((cleanupError) => {
           console.error("Failed to enqueue media cleanup", cleanupError);
