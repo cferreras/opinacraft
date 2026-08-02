@@ -60,6 +60,9 @@ async function main() {
 
     await client.query("CREATE EXTENSION IF NOT EXISTS pg_trgm");
 
+    await addColumn(client, "user", '"image_key" varchar(512)');
+    await addColumn(client, "user", '"image_bytes" integer');
+
     await ensureEnum(client, "server_endpoint_health", ["unknown", "online", "offline"]);
     await ensureEnum(client, "server_tag_status", ["active", "blocked", "merged"]);
     await ensureEnum(client, "server_media_kind", ["logo", "banner"]);

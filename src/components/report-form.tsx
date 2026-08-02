@@ -24,7 +24,7 @@ export function ReportForm({ serverId }: { serverId: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-[#e0e6eb] bg-white p-4 shadow-[0_1px_2px_rgba(16,30,45,0.02)] sm:p-5">
+    <form onSubmit={submit} className="ui-card p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div><h2 className="text-[15px] font-semibold text-[#17202a]">¿Hay algo que debamos revisar?</h2><p className="mt-1 text-[11px] text-[#7a8595]">Ayúdanos a mantener el directorio fiable y útil.</p></div>
       </div>

@@ -77,28 +77,28 @@ export default async function PublicServersPage({
   );
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa] text-[#17202a]">
+    <div className="app-shell">
       <SiteHeader />
 
-      <main className="mx-auto min-h-[calc(100vh-76px)] w-full max-w-[1180px] border-x border-[#edf0f3] bg-white px-4 pb-12 pt-7 sm:px-6 sm:pt-8 lg:px-7">
+      <main className="app-main page-shell px-4 pb-12 pt-7 sm:px-6 sm:pt-8 lg:px-7 2xl:px-8">
         <section aria-labelledby="servers-heading">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2d34cf]">Directorio comunitario</p>
-          <h1 id="servers-heading" className="mt-2.5 max-w-[680px] text-[34px] font-semibold leading-[1.12] tracking-[-0.055em] text-[#101722] sm:text-[42px]">
+          <p className="ui-eyebrow">Directorio comunitario</p>
+          <h1 id="servers-heading" className="ui-page-title mt-2.5 max-w-[680px]">
             Encuentra tu próximo
             <br className="hidden sm:block" /> servidor de Minecraft
           </h1>
-          <p className="mt-2 max-w-[620px] text-[13px] leading-[1.55] text-[#55627b]">
+          <p className="ui-page-copy mt-2">
             Explora, compara y únete a las mejores comunidades de Minecraft.
           </p>
 
           <form action="/servers" method="get" className="mt-4">
-            <div className="flex h-[43px] max-w-[765px] items-center rounded-lg border border-[#dce2e7] bg-white shadow-[0_1px_2px_rgba(16,30,45,0.02)] focus-within:border-[#4655e8] focus-within:ring-2 focus-within:ring-[#4655e8]/10">
+            <div className="app-header-search flex h-11 max-w-[765px] items-center bg-white px-0">
               <IconSearch aria-hidden="true" className="ml-3.5 shrink-0 text-[#7b8793]" size={17} stroke={1.7} />
               <label htmlFor="server-search" className="sr-only">Buscar</label>
               <ServerSearchInput defaultValue={query.q ?? ""} />
             </div>
 
-            <div className="relative z-30 mt-6 overflow-visible border-y border-[#e0e6eb] bg-[#f7f8fa] px-3 py-3 sm:px-4">
+            <div className="relative z-30 mt-6 overflow-visible rounded-t-2xl border-x border-y border-[#e0e6eb] bg-zinc-50 px-3 py-3 sm:px-4">
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.05fr_1.2fr_1.35fr_1.16fr] lg:items-center">
                 <FilterSelect id="edition-filter" name="edition" label="Edición" defaultValue={query.edition ?? ""} submitOnChange>
                   <option value="">Todas</option>
@@ -111,7 +111,7 @@ export default async function PublicServersPage({
                   <option value="offline">Fuera de línea</option>
                   <option value="unknown">Desconocido</option>
                 </FilterSelect>
-                <TagCombobox name="tags" initialTags={initialTags} compact ariaLabel="Modalidad" submitOnChange resetPagination />
+                <TagCombobox name="tags" initialTags={initialTags} compact label="Etiquetas" submitOnChange resetPagination />
                 <FilterSelect id="sort-filter" name="sort" label="Ordenar" defaultValue={sort} submitOnChange>
                   {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </FilterSelect>
@@ -128,16 +128,16 @@ export default async function PublicServersPage({
         </section>
 
         {servers.length === 0 ? (
-          <div className="mt-7 rounded-2xl border border-[#e0e6eb] bg-[#fbfcff] px-6 py-14 text-center">
+          <div className="rounded-b-2xl border-x border-b border-[#e0e6eb] bg-[#fbfcff] px-6 py-14 text-center">
             <h2 className="text-lg font-semibold text-[#17202a]">Todavía no hay servidores publicados</h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#687580]">Sé el primero en publicar una comunidad Minecraft en OpinaCraft.</p>
             <Link href="/servers/new" className="mt-6 inline-flex h-10 items-center rounded-lg bg-[#3029e7] px-4 text-sm font-semibold text-white shadow-[0_5px_12px_rgba(48,41,231,0.16)] transition hover:bg-[#2821c8]">Añadir servidor</Link>
           </div>
         ) : (
-          <section className="mt-7" aria-labelledby="server-results-heading">
+          <section aria-labelledby="server-results-heading">
             <h2 id="server-results-heading" className="sr-only">Resultados de servidores</h2>
-            <div className="overflow-hidden rounded-2xl border border-[#e0e6eb] bg-white shadow-[0_1px_2px_rgba(16,30,45,0.02)]">
-              <div className="hidden h-10 items-center border-b border-[#e0e6eb] bg-[#f7f8fa] px-4 text-[9px] font-medium uppercase tracking-[0.035em] text-[#7c8799] lg:grid lg:grid-cols-[minmax(330px,1.65fr)_96px_118px_108px_82px_112px_30px] lg:items-center lg:gap-3">
+            <div className="overflow-hidden rounded-b-2xl border-x border-b border-[#e0e6eb] bg-white shadow-[0_1px_2px_rgba(16,30,45,0.02)]">
+              <div className="hidden h-10 items-center border-b border-[#e0e6eb] bg-[#f7f8fa] px-4 text-[9px] font-medium uppercase tracking-[0.035em] text-[#7c8799] xl:grid xl:grid-cols-[minmax(250px,1.5fr)_72px_98px_82px_58px_72px_28px] xl:items-center xl:gap-2">
                 <span>Servidor</span>
                 <span>Edición</span>
                 <span>Jugadores</span>

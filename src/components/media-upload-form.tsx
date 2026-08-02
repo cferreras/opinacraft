@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { IconPhoto, IconUpload } from "@tabler/icons-react";
 
 type Media = { kind: "logo" | "banner"; url: string; bytes: number; width: number; height: number };
 
 export function MediaUploadForm({ serverId }: { serverId: string }) {
-  const [kind, setKind] = useState<"logo" | "banner">("logo");
   const [file, setFile] = useState<File | null>(null);
   const [active, setActive] = useState<Media[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -16,6 +16,7 @@ export function MediaUploadForm({ serverId }: { serverId: string }) {
     const response = await fetch(`/api/servers/${serverId}/media`, { cache: "no-store" });
     if (response.ok) setActive((await response.json()).active ?? []);
   }
+
   useEffect(() => {
     let cancelled = false;
     void fetch(`/api/servers/${serverId}/media`, { cache: "no-store" }).then(async (response) => {
@@ -28,9 +29,12 @@ export function MediaUploadForm({ serverId }: { serverId: string }) {
     event.preventDefault();
     if (!file) return;
     const body = new FormData();
-    body.set("kind", kind);
+    body.set("kind", "logo");
     body.set("file", file);
-    setPending(true); setProgress(0); setMessage(null);
+    setPending(true);
+    setProgress(0);
+    setMessage(null);
+
     const request = new XMLHttpRequest();
     request.open("POST", `/api/servers/${serverId}/media`);
     request.upload.onprogress = (progressEvent) => {
@@ -39,32 +43,79 @@ export function MediaUploadForm({ serverId }: { serverId: string }) {
     request.onload = () => {
       let result: { error?: string } = {};
       try { result = JSON.parse(request.responseText); } catch { /* ignored */ }
-      setMessage(request.status >= 200 && request.status < 300 ? "Imagen subida." : result.error ?? "No se pudo subir la imagen.");
+      setMessage(request.status >= 200 && request.status < 300 ? "Image uploaded." : result.error ?? "Could not upload the image.");
       setPending(false);
-      if (request.status >= 200 && request.status < 300) { setFile(null); void refresh(); }
+      if (request.status >= 200 && request.status < 300) {
+        setFile(null);
+        void refresh();
+      }
     };
-    request.onerror = () => { setPending(false); setMessage("No se pudo subir la imagen."); };
+    request.onerror = () => {
+      setPending(false);
+      setMessage("Could not upload the image.");
+    };
     request.send(body);
   }
 
   async function remove(kindToRemove: "logo" | "banner") {
     setMessage(null);
     const response = await fetch(`/api/servers/${serverId}/media?kind=${kindToRemove}`, { method: "DELETE" });
-    setMessage(response.ok ? "Imagen eliminada." : "No se pudo eliminar la imagen.");
+    setMessage(response.ok ? "Image removed." : "Could not remove the image.");
     if (response.ok) void refresh();
   }
 
   const selectedPreview = file ? URL.createObjectURL(file) : null;
-  return <section className="rounded-xl border border-zinc-200 p-5 dark:border-zinc-800">
-    <h2 className="text-base font-semibold">Imágenes de marca</h2>
-    <p className="mt-1 text-sm text-zinc-500">Se convierten a WebP. Logo máximo 500 KB; banner máximo 1,5 MB.</p>
-    {active.length ? <div className="mt-4 grid gap-3 sm:grid-cols-2">{active.map((media) => <div key={media.kind} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"><img src={media.url} alt={media.kind} className="max-h-32 w-full object-contain" /><div className="mt-2 flex items-center justify-between text-xs text-zinc-500"><span>{media.kind} · {Math.round(media.bytes / 1024)} KB</span><button type="button" onClick={() => void remove(media.kind)} className="underline">Eliminar</button></div></div>)}</div> : null}
-    <form onSubmit={submit} className="mt-4 flex flex-wrap items-end gap-3">
-      <label className="text-sm font-medium">Tipo<select name="kind" value={kind} onChange={(event) => setKind(event.target.value as "logo" | "banner")} className="mt-2 block h-10 rounded-lg border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-950"><option value="logo">Logo</option><option value="banner">Banner</option></select></label>
-      <label className="text-sm font-medium">Imagen<input name="file" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required className="mt-2 block h-10 text-sm" /></label>
-      <button disabled={pending || !file} className="h-10 rounded-lg bg-zinc-950 px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-950">{pending ? `Subiendo… ${progress}%` : "Subir"}</button>
-    </form>
-    {selectedPreview ? <img src={selectedPreview} alt="Vista previa" className="mt-4 max-h-40 rounded-lg object-contain" /> : null}
-    {message ? <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400" role="status">{message}</p> : null}
-  </section>;
+  const logoMedia = active.filter((media) => media.kind === "logo");
+
+  return (
+    <section className="rounded-2xl border border-[#e0e6eb] bg-white p-5 shadow-[0_1px_2px_rgba(16,30,45,0.02)] sm:p-6" aria-labelledby="branding-heading">
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f0f1ff] text-[#2d34cf]"><IconPhoto aria-hidden="true" size={17} stroke={1.7} /></span>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7a86a0]">Brand presence</p>
+          <h2 id="branding-heading" className="mt-1 text-[18px] font-semibold tracking-[-0.025em] text-[#101722]">Imágenes de marca</h2>
+          <p className="mt-1.5 text-[11px] leading-5 text-[#667287]">Por ahora solo usamos el logo en la web; no es necesario subir un banner.</p>
+        </div>
+      </div>
+
+      <p className="mt-5 rounded-lg bg-[#f7f8fa] px-3 py-2.5 text-[10px] leading-4 text-[#718097]">El logo se convierte a WebP automáticamente. Tamaño máximo: 500 KB.</p>
+
+      {logoMedia.length ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {logoMedia.map((media) => (
+            <div key={media.kind} className="overflow-hidden rounded-xl border border-[#e1e6eb] bg-[#fbfcff]">
+              <div className={`flex items-center justify-center bg-[#f4f6fb] p-3 ${media.kind === "banner" ? "aspect-[2.5/1]" : "aspect-[1.6/1]"}`}>
+                <img src={media.url} alt={`${media.kind} preview`} className="max-h-full w-full object-contain" />
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-[#e5e9ee] px-3 py-2.5 text-[10px]">
+                <span className="font-medium capitalize text-[#35415b]">{media.kind} <span className="font-normal text-[#8a95a5]">· {Math.round(media.bytes / 1024)} KB</span></span>
+                <button type="button" onClick={() => void remove(media.kind)} className="font-semibold text-[#c43b45] transition hover:text-[#9f2934]">Remove</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <form onSubmit={submit} className="mt-5 rounded-xl border border-dashed border-[#cfd6df] bg-[#fbfcff] p-4">
+        <input type="hidden" name="kind" value="logo" />
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div className="rounded-lg border border-[#e0e5ff] bg-[#f7f7ff] px-3 py-2.5">
+            <p className="text-[11px] font-semibold text-[#35415b]">Logo del servidor</p>
+            <p className="mt-0.5 text-[10px] leading-4 text-[#718097]">Se mostrará en el directorio y en la ficha pública.</p>
+          </div>
+          <label className="block min-w-0 text-[11px] font-semibold text-[#35415b]">
+            Archivo del logo
+            <input name="file" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required className="mt-2 block h-10 w-full min-w-0 rounded-lg border border-[#dce2e7] bg-white px-2 py-2 text-[11px] text-[#59677c] file:mr-2 file:rounded-md file:border-0 file:bg-[#f0f1ff] file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-[#2d34cf]" />
+          </label>
+          <button disabled={pending || !file} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#3029e7] px-4 text-[11px] font-semibold text-white shadow-[0_4px_10px_rgba(48,41,231,0.13)] transition hover:bg-[#2821c8] disabled:cursor-not-allowed disabled:opacity-50">
+            <IconUpload aria-hidden="true" size={15} stroke={1.8} />
+            {pending ? `Uploading... ${progress}%` : "Upload"}
+          </button>
+        </div>
+      </form>
+
+      {selectedPreview ? <img src={selectedPreview} alt="Preview" className="mt-4 max-h-40 rounded-lg border border-[#e1e6eb] object-contain" /> : null}
+      {message ? <p className="mt-3 text-[11px] text-[#59677c]" role="status">{message}</p> : null}
+    </section>
+  );
 }

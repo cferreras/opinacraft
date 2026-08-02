@@ -12,7 +12,18 @@ type VerificationEmail = {
   url: string;
 };
 
-type EmailMessageType = "notification" | "password-reset" | "verification";
+type ChangeEmailConfirmationEmail = {
+  to: string;
+  currentEmail: string;
+  newEmail: string;
+  url: string;
+};
+
+type EmailMessageType =
+  | "notification"
+  | "password-reset"
+  | "verification"
+  | "change-email";
 
 function skipEmail(messageType: EmailMessageType) {
   if (serverEnv.NODE_ENV !== "production" && serverEnv.E2E_DISABLE_EMAIL === "true") {
@@ -80,6 +91,36 @@ export async function sendVerificationEmail({
     subject: "Verifica tu email de OpinaCraft",
     text: `Verifica tu email para publicar servidores en OpinaCraft: ${url}`,
     html: `<p>Verifica tu email para publicar servidores en OpinaCraft.</p><p><a href="${url}">Verificar email</a></p>`,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function sendChangeEmailConfirmationEmail({
+  to,
+  currentEmail,
+  newEmail,
+  url,
+}: ChangeEmailConfirmationEmail) {
+  if (skipEmail("change-email")) return;
+  const apiKey = serverEnv.RESEND_API_KEY;
+  const from = serverEnv.EMAIL_FROM;
+
+  if (!apiKey || !from) {
+    throw new Error(
+      "Email change confirmation is not configured. Set RESEND_API_KEY and EMAIL_FROM.",
+    );
+  }
+
+  const resend = new Resend(apiKey);
+  const { error } = await resend.emails.send({
+    from,
+    to: [to],
+    subject: "Confirma el cambio de email de OpinaCraft",
+    text: `Confirma el cambio de email de ${currentEmail} a ${newEmail} usando este enlace: ${url}`,
+    html: `<p>Confirma el cambio de email de OpinaCraft.</p><p><a href="${url}">Confirmar cambio de email</a></p>`,
   });
 
   if (error) {

@@ -6,8 +6,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { moderationEvents, reviewReplies, serverMembers, serverMedia, serverReports, serverReviewReports, serverReviews, servers } from "@/schema";
 import { user } from "@/auth-schema";
-import { mediaStorage } from "@/lib/media/storage";
-import { enqueueMediaCleanup } from "@/lib/media/cleanup";
+import { removeMediaOrEnqueue } from "@/lib/media/cleanup";
+import { releaseMediaQuota } from "@/lib/media/quota";
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,12 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   const body = await request.json().catch(() => null) as { confirmation?: string } | null;
   if (body?.confirmation !== "DELETE ACCOUNT") return NextResponse.json({ error: "Type DELETE ACCOUNT to confirm." }, { status: 400 });
-  const media = await db.transaction(async (tx) => {
+  const deleted = await db.transaction(async (tx) => {
+    const [avatar] = await tx
+      .select({ blobKey: user.imageKey, bytes: user.imageBytes })
+      .from(user)
+      .where(eq(user.id, session.user.id))
+      .limit(1);
     const owned = await tx.select({ id: servers.id }).from(servers).innerJoin(serverMembers, eq(serverMembers.serverId, servers.id)).where(and(eq(serverMembers.userId, session.user.id), eq(serverMembers.role, "owner")));
     const keys = owned.length ? await tx.select({ blobKey: serverMedia.blobKey }).from(serverMedia).where(inArray(serverMedia.serverId, owned.map((server) => server.id))) : [];
     for (const server of owned) await tx.delete(servers).where(eq(servers.id, server.id));
@@ -28,8 +33,10 @@ export async function POST(request: Request) {
     await tx.update(reviewReplies).set({ userId: null, content: "Respuesta oficial anónima", updatedAt: new Date() }).where(eq(reviewReplies.userId, session.user.id));
     await tx.delete(serverMembers).where(eq(serverMembers.userId, session.user.id));
     await tx.delete(user).where(eq(user.id, session.user.id));
-    return keys.map((row) => row.blobKey);
+    return { media: keys.map((row) => row.blobKey), avatar };
   });
-  await Promise.all(media.map((key) => mediaStorage.remove(key).catch((error) => enqueueMediaCleanup(key, error))));
+  await Promise.all(deleted.media.map((key) => removeMediaOrEnqueue(key)));
+  if (deleted.avatar?.blobKey) await removeMediaOrEnqueue(deleted.avatar.blobKey);
+  if (deleted.avatar?.bytes) await releaseMediaQuota(deleted.avatar.bytes).catch(() => undefined);
   return NextResponse.json({ ok: true });
 }

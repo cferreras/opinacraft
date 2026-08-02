@@ -6,7 +6,7 @@ import { CopyAddressButton } from "@/components/copy-address-button";
 
 export function PublicServerCard({ server }: { server: PublicServer }) {
   const banner = server.media.find((media) => media.kind === "banner");
-  return <article className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+  return <article className="ui-card ui-signal p-5 pl-6">
     {banner ? <img src={banner.url} alt="" className="mb-5 h-32 w-full rounded-lg object-cover" /> : null}
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold text-zinc-950 dark:text-white">{server.name}</h2><p className="mt-1 text-sm text-zinc-500">/{server.slug}</p></div><span className={`rounded-full px-3 py-1 text-xs font-medium ${server.aggregateStatus === "online" ? "bg-emerald-100 text-emerald-800" : server.aggregateStatus === "offline" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{server.aggregateStatus === "online" ? "Online" : server.aggregateStatus === "offline" ? "Offline" : "Estado desconocido"}</span></div>
     {server.description ? <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{server.description}</p> : null}

@@ -1,6 +1,7 @@
 import sharp from "sharp";
 
 export const MEDIA_LIMITS = {
+  avatar: { maxBytes: 500_000, width: 512, height: 512 },
   logo: { maxBytes: 500_000, width: 1_024, height: 1_024 },
   banner: { maxBytes: 1_500_000, width: 1_920, height: 640 },
 } as const;
@@ -28,7 +29,7 @@ export async function optimizeImage(file: File, kind: keyof typeof MEDIA_LIMITS)
     if (!metadata.width || !metadata.height || metadata.width < 1 || metadata.height < 1 || metadata.width > 10_000 || metadata.height > 10_000) throw new MediaValidationError("Las dimensiones de la imagen no son válidas.");
     output = await sharp(source)
     .rotate()
-    .resize({ width: limit.width, height: limit.height, fit: kind === "banner" ? "cover" : "inside", withoutEnlargement: true })
+    .resize({ width: limit.width, height: limit.height, fit: kind === "logo" ? "inside" : "cover", withoutEnlargement: true })
     .webp({ quality, effort: 4 })
     .toBuffer({ resolveWithObject: true });
   } catch (error) {
@@ -39,7 +40,7 @@ export async function optimizeImage(file: File, kind: keyof typeof MEDIA_LIMITS)
     quality -= 7;
     output = await sharp(source)
       .rotate()
-      .resize({ width: limit.width, height: limit.height, fit: kind === "banner" ? "cover" : "inside", withoutEnlargement: true })
+      .resize({ width: limit.width, height: limit.height, fit: kind === "logo" ? "inside" : "cover", withoutEnlargement: true })
       .webp({ quality, effort: 4 })
       .toBuffer({ resolveWithObject: true });
   }

@@ -67,7 +67,7 @@ function Composer({ serverId, slug, viewer }: { serverId: string; slug: string; 
             <p className="mt-0.5 text-[11px] text-[#8490a3]">Necesitas iniciar sesión para publicar.</p>
           </div>
         </div>
-        <Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`} className="inline-flex h-8 items-center justify-center rounded-md bg-[#a7a7ff] px-3.5 text-[11px] font-semibold text-white transition hover:bg-[#8f8ff4] sm:shrink-0">
+        <Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`} className="ui-button-primary h-8 px-3.5 text-[11px] sm:shrink-0">
           Iniciar sesión
         </Link>
       </div>
@@ -134,7 +134,7 @@ export function ReviewSection({
   const canReport = Boolean(viewer?.emailVerified);
 
   return (
-    <section id="reviews" className="mt-4 scroll-mt-8 rounded-2xl border border-[#e0e6eb] bg-white p-4 shadow-[0_1px_2px_rgba(16,30,45,0.02)] sm:p-5">
+    <section id="reviews" className="ui-card mt-4 scroll-mt-8 p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#7a8595]">La voz de la comunidad</p>

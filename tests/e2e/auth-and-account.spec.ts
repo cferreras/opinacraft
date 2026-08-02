@@ -17,6 +17,24 @@ test.afterAll(async () => {
   await cleanupAccounts(createdEmails);
 });
 
+test("authenticated navigation links to the profile instead of sign-in", async ({ page }) => {
+  const account = await createAccount(page, "header-profile");
+  createdEmails.push(account.email);
+
+  await page.goto("/servers");
+  await expect(page.locator('header a[href="/profile"]:visible').first()).toBeVisible();
+  await expect(page.locator('header a[href="/sign-in"]')).toHaveCount(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/servers");
+  await page.getByRole("button", { name: "Abrir menú" }).click();
+  await expect(page.locator('header a[href="/profile"]:visible').first()).toBeVisible();
+  await expect(page.locator('header a[href="/sign-in"]')).toHaveCount(0);
+
+  await page.locator('header a[href="/profile"]:visible').first().click();
+  await expect(page).toHaveURL(/\/profile$/);
+});
+
 test("an account can verify its email without sending a real message", async ({ page }) => {
   const account = await createAccount(page, "email-verification", { verified: false });
   createdEmails.push(account.email);

@@ -38,7 +38,7 @@ export function CopyAddressButton({
       onClick={() => void copyAddress()}
       aria-label={iconOnly ? (copied ? "Dirección copiada" : `Copiar ${value}`) : undefined}
       title={iconOnly ? (copied ? "Dirección copiada" : "Copiar dirección") : undefined}
-      className={iconOnly ? `inline-flex h-7 w-7 items-center justify-center rounded-md transition ${className}` : `inline-flex items-center justify-center gap-2 transition ${className}`}
+      className={iconOnly ? `inline-flex h-9 w-9 items-center justify-center rounded-md transition ${className}` : `inline-flex min-h-10 items-center justify-center gap-2 transition ${className}`}
     >
       {iconOnly ? (copied ? <IconCheck aria-hidden="true" size={15} /> : <IconCopy aria-hidden="true" size={15} />) : (
         <>

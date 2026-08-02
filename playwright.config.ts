@@ -3,7 +3,8 @@ import "dotenv/config";
 import { defineConfig, devices } from "@playwright/test";
 
 const externalBaseUrl = process.env.E2E_BASE_URL;
-const baseURL = externalBaseUrl ?? "http://127.0.0.1:3000";
+const e2ePort = process.env.E2E_PORT ?? "3101";
+const baseURL = externalBaseUrl ?? `http://127.0.0.1:${e2ePort}`;
 
 if (!process.env.TEST_DATABASE_URL) {
   throw new Error(
@@ -27,11 +28,12 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: "pnpm exec next dev --hostname 127.0.0.1",
+        command: `pnpm exec next dev --hostname 127.0.0.1 --port ${e2ePort}`,
         url: baseURL,
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: process.env.E2E_REUSE_EXISTING_SERVER === "true",
         timeout: 120_000,
         env: {
+          NEXT_DIST_DIR: ".next-e2e",
           DATABASE_URL: process.env.TEST_DATABASE_URL!,
           BETTER_AUTH_SECRET: "e2e-test-secret-that-is-at-least-32-characters",
           BETTER_AUTH_URL: baseURL,

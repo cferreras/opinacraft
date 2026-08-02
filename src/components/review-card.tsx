@@ -36,7 +36,7 @@ export function ReviewCard({
   canManageReplies: boolean;
 }) {
   return (
-    <article id={`review-${review.id}`} className="rounded-xl border border-[#e2e7ec] bg-white p-3.5 sm:p-4">
+    <article id={`review-${review.id}`} className="ui-card p-3.5 sm:p-4">
       <div className="flex items-start gap-3">
         <span aria-hidden="true" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#65c78d] text-[11px] font-semibold text-white">{initials(review.authorName)}</span>
         <div className="min-w-0 flex-1">

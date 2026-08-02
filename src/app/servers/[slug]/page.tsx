@@ -163,16 +163,16 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
   const rating = reviewSummary.average === null ? "—" : reviewSummary.average.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa] text-[#17202a]">
+    <div className="app-shell">
       <SiteHeader />
-      <main className="mx-auto min-h-[calc(100vh-76px)] w-full max-w-[1180px] border-x border-[#edf0f3] bg-white px-4 pb-12 sm:px-6 lg:px-7">
+      <main className="app-main page-shell px-4 pb-12 sm:px-6 lg:px-7 2xl:px-8">
         <div className="pt-7 sm:pt-8">
           <section className="grid gap-6 lg:grid-cols-[214px_minmax(0,1fr)_248px] lg:items-start lg:gap-8" aria-labelledby="server-name">
             <ServerLogo name={server.name} media={server.media} className="h-[100px] w-[100px] justify-self-center rounded-2xl sm:h-[148px] sm:w-[148px] lg:h-[214px] lg:w-[214px] lg:justify-self-start" />
 
             <div className="min-w-0 text-center lg:text-left">
               <div className="flex flex-wrap items-center gap-3">
-                <h1 id="server-name" className="w-full text-[30px] font-semibold leading-none tracking-[-0.055em] text-[#101722] sm:text-[38px] lg:w-auto lg:text-[42px]">{server.name}</h1>
+                <h1 id="server-name" className="w-full text-[30px] font-bold leading-none tracking-[-0.06em] text-[#101722] sm:text-[38px] lg:w-auto lg:text-[42px]">{server.name}</h1>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e6f8ef] px-2.5 py-1 text-[11px] font-medium text-[#0c8950]"><span aria-hidden="true" className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#0e9a55] text-white"><span className="text-[10px] leading-none">✓</span></span>Servidor verificado</span>
               </div>
               <p className="mt-4 max-w-[540px] text-[13px] leading-[1.55] text-[#55627b]">{server.description ?? "Una comunidad de Minecraft lista para recibirte."}</p>

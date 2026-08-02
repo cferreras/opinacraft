@@ -8,6 +8,18 @@ export async function enqueueMediaCleanup(blobKey: string, error?: unknown) {
   await db.insert(mediaCleanupJobs).values({ blobKey, lastError: error instanceof Error ? error.message.slice(0, 500) : null }).onConflictDoUpdate({ target: mediaCleanupJobs.blobKey, set: { status: "pending", nextAttemptAt: new Date(), lastError: error instanceof Error ? error.message.slice(0, 500) : null } });
 }
 
+export async function removeMediaOrEnqueue(blobKey: string) {
+  try {
+    await mediaStorage.remove(blobKey);
+  } catch (error) {
+    try {
+      await enqueueMediaCleanup(blobKey, error);
+    } catch (cleanupError) {
+      console.error("Failed to enqueue media cleanup", cleanupError);
+    }
+  }
+}
+
 export async function runMediaCleanup(limit = 100) {
   const jobs = await db.transaction(async (tx) => {
     await tx.update(mediaCleanupJobs).set({ status: "pending" }).where(and(eq(mediaCleanupJobs.status, "processing"), lt(mediaCleanupJobs.updatedAt, new Date(Date.now() - 15 * 60 * 1000))));

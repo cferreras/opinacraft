@@ -38,6 +38,14 @@ export async function setEmailVerified(email: string, verified = true) {
   await pool.query('update "user" set email_verified = $1 where email = $2', [verified, email]);
 }
 
+export async function setOnlySocialAccount(email: string, providerId = "discord") {
+  const pool = openPool();
+  await pool.query(
+    'update "account" set provider_id = $1, account_id = $2, password = null where user_id = (select id from "user" where email = $3) and provider_id = $4',
+    [providerId, `${providerId}-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`, email, "credential"],
+  );
+}
+
 export async function createAccount(
   page: Page,
   label: string,
@@ -54,7 +62,7 @@ export async function createAccount(
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByText("Cuenta creada")).toBeVisible();
+  await expect(page.getByText("Cuenta creada")).toBeVisible({ timeout: 15_000 });
 
   await setEmailVerified(email, verified);
   if (verified) {
@@ -179,13 +187,29 @@ function base64Url(value: string) {
   return Buffer.from(value).toString("base64url");
 }
 
-export function makeEmailVerificationToken(email: string) {
+function makeAuthToken(payload: Record<string, string | number>) {
   const now = Math.floor(Date.now() / 1000);
   const header = base64Url(JSON.stringify({ alg: "HS256" }));
-  const payload = base64Url(JSON.stringify({ email: email.toLowerCase(), iat: now, exp: now + 3600 }));
-  const input = `${header}.${payload}`;
+  const body = base64Url(JSON.stringify({ ...payload, iat: now, exp: now + 3600 }));
+  const input = `${header}.${body}`;
   const signature = createHmac("sha256", E2E_AUTH_SECRET).update(input).digest("base64url");
   return `${input}.${signature}`;
+}
+
+export function makeEmailVerificationToken(email: string) {
+  return makeAuthToken({ email: email.toLowerCase() });
+}
+
+export function makeEmailChangeToken(
+  currentEmail: string,
+  newEmail: string,
+  requestType: "change-email-confirmation" | "change-email-verification",
+) {
+  return makeAuthToken({
+    email: currentEmail.toLowerCase(),
+    updateTo: newEmail.toLowerCase(),
+    requestType,
+  });
 }
 
 export async function requestPasswordReset(page: Page, email: string) {

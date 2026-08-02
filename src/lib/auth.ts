@@ -6,6 +6,7 @@ import * as authSchema from "@/auth-schema";
 import { db } from "@/db";
 import { serverEnv } from "@/env/server";
 import {
+  sendChangeEmailConfirmationEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from "@/lib/email";
@@ -37,6 +38,28 @@ export const auth = betterAuth({
   },
   account: {
     encryptOAuthTokens: true,
+  },
+  user: {
+    changeEmail: {
+      enabled: true,
+      sendChangeEmailConfirmation: async ({ user, newEmail, url }) => {
+        after(async () => {
+          try {
+            await sendChangeEmailConfirmationEmail({
+              to: user.email,
+              currentEmail: user.email,
+              newEmail,
+              url,
+            });
+          } catch (error) {
+            console.error(
+              "Failed to send email change confirmation",
+              error instanceof Error ? `${error.name}: ${error.message}` : "unknown",
+            );
+          }
+        });
+      },
+    },
   },
   emailAndPassword: {
     enabled: true,
