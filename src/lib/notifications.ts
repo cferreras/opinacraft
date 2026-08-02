@@ -2,7 +2,7 @@ import { and, eq, isNull, lt, lte, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import { notificationJobs } from "@/schema";
-import { sendNotificationEmail } from "@/lib/email";
+import { sendChangeEmailConfirmationEmail, sendNotificationEmail } from "@/lib/email";
 
 export async function runNotificationOutbox(limit = 25) {
   const jobs = await db.transaction(async (tx) => {
@@ -35,52 +35,60 @@ export async function runNotificationOutbox(limit = 25) {
   for (const job of jobs) {
     try {
       const payload = job.payload as Record<string, unknown>;
-      const decision = typeof payload.decision === "string" ? payload.decision : "actualizada";
-      const edition = payload.edition === "bedrock" ? "Bedrock" : "Java";
-      const templates: Record<string, { subject: string; text: string }> = {
-        report_decision: {
-          subject: "Actualización de tu reporte en OpinaCraft",
-          text: `La decisión de moderación es: ${decision}.`,
-        },
-        review_report_decision: {
-          subject: "Actualización de tu reporte de opinión en OpinaCraft",
-          text: `La decisión sobre tu reporte de opinión es: ${decision}.`,
-        },
-        review_moderation: {
-          subject: "Actualización de tu opinión en OpinaCraft",
-          text: decision === "hidden"
-            ? "Tu opinión ha sido ocultada temporalmente por moderación."
-            : "Tu opinión ha sido restaurada y vuelve a estar visible.",
-        },
-        review_reply: {
-          subject: "Has recibido una respuesta oficial en OpinaCraft",
-          text: "El equipo del servidor ha respondido a tu opinión.",
-        },
-        blob_quota: {
-          subject: "Aviso de cuota Blob de OpinaCraft",
-          text: `La cuota interna de Blob ha alcanzado el ${String(payload.level ?? "")}% de uso.`,
-        },
-        endpoint_down: {
-          subject: "Tu servidor no responde en OpinaCraft",
-          text: `Tu endpoint ${edition} no responde. Revisa el estado del servidor.`,
-        },
-        endpoint_recovered: {
-          subject: "Tu servidor vuelve a responder en OpinaCraft",
-          text: `Tu endpoint ${edition} vuelve a responder correctamente.`,
-        },
-        availability_hidden: {
-          subject: "Tu servidor se ha ocultado en OpinaCraft",
-          text: "Tu servidor se ha ocultado del catálogo por estar sin conexión de forma prolongada.",
-        },
-        availability_restored: {
-          subject: "Tu servidor vuelve a estar visible en OpinaCraft",
-          text: "Tu servidor vuelve a estar visible en el catálogo.",
-        },
-      };
-      const rendered = templates[job.template];
-      if (!rendered) throw new Error(`Unknown notification template: ${job.template}`);
-      const { subject, text } = rendered;
-      await sendNotificationEmail({ to: job.recipientEmail, subject, text, html: `<p>${text}</p>` });
+      if (job.template === "change_email_confirmation") {
+        const currentEmail = typeof payload.currentEmail === "string" ? payload.currentEmail : null;
+        const newEmail = typeof payload.newEmail === "string" ? payload.newEmail : null;
+        const url = typeof payload.url === "string" ? payload.url : null;
+        if (!currentEmail || !newEmail || !url) throw new Error("Datos incompletos para confirmar el cambio de email.");
+        await sendChangeEmailConfirmationEmail({ to: job.recipientEmail, currentEmail, newEmail, url });
+      } else {
+        const decision = typeof payload.decision === "string" ? payload.decision : "actualizada";
+        const edition = payload.edition === "bedrock" ? "Bedrock" : "Java";
+        const templates: Record<string, { subject: string; text: string }> = {
+          report_decision: {
+            subject: "Actualización de tu reporte en OpinaCraft",
+            text: `La decisión de moderación es: ${decision}.`,
+          },
+          review_report_decision: {
+            subject: "Actualización de tu reporte de opinión en OpinaCraft",
+            text: `La decisión sobre tu reporte de opinión es: ${decision}.`,
+          },
+          review_moderation: {
+            subject: "Actualización de tu opinión en OpinaCraft",
+            text: decision === "hidden"
+              ? "Tu opinión ha sido ocultada temporalmente por moderación."
+              : "Tu opinión ha sido restaurada y vuelve a estar visible.",
+          },
+          review_reply: {
+            subject: "Has recibido una respuesta oficial en OpinaCraft",
+            text: "El equipo del servidor ha respondido a tu opinión.",
+          },
+          blob_quota: {
+            subject: "Aviso de cuota Blob de OpinaCraft",
+            text: `La cuota interna de Blob ha alcanzado el ${String(payload.level ?? "")}% de uso.`,
+          },
+          endpoint_down: {
+            subject: "Tu servidor no responde en OpinaCraft",
+            text: `Tu endpoint ${edition} no responde. Revisa el estado del servidor.`,
+          },
+          endpoint_recovered: {
+            subject: "Tu servidor vuelve a responder en OpinaCraft",
+            text: `Tu endpoint ${edition} vuelve a responder correctamente.`,
+          },
+          availability_hidden: {
+            subject: "Tu servidor se ha ocultado en OpinaCraft",
+            text: "Tu servidor se ha ocultado del catálogo por estar sin conexión de forma prolongada.",
+          },
+          availability_restored: {
+            subject: "Tu servidor vuelve a estar visible en OpinaCraft",
+            text: "Tu servidor vuelve a estar visible en el catálogo.",
+          },
+        };
+        const rendered = templates[job.template];
+        if (!rendered) throw new Error(`Unknown notification template: ${job.template}`);
+        const { subject, text } = rendered;
+        await sendNotificationEmail({ to: job.recipientEmail, subject, text, html: `<p>${text}</p>` });
+      }
       await db
         .update(notificationJobs)
         .set({ status: "sent", sentAt: new Date(), processingStartedAt: null, lastError: null })

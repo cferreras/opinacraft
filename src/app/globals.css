@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap");
+@import "https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap";
 @import "tailwindcss";
 
 :root {
@@ -35,25 +35,6 @@
   --shadow-lg: 0 24px 58px rgba(22, 31, 36, 0.09), 0 2px 8px rgba(22, 31, 36, 0.04);
   --app-frame-width: 1180px;
   --app-frame-gutter: 24px;
-  --app-visual-scale: 1;
-}
-
-@media (min-width: 1024px) {
-  :root {
-    --app-visual-scale: 1.1;
-  }
-}
-
-@media (min-width: 1200px) {
-  :root {
-    --app-visual-scale: 1.25;
-  }
-}
-
-@media (min-width: 1280px) {
-  :root {
-    --app-visual-scale: 1.5;
-  }
 }
 
 @theme inline {
@@ -75,18 +56,18 @@
 html {
   min-width: 320px;
   scroll-behavior: smooth;
+  font-size: clamp(15px, calc(14px + 0.25vw), 16px);
 }
 
 body {
   min-height: 100%;
   margin: 0;
-  zoom: var(--app-visual-scale);
   background: #fff;
   color: var(--foreground);
   font-family: var(--font-sans);
   font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  text-rendering: optimizelegibility;
 }
 
 button,
@@ -1260,16 +1241,34 @@ select {
   [class~="border-[#d9e0ff]"],
   [class~="border-indigo-200"],
   [class~="border-indigo-300"],
-  [class~="border-indigo-500"],
-  [class*="border-indigo-"] {
+  [class~="border-indigo-500"] {
     border-color: rgba(7, 148, 91, 0.22) !important;
   }
 
-  [class*="bg-indigo-"] {
+  [class~="bg-indigo-300"],
+  [class~="bg-indigo-50"],
+  [class~="bg-indigo-50/60"] {
     background-color: var(--accent-soft) !important;
   }
 
-  [class*="text-indigo-"] {
+  [class~="text-indigo-300"],
+  [class~="text-indigo-700"],
+  [class~="text-indigo-800/70"],
+  [class~="text-indigo-900"],
+  [class~="text-indigo-950"] {
+    color: var(--accent) !important;
+  }
+
+  [class~="focus:border-indigo-500"]:focus {
+    border-color: var(--accent) !important;
+  }
+
+  [class~="hover:bg-indigo-100"]:hover,
+  [class~="hover:bg-indigo-950/50"]:hover {
+    background-color: var(--accent-soft) !important;
+  }
+
+  [class~="hover:text-indigo-600"]:hover {
     color: var(--accent) !important;
   }
 

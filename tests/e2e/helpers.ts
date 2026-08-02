@@ -40,10 +40,14 @@ export async function setEmailVerified(email: string, verified = true) {
 
 export async function setOnlySocialAccount(email: string, providerId = "discord") {
   const pool = openPool();
-  await pool.query(
-    'update "account" set provider_id = $1, account_id = $2, password = null where user_id = (select id from "user" where email = $3) and provider_id = $4',
-    [providerId, `${providerId}-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`, email, "credential"],
-  );
+  try {
+    await pool.query(
+      'update "account" set provider_id = $1, account_id = $2, password = null where user_id = (select id from "user" where email = $3) and provider_id = $4',
+      [providerId, `${providerId}-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`, email, "credential"],
+    );
+  } finally {
+    await closePool();
+  }
 }
 
 export async function createAccount(

@@ -59,7 +59,6 @@ export function ReviewForm({
         <div
           className="mt-3 flex flex-wrap items-center gap-2"
           role="radiogroup"
-          aria-label="Puntuación de 1 a 5 estrellas"
           aria-labelledby={ratingLabelId}
           aria-describedby={[ratingHelpId, state?.fieldErrors?.rating ? ratingErrorId : null].filter(Boolean).join(" ")}
         >
@@ -80,8 +79,8 @@ export function ReviewForm({
               </span>
             </label>
           ))}
-          <span className="ml-1 text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-live="polite">Puntuación: {rating} de 5</span>
         </div>
+        <span className="ml-1 mt-2 block text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-live="polite">Puntuación: {rating} de 5</span>
         {state?.fieldErrors?.rating ? <p id={ratingErrorId} className="mt-2 text-sm text-red-700 dark:text-red-300">{state.fieldErrors.rating}</p> : null}
       </fieldset>
 

@@ -23,7 +23,12 @@ export async function POST(request: Request) {
       .where(eq(user.id, session.user.id))
       .limit(1);
     const owned = await tx.select({ id: servers.id }).from(servers).innerJoin(serverMembers, eq(serverMembers.serverId, servers.id)).where(and(eq(serverMembers.userId, session.user.id), eq(serverMembers.role, "owner")));
-    const keys = owned.length ? await tx.select({ blobKey: serverMedia.blobKey }).from(serverMedia).where(inArray(serverMedia.serverId, owned.map((server) => server.id))) : [];
+    const keys = owned.length
+      ? await tx
+        .select({ blobKey: serverMedia.blobKey, bytes: serverMedia.bytes })
+        .from(serverMedia)
+        .where(inArray(serverMedia.serverId, owned.map((server) => server.id)))
+      : [];
     for (const server of owned) await tx.delete(servers).where(eq(servers.id, server.id));
     await tx.update(serverReports).set({ reporterUserId: null, details: null }).where(eq(serverReports.reporterUserId, session.user.id));
     await tx.update(serverReviewReports).set({ reporterUserId: null, details: null }).where(eq(serverReviewReports.reporterUserId, session.user.id));
@@ -33,10 +38,15 @@ export async function POST(request: Request) {
     await tx.update(reviewReplies).set({ userId: null, content: "Respuesta oficial anónima", updatedAt: new Date() }).where(eq(reviewReplies.userId, session.user.id));
     await tx.delete(serverMembers).where(eq(serverMembers.userId, session.user.id));
     await tx.delete(user).where(eq(user.id, session.user.id));
-    return { media: keys.map((row) => row.blobKey), avatar };
+    return {
+      media: keys.map((row) => row.blobKey),
+      mediaBytes: keys.reduce((total, row) => total + row.bytes, 0),
+      avatar,
+    };
   });
+  const releasedBytes = deleted.mediaBytes + (deleted.avatar?.bytes ?? 0);
+  if (releasedBytes > 0) await releaseMediaQuota(releasedBytes).catch(() => undefined);
   await Promise.all(deleted.media.map((key) => removeMediaOrEnqueue(key)));
   if (deleted.avatar?.blobKey) await removeMediaOrEnqueue(deleted.avatar.blobKey);
-  if (deleted.avatar?.bytes) await releaseMediaQuota(deleted.avatar.bytes).catch(() => undefined);
   return NextResponse.json({ ok: true });
 }

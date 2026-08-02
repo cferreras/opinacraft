@@ -8,7 +8,7 @@ export function SiteFooter() {
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
           <span>© {new Date().getFullYear()} OpinaCraft</span>
           <Link href="/contact" className="transition-colors hover:text-zinc-950">Contacto</Link>
-          <Link href="/terms" className="hover:text-[#17202a]">Términos</Link>
+          <Link href="/terms" className="transition-colors hover:text-zinc-950">Términos</Link>
           <Link href="/privacy" className="transition-colors hover:text-zinc-950">Privacidad</Link>
         </div>
         <span className="inline-flex items-center gap-1.5">Hecho con <IconHeartFilled aria-hidden="true" className="text-[#e33b3f]" size={12} /> por jugadores</span>

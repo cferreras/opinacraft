@@ -15,7 +15,7 @@ export async function removeMediaOrEnqueue(blobKey: string) {
     try {
       await enqueueMediaCleanup(blobKey, error);
     } catch (cleanupError) {
-      console.error("Failed to enqueue media cleanup", cleanupError);
+      console.error("Failed to enqueue media cleanup", cleanupError instanceof Error ? cleanupError.name : "unknown");
     }
   }
 }

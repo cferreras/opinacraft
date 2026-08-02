@@ -14,7 +14,7 @@ import { CopyAddressButton } from "@/components/copy-address-button";
 import { ServerLogo } from "@/components/server-logo";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { formatEndpoint, latencyClass } from "@/lib/servers/format";
+import { formatEndpoint, latencyClass, playersLabel, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
 import { listPublishedServers, type CatalogServer } from "@/lib/servers/queries";
 
 export const metadata: Metadata = {
@@ -29,34 +29,6 @@ export const metadata: Metadata = {
 };
 
 export const dynamic = "force-dynamic";
-
-function primaryEndpoint(server: CatalogServer) {
-  return server.endpoints.find((endpoint) => endpoint.edition === "java") ?? server.endpoints[0];
-}
-
-function statusLabel(status: CatalogServer["aggregateStatus"]) {
-  if (status === "online") return "En línea";
-  if (status === "offline") return "Fuera de línea";
-  return "Sin comprobar";
-}
-
-function statusClass(status: CatalogServer["aggregateStatus"]) {
-  if (status === "online") return "text-[#0e9a55]";
-  if (status === "offline") return "text-[#d83a42]";
-  return "text-[#7c8799]";
-}
-
-function statusDot(status: CatalogServer["aggregateStatus"]) {
-  if (status === "online") return "bg-[#0e9a55]";
-  if (status === "offline") return "bg-[#d83a42]";
-  return "bg-[#adb6c2]";
-}
-
-function playersLabel(server: CatalogServer) {
-  const endpoint = primaryEndpoint(server);
-  if (!endpoint || (endpoint.playersCurrent === null && endpoint.playersMax === null)) return "—";
-  return `${endpoint.playersCurrent ?? "—"} / ${endpoint.playersMax ?? "—"}`;
-}
 
 function FeaturedServerPreview({ server }: { server: CatalogServer }) {
   const endpoint = primaryEndpoint(server);

@@ -2,10 +2,10 @@
 
 ## Comparison target
 
-- Source visual truth: `C:\Users\carlo\Desktop\image.png`.
-- Implementation: `http://127.0.0.1:3000/servers`.
-- Implementation screenshot: `C:\Users\carlo\.codex\visualizations\2026\08\02\019fc2e0-197b-7ab0-b205-d12451a52ee3\opinacraft-centered-desktop-1440.png`.
-- Combined comparison: `C:\Users\carlo\.codex\visualizations\2026\08\02\019fc2e0-197b-7ab0-b205-d12451a52ee3\opinacraft-reference-comparison.png`.
+- Source visual truth: external reference screenshot supplied for this review (not committed).
+- Implementation: local `/servers` route.
+- Implementation screenshot: [audit evidence](./audit-evidence/02-local-public-server.png).
+- Combined comparison: observations recorded below; the source comparison image is not committed.
 - State: authenticated catalog, default filters, desktop light theme.
 
 ## Normalization

@@ -14,6 +14,9 @@ import { mediaStorage, MediaStorageNotConfiguredError } from "@/lib/media/storag
 
 export const runtime = "nodejs";
 
+const MAX_AVATAR_FILE_BYTES = 4_000_000;
+const MAX_AVATAR_REQUEST_BYTES = MAX_AVATAR_FILE_BYTES + 128_000;
+
 export async function POST(request: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
@@ -22,6 +25,11 @@ export async function POST(request: Request) {
   let committed = false;
 
   try {
+    const contentLength = Number(request.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > MAX_AVATAR_REQUEST_BYTES) {
+      return NextResponse.json({ error: "El archivo original debe pesar 4 MB o menos." }, { status: 413 });
+    }
+
     const body = await request.formData();
     const file = body.get("file");
     if (!(file instanceof File)) return NextResponse.json({ error: "Choose an image." }, { status: 400 });

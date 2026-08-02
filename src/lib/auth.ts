@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { after } from "next/server";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
@@ -6,10 +8,10 @@ import * as authSchema from "@/auth-schema";
 import { db } from "@/db";
 import { serverEnv } from "@/env/server";
 import {
-  sendChangeEmailConfirmationEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from "@/lib/email";
+import { notificationJobs } from "@/schema";
 
 const discordClientId = serverEnv.DISCORD_CLIENT_ID;
 const discordClientSecret = serverEnv.DISCORD_CLIENT_SECRET;
@@ -43,21 +45,14 @@ export const auth = betterAuth({
     changeEmail: {
       enabled: true,
       sendChangeEmailConfirmation: async ({ user, newEmail, url }) => {
-        after(async () => {
-          try {
-            await sendChangeEmailConfirmationEmail({
-              to: user.email,
-              currentEmail: user.email,
-              newEmail,
-              url,
-            });
-          } catch (error) {
-            console.error(
-              "Failed to send email change confirmation",
-              error instanceof Error ? `${error.name}: ${error.message}` : "unknown",
-            );
-          }
-        });
+        const dedupeKey = `change-email:${createHash("sha256").update(`${user.id}:${url}`).digest("hex")}`;
+        await db.insert(notificationJobs).values({
+          dedupeKey,
+          recipientUserId: user.id,
+          recipientEmail: user.email,
+          template: "change_email_confirmation",
+          payload: { currentEmail: user.email, newEmail, url },
+        }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
       },
     },
   },

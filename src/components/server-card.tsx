@@ -13,21 +13,9 @@ import {
 import { CopyAddressButton } from "@/components/copy-address-button";
 import { ServerLogo } from "@/components/server-logo";
 import type { ManagedServer } from "@/lib/servers/queries";
-import { formatEndpoint, latencyClass } from "@/lib/servers/format";
+import { formatEndpoint, latencyClass, playersLabel, primaryEndpoint, statusClass, statusLabel } from "@/lib/servers/format";
 
 type ServerStatus = ManagedServer["aggregateStatus"];
-
-function statusLabel(status: ServerStatus) {
-  if (status === "online") return "En línea";
-  if (status === "offline") return "Fuera de línea";
-  return "Sin comprobar";
-}
-
-function statusTone(status: ServerStatus) {
-  if (status === "online") return "text-[#0e9a55]";
-  if (status === "offline") return "text-[#d83a42]";
-  return "text-[#7c8799]";
-}
 
 function statusMark(status: ServerStatus) {
   if (status === "offline") {
@@ -57,11 +45,6 @@ function publicationTone(status: ManagedServer["publicationStatus"]) {
 
 function verificationLabel(status: ManagedServer["verificationStatus"]) {
   return status === "verified" ? "Verificado" : "Pendiente de verificación";
-}
-
-function playersLabel(endpoint: ManagedServer["endpoints"][number] | undefined) {
-  if (!endpoint || (endpoint.playersCurrent === null && endpoint.playersMax === null)) return "— / —";
-  return `${endpoint.playersCurrent ?? "—"} / ${endpoint.playersMax ?? "—"}`;
 }
 
 function Metric({ icon, label, value, tone = "text-[#162033]" }: { icon: React.ReactNode; label: string; value: string; tone?: string }) {
@@ -95,7 +78,7 @@ function EndpointChip({ endpoint }: { endpoint: ManagedServer["endpoints"][numbe
 }
 
 export function ServerCard({ server }: { server: ManagedServer }) {
-  const endpoint = server.endpoints.find((item) => item.edition === "java") ?? server.endpoints[0];
+  const endpoint = primaryEndpoint(server);
 
   return (
     <article className="ui-signal ui-card overflow-hidden transition-shadow hover:shadow-[0_8px_24px_rgba(24,24,27,0.08)]">
@@ -138,8 +121,8 @@ export function ServerCard({ server }: { server: ManagedServer }) {
       </div>
 
       <div className="grid gap-y-1 border-y border-[#e6eaf0] bg-[#fbfcff] px-4 py-3 sm:grid-cols-2 lg:grid-cols-4 lg:px-5">
-        <Metric icon={<span className="inline-flex items-center justify-center">{statusMark(server.aggregateStatus)}</span>} label="Estado" value={statusLabel(server.aggregateStatus)} tone={statusTone(server.aggregateStatus)} />
-        <Metric icon={<IconUsers aria-hidden="true" size={18} stroke={1.7} />} label="Jugadores" value={playersLabel(endpoint)} />
+        <Metric icon={<span className="inline-flex items-center justify-center">{statusMark(server.aggregateStatus)}</span>} label="Estado" value={statusLabel(server.aggregateStatus)} tone={statusClass(server.aggregateStatus)} />
+        <Metric icon={<IconUsers aria-hidden="true" size={18} stroke={1.7} />} label="Jugadores" value={playersLabel(server, "— / —")} />
         <Metric icon={<IconCode aria-hidden="true" size={18} stroke={1.7} />} label="Versión" value={endpoint?.version ?? "—"} />
         <Metric icon={<IconChartBar aria-hidden="true" size={18} stroke={1.7} />} label="Ping" value={endpoint?.latencyMs !== null && endpoint?.latencyMs !== undefined ? `${endpoint.latencyMs} ms` : "—"} tone={latencyClass(endpoint?.latencyMs ?? null)} />
       </div>

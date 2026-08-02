@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   cleanupAccounts,
+  closePool,
   createAccount,
   makeEmailChangeToken,
   makeEmailVerificationToken,
@@ -34,6 +35,7 @@ test("a user can edit their public profile and request an email change", async (
   await expect(page.getByText("Perfil actualizado.")).toBeVisible({ timeout: 15_000 });
 
   const pool = openPool();
+  try {
   const profileResult = await pool.query(
     'select name, image, image_key, image_bytes, email, email_verified from "user" where email = $1',
     [account.email],
@@ -57,7 +59,7 @@ test("a user can edit their public profile and request an email change", async (
   await expect(page.getByText("El nombre debe tener al menos 2 caracteres.")).toBeVisible();
 
   await page.getByLabel("Nombre visible").fill("OpinaCraft Explorer");
-  const nextEmail = `e2e-profile-next-${Date.now()}@integration.invalid`;
+  const nextEmail = `e2e-profile-next-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.invalid`;
   await page.getByLabel("Nuevo correo electrónico").fill(account.email);
   await page.getByRole("button", { name: "Solicitar cambio de correo" }).click();
   await expect(page.getByText("Escribe un correo diferente al actual.")).toBeVisible();
@@ -92,6 +94,9 @@ test("a user can edit their public profile and request an email change", async (
     [nextEmail],
   );
   expect(changedEmailResult.rows[0]).toMatchObject({ email: nextEmail, email_verified: true });
+  } finally {
+    await closePool();
+  }
 });
 
 test("a Discord-only account can edit its profile without a local password", async ({ page }) => {
@@ -102,7 +107,7 @@ test("a Discord-only account can edit its profile without a local password", asy
   await page.goto("/profile");
   await expect(page.getByText("Acceso administrado por Discord")).toBeVisible();
   await expect(page.getByText("Esta cuenta no tiene una contraseña local.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Change password" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Cambiar contraseña" })).toHaveCount(0);
 
   await page.getByLabel("Nombre visible").fill("Discord Explorer");
   await page.getByRole("button", { name: "Guardar cambios" }).click();
@@ -110,9 +115,13 @@ test("a Discord-only account can edit its profile without a local password", asy
   await expect(page.getByText("Perfil actualizado.")).toBeVisible();
 
   const pool = openPool();
+  try {
   const accountResult = await pool.query(
     'select provider_id from "account" where user_id = (select id from "user" where email = $1)',
     [account.email],
   );
   expect(accountResult.rows).toEqual([{ provider_id: "discord" }]);
+  } finally {
+    await closePool();
+  }
 });

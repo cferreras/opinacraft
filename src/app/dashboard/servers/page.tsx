@@ -101,7 +101,7 @@ export default async function ManagedServersPage({ searchParams }: Props) {
               </p>
               <Link
                 href="/servers/new"
-                className="mt-6 inline-flex h-10 items-center gap-2 rounded-lg bg-[#2d2de4] px-4 text-sm font-semibold text-white shadow-[0_5px_12px_rgba(45,45,228,0.16)] transition hover:bg-[#2424c9]"
+                className="ui-button-primary mt-6 h-10 px-4 text-sm"
               >
                 <IconPlus aria-hidden="true" size={16} stroke={2} />
                 Crear servidor

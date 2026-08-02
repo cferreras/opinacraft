@@ -133,7 +133,7 @@ function socialProviderLabel(providerId: string) {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session, isPending, refetch: refetchSession } = authClient.useSession();
   const [error, setError] = useState<string | null>(null);
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
   const [isSendingVerification, setIsSendingVerification] = useState(false);
@@ -247,8 +247,11 @@ export default function ProfilePage() {
       const link = document.createElement("a");
       link.href = url;
       link.download = "opinacraft-cuenta.json";
+      link.style.display = "none";
+      document.body.append(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
       setAccountMessage("Exportación descargada.");
     } catch {
       setAccountMessage("No se pudo exportar la cuenta.");
@@ -260,19 +263,23 @@ export default function ProfilePage() {
       return;
     }
 
-    const response = await fetch("/api/account/delete", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ confirmation: "DELETE ACCOUNT" }),
-    });
+    try {
+      const response = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmation: "DELETE ACCOUNT" }),
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        setAccountMessage("No se pudo borrar la cuenta.");
+        return;
+      }
+
+      await authClient.signOut();
+      router.replace("/");
+    } catch {
       setAccountMessage("No se pudo borrar la cuenta.");
-      return;
     }
-
-    await authClient.signOut();
-    router.replace("/");
   }
 
   async function handleSendVerification() {
@@ -336,10 +343,7 @@ export default function ProfilePage() {
       return;
     }
 
-    if (avatarUrl.trim()) {
-      setAvatarRemovalRequested(true);
-      setAvatarUrlDraft("");
-    }
+    if (avatarUrl.trim()) setAvatarRemovalRequested(true);
   }
 
   async function handleProfileUpdate(event: FormEvent<HTMLFormElement>) {
@@ -365,6 +369,7 @@ export default function ProfilePage() {
         return;
       }
 
+      setProfileNameDraft(normalizedName);
       let nextAvatarUrl = avatarUrl;
       if (avatarFile) {
         const body = new FormData();
@@ -384,8 +389,8 @@ export default function ProfilePage() {
         nextAvatarUrl = "";
       }
 
-      setProfileNameDraft(normalizedName);
       if (avatarFile || avatarRemovalRequested) setAvatarUrlDraft(nextAvatarUrl);
+      await refetchSession();
       setAvatarFile(null);
       setAvatarPreviewUrl(null);
       setAvatarRemovalRequested(false);
@@ -453,9 +458,9 @@ export default function ProfilePage() {
 
   const isVerified = Boolean(session.user.emailVerified);
   const profileName = profileNameDraft ?? session.user.name;
-  const userName = profileName.trim() || "User";
+  const userName = profileName.trim() || "Usuario";
   const avatarUrl = avatarUrlDraft ?? session.user.image ?? "";
-  const displayedAvatarUrl = avatarPreviewUrl ?? avatarUrl;
+  const displayedAvatarUrl = avatarRemovalRequested ? "" : avatarPreviewUrl ?? avatarUrl;
   const newEmail = newEmailDraft ?? session.user.email;
   const linkedAccounts = accountState.accounts;
   const areAccountsLoading = accountState.status === "loading";
@@ -497,11 +502,10 @@ export default function ProfilePage() {
               <section className="rounded-2xl border border-[#e0e6eb] bg-white p-5 shadow-[0_1px_2px_rgba(16,30,45,0.02)] sm:p-6" aria-labelledby="identity-heading">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
                   {displayedAvatarUrl ? (
-                    <div
-                      role="img"
-                      aria-label={`Avatar de ${userName}`}
-                      className="h-24 w-24 shrink-0 rounded-2xl bg-cover bg-center bg-no-repeat ring-1 ring-black/5 sm:h-28 sm:w-28"
-                      style={{ backgroundImage: `url("${displayedAvatarUrl}")` }}
+                    <img
+                      src={displayedAvatarUrl}
+                      alt={`Avatar de ${userName}`}
+                      className="h-24 w-24 shrink-0 rounded-2xl object-cover ring-1 ring-black/5 sm:h-28 sm:w-28"
                     />
                   ) : (
                     <div
@@ -604,11 +608,10 @@ export default function ProfilePage() {
                   <div className="flex flex-col gap-3 border-t border-[#e7ebef] pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
                       {displayedAvatarUrl.trim() ? (
-                        <div
-                          role="img"
-                          aria-label="Vista previa del avatar"
-                          className="h-10 w-10 shrink-0 rounded-xl bg-cover bg-center bg-no-repeat ring-1 ring-black/5"
-                          style={{ backgroundImage: `url("${displayedAvatarUrl.trim()}")` }}
+                        <img
+                          src={displayedAvatarUrl.trim()}
+                          alt="Vista previa del avatar"
+                          className="h-10 w-10 shrink-0 rounded-xl object-cover ring-1 ring-black/5"
                         />
                       ) : (
                         <span aria-hidden="true" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eef0ff] text-[13px] font-semibold text-[#3039dc] ring-1 ring-[#d9ddff]">
@@ -701,10 +704,10 @@ export default function ProfilePage() {
                 </div>
                 <div className="grid gap-2.5 p-4 sm:p-5">
                   {canChangePassword ? (
-                    <Link href="/change-password" aria-label="Change password" className="group flex min-h-[64px] items-center gap-3 rounded-xl border border-[#e0e5ea] px-3.5 py-3 transition hover:border-[#b8c0ff] hover:bg-[#fafaff]">
+                    <Link href="/change-password" aria-label="Cambiar contraseña" className="group flex min-h-[64px] items-center gap-3 rounded-xl border border-[#e0e5ea] px-3.5 py-3 transition hover:border-[#b8c0ff] hover:bg-[#fafaff]">
                       <span aria-hidden="true" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#f0f1ff] text-[#3039dc]"><IconKey size={18} stroke={1.7} /></span>
                       <span className="min-w-0 flex-1 text-left">
-                        <span className="block text-[12px] font-semibold text-[#1c2739]">Change password</span>
+                        <span className="block text-[12px] font-semibold text-[#1c2739]">Cambiar contraseña</span>
                         <span className="mt-1 block text-[11px] leading-4 text-[#788397]">Actualiza la contraseña de tu cuenta.</span>
                       </span>
                       <IconChevronRight aria-hidden="true" size={17} stroke={1.7} className="shrink-0 text-[#9aa4b5] transition-transform group-hover:translate-x-0.5" />
@@ -735,9 +738,9 @@ export default function ProfilePage() {
                 <h2 id="workspace-heading" className="mt-1.5 text-[18px] font-semibold tracking-[-0.025em] text-[#101722]">Tu espacio</h2>
                 <p className="mt-2 text-[12px] leading-5 text-[#68758a]">Continúa donde lo dejaste o descubre una nueva comunidad.</p>
                 <div className="mt-5 grid gap-2.5">
-                  <Link href="/dashboard/servers" aria-label="Managed servers" className="group flex min-h-[52px] items-center gap-3 rounded-xl border border-[#dce2e8] px-3.5 py-2.5 transition hover:border-[#b8c0ff] hover:bg-[#fafaff]">
+                  <Link href="/dashboard/servers" aria-label="Servidores gestionados" className="group flex min-h-[52px] items-center gap-3 rounded-xl border border-[#dce2e8] px-3.5 py-2.5 transition hover:border-[#b8c0ff] hover:bg-[#fafaff]">
                     <span aria-hidden="true" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f0f1ff] text-[#3039dc]"><IconServer size={17} stroke={1.7} /></span>
-                    <span className="min-w-0 flex-1 text-[12px] font-semibold text-[#263248]">Managed servers</span>
+                    <span className="min-w-0 flex-1 text-[12px] font-semibold text-[#263248]">Servidores gestionados</span>
                     <IconChevronRight aria-hidden="true" size={16} stroke={1.7} className="shrink-0 text-[#9aa4b5] transition-transform group-hover:translate-x-0.5" />
                   </Link>
                   <Link href="/servers" aria-label="Explorar servidores" className="group flex min-h-[52px] items-center gap-3 rounded-xl border border-[#dce2e8] px-3.5 py-2.5 transition hover:border-[#b8c0ff] hover:bg-[#fafaff]">
@@ -754,13 +757,13 @@ export default function ProfilePage() {
                 <p className="mt-2 text-[12px] leading-5 text-[#68758a]">Cierra la sesión cuando uses un dispositivo compartido.</p>
                 <button
                   type="button"
-                  aria-label="Log out"
+                  aria-label="Cerrar sesión"
                   onClick={handleLogout}
                   disabled={isLoggingOut}
                   className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#2d2de4] px-3.5 text-[12px] font-semibold text-white shadow-[0_5px_12px_rgba(45,45,228,0.16)] transition hover:bg-[#2821c8] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <IconLogout aria-hidden="true" size={16} stroke={1.8} />
-                  {isLoggingOut ? "Logging out..." : "Log out"}
+                  {isLoggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
                 </button>
               </section>
 
