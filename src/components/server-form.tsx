@@ -20,7 +20,7 @@ import {
 import { SectionHeading } from "@/components/section-heading";
 import { TagCombobox } from "@/components/tag-combobox";
 
-const inputClassName = "ui-input mt-2 text-[12px]";
+const inputClassName = "ui-input mt-2 text-[0.75rem]";
 const labelClassName = "ui-field-label";
 const logoMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
@@ -38,17 +38,17 @@ function SubmitButton({ disabled = false, busy = false }: { disabled?: boolean; 
     <button
       type="submit"
       disabled={isBusy || disabled}
-      className="ui-button-primary h-11 px-5 text-[12px]"
+      className="ui-button-primary h-11 px-5 text-[0.75rem]"
     >
       {pending ? "Creando servidor…" : busy ? "Subiendo logo…" : "Crear servidor"}
-      {!isBusy ? <IconArrowRight aria-hidden="true" size={15} stroke={1.8} /> : null}
+      {!isBusy ? <IconArrowRight aria-hidden="true" size="0.9375rem" stroke={1.8} /> : null}
     </button>
   );
 }
 
 function FieldError({ message }: { message?: string }) {
   return message ? (
-    <p role="alert" className="mt-2 text-[11px] leading-4 text-[#c43b45]">{message}</p>
+    <p role="alert" className="mt-2 text-[0.6875rem] leading-4 text-[#c43b45]">{message}</p>
   ) : null;
 }
 
@@ -62,8 +62,8 @@ function EndpointFields({
   onEnabledChange: (enabled: boolean) => void;
 }) {
   const defaults = edition === "java"
-    ? { name: "Java", port: 25565, description: "Para Minecraft Java Edition", icon: <IconDeviceDesktop aria-hidden="true" size={18} stroke={1.7} /> }
-    : { name: "Bedrock", port: 19132, description: "Para Minecraft Bedrock Edition", icon: <IconDeviceMobile aria-hidden="true" size={18} stroke={1.7} /> };
+    ? { name: "Java", port: 25565, description: "Para Minecraft Java Edition", icon: <IconDeviceDesktop aria-hidden="true" size="1.125rem" stroke={1.7} /> }
+    : { name: "Bedrock", port: 19132, description: "Para Minecraft Bedrock Edition", icon: <IconDeviceMobile aria-hidden="true" size="1.125rem" stroke={1.7} /> };
 
   return (
     <fieldset className={`rounded-xl border p-4 transition-colors ${enabled ? "border-[#cbd2ff] bg-[#fbfcff]" : "border-[#e1e6e9] bg-white"}`}>
@@ -75,10 +75,10 @@ function EndpointFields({
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-[13px] font-semibold text-[#1b2638]">{defaults.name}</p>
-              <p className="mt-0.5 text-[10px] text-[#7a8698]">{defaults.description}</p>
+              <p className="text-[0.8125rem] font-semibold text-[#1b2638]">{defaults.name}</p>
+              <p className="mt-0.5 text-[0.625rem] text-[#7a8698]">{defaults.description}</p>
             </div>
-            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 self-start rounded-lg border border-[#dce2e7] bg-white px-2.5 text-[11px] font-medium text-[#35415b] transition hover:border-[#bfc8d4]">
+            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 self-start rounded-lg border border-[#dce2e7] bg-white px-2.5 text-[0.6875rem] font-medium text-[#35415b] transition hover:border-[#bfc8d4]">
               <input
                 type="checkbox"
                 name={`${edition}Enabled`}
@@ -91,7 +91,7 @@ function EndpointFields({
           </div>
 
           {enabled ? (
-            <div className="mt-4 grid gap-4 border-t border-[#e6eaf1] pt-4 sm:grid-cols-[minmax(0,1fr)_140px]">
+            <div className="mt-4 grid gap-4 border-t border-[#e6eaf1] pt-4 sm:grid-cols-[minmax(0,1fr)_8.75rem]">
               <label className={labelClassName}>
                 Host
                 <input
@@ -117,7 +117,7 @@ function EndpointFields({
               </label>
             </div>
           ) : (
-            <p className="mt-3 rounded-lg bg-[#f5f7f9] px-3 py-2 text-[10px] leading-4 text-[#7a8698]">
+            <p className="mt-3 rounded-lg bg-[#f5f7f9] px-3 py-2 text-[0.625rem] leading-4 text-[#7a8698]">
               Activa esta edición para mostrar una dirección de conexión adicional.
             </p>
           )}
@@ -215,7 +215,7 @@ export function ServerForm() {
       <section className="space-y-5" aria-labelledby="identity-heading">
         <SectionHeading
           number="01 · Identidad"
-          icon={<IconFileText aria-hidden="true" size={18} stroke={1.7} />}
+          icon={<IconFileText aria-hidden="true" size="1.125rem" stroke={1.7} />}
           id="identity-heading"
           title="Identidad y enlaces"
           description="Cuenta qué hace especial a tu comunidad y dónde encontrarla."
@@ -243,7 +243,7 @@ export function ServerForm() {
               rows={5}
               maxLength={2000}
               placeholder="Describe el estilo de juego, la comunidad y lo que encontrarán los jugadores."
-              className="ui-textarea mt-2 min-h-[126px] text-[12px]"
+              className="ui-textarea mt-2 min-h-[7.875rem] text-[0.75rem]"
             />
             <FieldError message={state?.fieldErrors?.description} />
           </label>
@@ -294,7 +294,7 @@ export function ServerForm() {
       <section className="space-y-5" aria-labelledby="logo-heading">
         <SectionHeading
           number="02 · Imagen"
-          icon={<IconPhoto aria-hidden="true" size={18} stroke={1.7} />}
+          icon={<IconPhoto aria-hidden="true" size="1.125rem" stroke={1.7} />}
           id="logo-heading"
           title="Logo del servidor"
           description="Ayuda a los jugadores a reconocer tu comunidad en el directorio y en su ficha pública."
@@ -306,13 +306,13 @@ export function ServerForm() {
               <img src={logoPreview} alt="Vista previa del logo seleccionado" className="h-20 w-20 shrink-0 rounded-xl border border-[#e1e6eb] bg-white object-contain p-2" />
             ) : (
               <span className="inline-flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-[#e0e5ff] bg-[#f0f1ff] text-[#4655e8]">
-                <IconPhoto aria-hidden="true" size={28} stroke={1.5} />
+                <IconPhoto aria-hidden="true" size="1.75rem" stroke={1.5} />
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-semibold text-[#35415b]">Añade el logo de tu comunidad</p>
-              <p id="server-logo-help" className="mt-1 text-[10px] leading-4 text-[#718097]">PNG, JPEG o WebP · máximo 4 MB. Se optimizará automáticamente a WebP.</p>
-              <label className="mt-3 inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-[#cbd2ff] bg-white px-3 text-[11px] font-semibold text-[#2d34cf] transition hover:bg-[#f0f1ff]">
+              <p className="text-[0.75rem] font-semibold text-[#35415b]">Añade el logo de tu comunidad</p>
+              <p id="server-logo-help" className="mt-1 text-[0.625rem] leading-4 text-[#718097]">PNG, JPEG o WebP · máximo 4 MB. Se optimizará automáticamente a WebP.</p>
+              <label className="mt-3 inline-flex min-h-10 cursor-pointer items-center rounded-lg border border-[#cbd2ff] bg-white px-3 text-[0.6875rem] font-semibold text-[#2d34cf] transition hover:bg-[#f0f1ff]">
                 {logoFile ? "Cambiar logo" : "Elegir logo"}
                 <input
                   id="server-logo"
@@ -326,7 +326,7 @@ export function ServerForm() {
               </label>
             </div>
           </div>
-          <p className="mt-4 rounded-lg bg-[#f5f7f9] px-3 py-2 text-[10px] leading-4 text-[#718097]">El logo es opcional. Esta publicación no utiliza banners.</p>
+          <p className="mt-4 rounded-lg bg-[#f5f7f9] px-3 py-2 text-[0.625rem] leading-4 text-[#718097]">El logo es opcional. Esta publicación no utiliza banners.</p>
         </div>
         <FieldError message={logoError ?? undefined} />
       </section>
@@ -336,7 +336,7 @@ export function ServerForm() {
       <section className="space-y-5" aria-labelledby="endpoints-heading">
         <SectionHeading
           number="03 · Conexión"
-          icon={<IconLink aria-hidden="true" size={18} stroke={1.7} />}
+          icon={<IconLink aria-hidden="true" size="1.125rem" stroke={1.7} />}
           id="endpoints-heading"
           title="Direcciones del servidor"
           description="Añade al menos una dirección pública. Los puertos habituales ya están preparados."
@@ -356,28 +356,28 @@ export function ServerForm() {
         </div>
         <FieldError message={state?.fieldErrors?.endpoints} />
         {!javaEnabled && !bedrockEnabled ? (
-          <p role="alert" className="rounded-lg bg-[#fff3f3] px-3 py-2 text-[11px] leading-4 text-[#c43b45]">
+          <p role="alert" className="rounded-lg bg-[#fff3f3] px-3 py-2 text-[0.6875rem] leading-4 text-[#c43b45]">
             Selecciona al menos una edición de Minecraft.
           </p>
         ) : null}
       </section>
 
       {state?.formError ? (
-        <p role="alert" className="rounded-lg border border-[#f2cfd2] bg-[#fff3f3] px-3 py-2.5 text-[11px] leading-5 text-[#c43b45]">
+        <p role="alert" className="rounded-lg border border-[#f2cfd2] bg-[#fff3f3] px-3 py-2.5 text-[0.6875rem] leading-5 text-[#c43b45]">
           {state.formError}
         </p>
       ) : null}
 
       {state?.created && logoError ? (
-        <p role="alert" className="rounded-lg border border-[#f2cfd2] bg-[#fff3f3] px-3 py-2.5 text-[11px] leading-5 text-[#c43b45]">
+        <p role="alert" className="rounded-lg border border-[#f2cfd2] bg-[#fff3f3] px-3 py-2.5 text-[0.6875rem] leading-5 text-[#c43b45]">
           El servidor se ha creado, pero no hemos podido subir el logo. <Link href={`/servers/${state.created.slug}/manage?created=1`} className="font-semibold underline underline-offset-2">Abrir el panel para intentarlo de nuevo.</Link>
         </p>
       ) : null}
 
       <div className="flex flex-col gap-3 border-t border-[#e7ebef] pt-6 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-[270px] text-[10px] leading-4 text-[#7a8698]">Podrás revisar y completar la ficha antes de hacerla pública.</p>
+        <p className="max-w-[16.875rem] text-[0.625rem] leading-4 text-[#7a8698]">Podrás revisar y completar la ficha antes de hacerla pública.</p>
         <div className="flex items-center justify-end gap-2">
-          <Link href="/dashboard/servers" className="inline-flex h-10 items-center rounded-lg border border-[#dce2e7] px-3.5 text-[11px] font-semibold text-[#59677c] transition hover:border-[#bdc6d1] hover:bg-[#f7f8fa]">
+          <Link href="/dashboard/servers" className="inline-flex h-10 items-center rounded-lg border border-[#dce2e7] px-3.5 text-[0.6875rem] font-semibold text-[#59677c] transition hover:border-[#bdc6d1] hover:bg-[#f7f8fa]">
             Cancelar
           </Link>
           <SubmitButton disabled={Boolean(state?.created) || Boolean(logoError)} busy={logoUploading} />

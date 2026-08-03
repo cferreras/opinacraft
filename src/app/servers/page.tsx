@@ -83,7 +83,7 @@ export default async function PublicServersPage({
       <main className="app-main page-shell px-4 pb-12 pt-7 sm:px-6 sm:pt-8 lg:px-7 2xl:px-8">
         <section aria-labelledby="servers-heading">
           <p className="ui-eyebrow">Directorio comunitario</p>
-          <h1 id="servers-heading" className="ui-page-title mt-2.5 max-w-[680px]">
+          <h1 id="servers-heading" className="ui-page-title mt-2.5 max-w-[42.5rem]">
             Encuentra tu próximo
             <br className="hidden sm:block" /> servidor de Minecraft
           </h1>
@@ -92,8 +92,8 @@ export default async function PublicServersPage({
           </p>
 
           <form action="/servers" method="get" className="mt-4">
-            <div className="app-header-search flex h-11 max-w-[765px] items-center bg-white px-0">
-              <IconSearch aria-hidden="true" className="ml-3.5 shrink-0 text-[#7b8793]" size={17} stroke={1.7} />
+            <div className="app-header-search flex h-11 max-w-[47.8125rem] items-center bg-white px-0">
+              <IconSearch aria-hidden="true" className="ml-3.5 shrink-0 text-[#7b8793]" size="1.0625rem" stroke={1.7} />
               <label htmlFor="server-search" className="sr-only">Buscar</label>
               <ServerSearchInput defaultValue={query.q ?? ""} />
             </div>
@@ -116,7 +116,7 @@ export default async function PublicServersPage({
                   {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </FilterSelect>
               </div>
-              <div className="mt-3 flex items-center justify-between border-t border-[#e0e6eb] pt-3 text-[11px] text-[#77838e]">
+              <div className="mt-3 flex items-center justify-between border-t border-[#e0e6eb] pt-3 text-[0.6875rem] text-[#77838e]">
                 <span>Mostrando {countLabel(servers.length)} en esta página</span>
                 {hasActiveFilters ? (
                   <Link href="/servers" className="font-medium text-[#2d34cf] hover:underline">Limpiar filtros</Link>
@@ -131,13 +131,13 @@ export default async function PublicServersPage({
           <div className="rounded-b-2xl border-x border-b border-[#e0e6eb] bg-[#fbfcff] px-6 py-14 text-center">
             <h2 className="text-lg font-semibold text-[#17202a]">Todavía no hay servidores publicados</h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#687580]">Sé el primero en publicar una comunidad Minecraft en OpinaCraft.</p>
-            <Link href="/servers/new" className="mt-6 inline-flex h-10 items-center rounded-lg bg-[#3029e7] px-4 text-sm font-semibold text-white shadow-[0_5px_12px_rgba(48,41,231,0.16)] transition hover:bg-[#2821c8]">Añadir servidor</Link>
+            <Link href="/servers/new" className="mt-6 inline-flex h-10 items-center rounded-lg bg-[#3029e7] px-4 text-sm font-semibold text-white shadow-[0_0.3125rem_0.75rem_rgba(48,41,231,0.16)] transition hover:bg-[#2821c8]">Añadir servidor</Link>
           </div>
         ) : (
           <section aria-labelledby="server-results-heading">
             <h2 id="server-results-heading" className="sr-only">Resultados de servidores</h2>
-            <div className="overflow-hidden rounded-b-2xl border-x border-b border-[#e0e6eb] bg-white shadow-[0_1px_2px_rgba(16,30,45,0.02)]">
-              <div className="hidden h-10 items-center border-b border-[#e0e6eb] bg-[#f7f8fa] px-4 text-[9px] font-medium uppercase tracking-[0.035em] text-[#7c8799] xl:grid xl:grid-cols-[minmax(250px,1.5fr)_72px_98px_82px_58px_72px_28px] xl:items-center xl:gap-2">
+            <div className="overflow-hidden rounded-b-2xl border-x border-b border-[#e0e6eb] bg-white shadow-[0_0.0625rem_0.125rem_rgba(16,30,45,0.02)]">
+              <div className="hidden h-10 items-center border-b border-[#e0e6eb] bg-[#f7f8fa] px-4 text-[0.5625rem] font-medium uppercase tracking-[0.035em] text-[#7c8799] xl:grid xl:grid-cols-[minmax(15.625rem,1.5fr)_4.5rem_6.125rem_5.125rem_3.625rem_4.5rem_1.75rem] xl:items-center xl:gap-2">
                 <span>Servidor</span>
                 <span>Edición</span>
                 <span>Jugadores</span>

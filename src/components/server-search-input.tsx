@@ -39,7 +39,7 @@ export function ServerSearchInput({ defaultValue }: ServerSearchInputProps) {
       defaultValue={defaultValue}
       onKeyDown={submitOnEnter}
       placeholder="Buscar por nombre, modalidad o dirección"
-      className="h-full min-w-0 flex-1 bg-transparent px-3 text-[12px] text-[#33404c] outline-none placeholder:text-[#8b96a1]"
+      className="h-full min-w-0 flex-1 bg-transparent px-3 text-[0.75rem] text-[#33404c] outline-none placeholder:text-[#8b96a1]"
     />
   );
 }

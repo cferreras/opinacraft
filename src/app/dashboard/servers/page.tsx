@@ -18,10 +18,10 @@ function countLabel(count: number) {
 function SummaryMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
     <div className="px-4 py-3.5 first:pl-0 last:pr-0 sm:px-5 sm:first:pl-5 sm:last:pr-5">
-      <dt className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#7c8799]">{label}</dt>
+      <dt className="text-[0.625rem] font-medium uppercase tracking-[0.08em] text-[#7c8799]">{label}</dt>
       <dd className="mt-1 flex items-baseline gap-2">
-        <span className="text-[20px] font-semibold leading-6 tracking-[-0.04em] text-[#162033] tabular-nums">{value}</span>
-        <span className="text-[10px] text-[#7c8799]">{detail}</span>
+        <span className="text-[1.25rem] font-semibold leading-6 tracking-[-0.04em] text-[#162033] tabular-nums">{value}</span>
+        <span className="text-[0.625rem] text-[#7c8799]">{detail}</span>
       </dd>
     </div>
   );
@@ -46,11 +46,11 @@ export default async function ManagedServersPage({ searchParams }: Props) {
         <section className="pt-7 sm:pt-8" aria-labelledby="managed-servers-heading">
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2d34cf]">Espacio de gestión</p>
-              <h1 id="managed-servers-heading" className="ui-page-title mt-2.5 max-w-[680px]">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-[#2d34cf]">Espacio de gestión</p>
+              <h1 id="managed-servers-heading" className="ui-page-title mt-2.5 max-w-[42.5rem]">
                 Tus servidores
               </h1>
-              <p className="mt-2 max-w-[620px] text-[13px] leading-[1.55] text-[#55627b]">
+              <p className="mt-2 max-w-[38.75rem] text-[0.8125rem] leading-[1.55] text-[#55627b]">
                 Revisa la salud, la publicación y la información pública de tus comunidades.
               </p>
             </div>
@@ -58,23 +58,23 @@ export default async function ManagedServersPage({ searchParams }: Props) {
             <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
               <Link
                 href="/servers"
-                className="ui-button-secondary h-10 text-[11px]"
+                className="ui-button-secondary h-10 text-[0.6875rem]"
               >
                 Explorar directorio
-                <IconExternalLink aria-hidden="true" size={14} stroke={1.8} />
+                <IconExternalLink aria-hidden="true" size="0.875rem" stroke={1.8} />
               </Link>
               <Link
                 href="/servers/new"
-                className="ui-button-primary h-10 text-[11px]"
+                className="ui-button-primary h-10 text-[0.6875rem]"
               >
-                <IconPlus aria-hidden="true" size={15} stroke={2} />
+                <IconPlus aria-hidden="true" size="0.9375rem" stroke={2} />
                 Añadir servidor
               </Link>
             </div>
           </div>
 
           {query?.deleted ? (
-            <p className="mt-5 rounded-lg border border-[#bde8d1] bg-[#f1fcf5] px-3.5 py-2.5 text-[11px] text-[#147548]" role="status">
+            <p className="mt-5 rounded-lg border border-[#bde8d1] bg-[#f1fcf5] px-3.5 py-2.5 text-[0.6875rem] text-[#147548]" role="status">
               El servidor se ha eliminado correctamente.
             </p>
           ) : null}
@@ -87,10 +87,10 @@ export default async function ManagedServersPage({ searchParams }: Props) {
 
           <div className="mt-8 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-[18px] font-semibold tracking-[-0.03em] text-[#162033]">Comunidades gestionadas</h2>
-              <p className="mt-1 text-[11px] text-[#77839a]">Cada ficha reúne lo necesario para mantener tu servidor listo para recibir jugadores.</p>
+              <h2 className="text-[1.125rem] font-semibold tracking-[-0.03em] text-[#162033]">Comunidades gestionadas</h2>
+              <p className="mt-1 text-[0.6875rem] text-[#77839a]">Cada ficha reúne lo necesario para mantener tu servidor listo para recibir jugadores.</p>
             </div>
-            <span className="text-[11px] text-[#8993a1]">{countLabel(servers.length)}</span>
+            <span className="text-[0.6875rem] text-[#8993a1]">{countLabel(servers.length)}</span>
           </div>
 
           {servers.length === 0 ? (
@@ -103,7 +103,7 @@ export default async function ManagedServersPage({ searchParams }: Props) {
                 href="/servers/new"
                 className="ui-button-primary mt-6 h-10 px-4 text-sm"
               >
-                <IconPlus aria-hidden="true" size={16} stroke={2} />
+                <IconPlus aria-hidden="true" size="1rem" stroke={2} />
                 Crear servidor
               </Link>
             </div>

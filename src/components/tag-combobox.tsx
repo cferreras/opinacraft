@@ -128,10 +128,10 @@ export function TagCombobox({
   }
 
   const controlClass = compact
-    ? "min-h-9 rounded-lg px-2"
+    ? "min-h-9 rounded-[var(--radius-md)] px-2"
     : "mt-2 min-h-11 rounded-lg px-2 py-1";
   const inputClass = compact
-    ? "h-7 min-w-24 text-[11px]"
+    ? "h-7 min-w-24 text-[0.6875rem]"
     : "h-8 min-w-32 text-sm";
   const placeholder = selected.length
     ? compact
@@ -145,17 +145,17 @@ export function TagCombobox({
 
   return (
     <div className={compact ? "relative z-40" : undefined}>
-      {label ? <label id={labelId} htmlFor={inputId} className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-zinc-500">{label}</label> : null}
+      {label ? <label id={labelId} htmlFor={inputId} className="mb-1.5 block text-[0.625rem] font-bold uppercase tracking-[0.08em] text-zinc-500">{label}</label> : null}
       <div
         className={`${controlClass} flex flex-wrap items-center gap-1.5 border border-zinc-200 bg-white transition focus-within:border-zinc-950 focus-within:ring-2 focus-within:ring-zinc-950/10`}
         role="group"
         aria-label="Etiquetas"
       >
         {selected.map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-[#e0e5ea] bg-[#fafbfc] px-2 py-1 text-[10px] font-medium text-[#35415b]">
+          <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-[#e0e5ea] bg-[#fafbfc] px-2 py-1 text-[0.625rem] font-medium text-[#35415b]">
             {tag}
             <button type="button" onClick={() => remove(tag)} aria-label={`Eliminar ${tag}`} className="rounded-full text-[#7b86a0] hover:bg-[#f0f1ff] hover:text-[#2d34cf]">
-              <IconX aria-hidden="true" size={11} stroke={2} />
+              <IconX aria-hidden="true" size="0.6875rem" stroke={2} />
             </button>
           </span>
         ))}

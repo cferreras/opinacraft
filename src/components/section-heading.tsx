@@ -17,9 +17,9 @@ export function SectionHeading({
         {icon}
       </span>
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#7a86a0]">{number}</p>
-        <h2 id={id} className="mt-0.5 text-[16px] font-semibold tracking-[-0.02em] text-[#17202a]">{title}</h2>
-        <p className="mt-1 text-[11px] leading-5 text-[#667287]">{description}</p>
+        <p className="text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-[#7a86a0]">{number}</p>
+        <h2 id={id} className="mt-0.5 text-[1rem] font-semibold tracking-[-0.02em] text-[#17202a]">{title}</h2>
+        <p className="mt-1 text-[0.6875rem] leading-5 text-[#667287]">{description}</p>
       </div>
     </div>
   );

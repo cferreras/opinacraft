@@ -50,7 +50,7 @@ export function FilterSelect({
 
   return (
     <label htmlFor={id} className="relative block min-w-0">
-      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-zinc-500">{label}</span>
+      <span className="mb-1.5 block text-[0.625rem] font-bold uppercase tracking-[0.08em] text-zinc-500">{label}</span>
       <span className="relative block">
         <select
           id={id}
@@ -61,11 +61,11 @@ export function FilterSelect({
           onBlur={submitOnChange ? handleBlur : undefined}
           onPointerUp={submitOnChange ? handlePointerUp : undefined}
           onClick={submitOnChange ? handleClick : undefined}
-          className="ui-select h-9 appearance-none pr-8 text-[11px]"
+          className="ui-select h-9 appearance-none pr-8 text-[0.6875rem]"
         >
           {children}
         </select>
-        <IconChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#465360]" size={14} />
+        <IconChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#465360]" size="0.875rem" />
       </span>
     </label>
   );

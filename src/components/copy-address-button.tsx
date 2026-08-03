@@ -40,9 +40,9 @@ export function CopyAddressButton({
       title={iconOnly ? (copied ? "Dirección copiada" : "Copiar dirección") : undefined}
       className={iconOnly ? `inline-flex h-9 w-9 items-center justify-center rounded-md transition ${className}` : `inline-flex min-h-10 items-center justify-center gap-2 transition ${className}`}
     >
-      {iconOnly ? (copied ? <IconCheck aria-hidden="true" size={15} /> : <IconCopy aria-hidden="true" size={15} />) : (
+      {iconOnly ? (copied ? <IconCheck aria-hidden="true" size="0.9375rem" /> : <IconCopy aria-hidden="true" size="0.9375rem" />) : (
         <>
-          {showIcon ? (copied ? <IconCheck aria-hidden="true" size={17} /> : <IconCopy aria-hidden="true" size={17} />) : null}
+          {showIcon ? (copied ? <IconCheck aria-hidden="true" size="1.0625rem" /> : <IconCopy aria-hidden="true" size="1.0625rem" />) : null}
           <span>{copied ? "Copiada" : label}</span>
         </>
       )}
