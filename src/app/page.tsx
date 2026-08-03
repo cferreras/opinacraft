@@ -38,7 +38,7 @@ function FeaturedCharacter() {
         alt="Personaje aventurero de Minecraft con un pico de diamante"
         fill
         priority
-        sizes="(min-width: 1024px) 390px, 100vw"
+        sizes="(min-width: 1024px) 527px, 100vw"
         className="object-contain object-bottom"
       />
     </div>
