@@ -25,16 +25,16 @@
   --warning-soft: #fff7e7;
   --danger: #c9555f;
   --danger-soft: #fff0f1;
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
-  --radius-2xl: 22px;
-  --shadow-xs: 0 1px 2px rgba(22, 31, 36, 0.025), 0 0 0 1px rgba(22, 31, 36, 0.025);
-  --shadow-sm: 0 12px 28px rgba(22, 31, 36, 0.055), 0 1px 3px rgba(22, 31, 36, 0.035);
-  --shadow-lg: 0 24px 58px rgba(22, 31, 36, 0.09), 0 2px 8px rgba(22, 31, 36, 0.04);
-  --app-frame-width: 1180px;
-  --app-frame-gutter: 24px;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.375rem;
+  --shadow-xs: 0 0.0625rem 0.125rem rgba(22, 31, 36, 0.025), 0 0 0 1px rgba(22, 31, 36, 0.025);
+  --shadow-sm: 0 0.75rem 1.75rem rgba(22, 31, 36, 0.055), 0 0.0625rem 0.1875rem rgba(22, 31, 36, 0.035);
+  --shadow-lg: 0 1.5rem 3.625rem rgba(22, 31, 36, 0.09), 0 0.125rem 0.5rem rgba(22, 31, 36, 0.04);
+  --app-frame-width: 73.75rem;
+  --app-frame-gutter: 1.5rem;
 }
 
 @theme inline {
@@ -56,7 +56,8 @@
 html {
   min-width: 320px;
   scroll-behavior: smooth;
-  font-size: clamp(15px, calc(14px + 0.25vw), 16px);
+  /* 16px on mobile and 21.6px at 1440px+, 90% of the previous desktop scale. */
+  font-size: clamp(16px, calc(1.34615vw + 2.21538px), 21.6px);
 }
 
 body {
@@ -74,7 +75,7 @@ button,
 input,
 select,
 textarea {
-  font: inherit;
+  font-family: inherit;
 }
 
 button,
@@ -189,7 +190,7 @@ select {
   .ui-signal::before {
     position: absolute;
     inset: 0 auto 0 0;
-    width: 4px;
+    width: 0.25rem;
     background: var(--accent);
     content: "";
   }
@@ -215,7 +216,7 @@ select {
     border: 1px solid var(--primary);
     background: var(--primary);
     color: var(--primary-foreground);
-    box-shadow: 0 5px 12px rgba(7, 148, 91, 0.16);
+    box-shadow: 0 0.3125rem 0.75rem rgba(7, 148, 91, 0.16);
   }
 
   .ui-button-primary:hover {
@@ -394,7 +395,7 @@ select {
     height: 14rem;
     border: 1px solid rgba(103, 205, 156, 0.45);
     border-radius: 999px;
-    box-shadow: 0 0 0 24px rgba(103, 205, 156, 0.08), 0 0 0 48px rgba(103, 205, 156, 0.05);
+    box-shadow: 0 0 0 1.5rem rgba(103, 205, 156, 0.08), 0 0 0 3rem rgba(103, 205, 156, 0.05);
     content: "";
   }
 
@@ -657,7 +658,7 @@ select {
     background: #087d4d;
     padding: 0.75rem;
     color: #fff;
-    box-shadow: 0 8px 18px rgba(7, 148, 91, 0.16);
+    box-shadow: 0 0.5rem 1.125rem rgba(7, 148, 91, 0.16);
     transition: background-color 160ms ease-out, transform 120ms ease-out;
   }
 

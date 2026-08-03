@@ -33,7 +33,7 @@ export function AuthShell({
           </Link>
 
           <div className="relative z-10 max-w-[18rem]">
-            <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">
+            <span className="inline-flex items-center gap-2 text-[0.625rem] font-bold uppercase tracking-[0.16em] text-indigo-300">
               <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-indigo-300" />
               Community signal
             </span>
@@ -45,7 +45,7 @@ export function AuthShell({
             </p>
           </div>
 
-          <div className="relative z-10 grid gap-2 text-[11px] text-zinc-400">
+          <div className="relative z-10 grid gap-2 text-[0.6875rem] text-zinc-400">
             <span className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
               Live server signals

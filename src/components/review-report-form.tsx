@@ -37,8 +37,8 @@ export function ReviewReportForm({ serverId, reviewId }: { serverId: string; rev
   }
 
   return (
-    <details className="mt-4 text-sm">
-      <summary className="cursor-pointer font-medium text-zinc-600 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-white">Reportar opinión</summary>
+    <details className="group mt-2.5">
+      <summary className="w-fit cursor-pointer text-[0.625rem] font-normal text-[#8a94a4] transition-colors hover:text-[#59657e] focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4655e8]/20 group-open:text-[#59657e] dark:text-zinc-500 dark:hover:text-zinc-300 dark:group-open:text-zinc-300">Reportar opinión</summary>
       <form onSubmit={submit} className="mt-3 grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
         <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
           Motivo

@@ -19,7 +19,7 @@ function paletteFor(name: string) {
 export function ServerLogo({
   name,
   media,
-  className = "h-11 w-11 rounded-[5px]",
+  className = "h-11 w-11 rounded-[0.3125rem]",
 }: {
   name: string;
   media: ServerMedia[];
@@ -42,7 +42,7 @@ export function ServerLogo({
       aria-hidden="true"
       className={`${className} ${paletteFor(name)} inline-flex shrink-0 items-center justify-center ring-1 ring-black/5`}
     >
-      <IconBrandMinecraft size={27} stroke={1.7} />
+      <IconBrandMinecraft size="1.6875rem" stroke={1.7} />
     </span>
   );
 }

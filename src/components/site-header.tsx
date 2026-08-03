@@ -140,7 +140,7 @@ export function SiteHeader() {
         </nav>
 
         <form onSubmit={submitSearch} className="app-topbar-search">
-          <IconSearch aria-hidden="true" size={17} stroke={1.8} />
+          <IconSearch aria-hidden="true" size="1.0625rem" stroke={1.8} />
           <label htmlFor="header-search" className="sr-only">Buscar servidores</label>
           <input
             ref={desktopSearchRef}
@@ -160,10 +160,10 @@ export function SiteHeader() {
 
         <div className="app-topbar-actions">
           <Link href="/contact" className="app-icon-button" aria-label="Ayuda" title="Ayuda">
-            <IconHelpCircle aria-hidden="true" size={18} stroke={1.7} />
+            <IconHelpCircle aria-hidden="true" size="1.125rem" stroke={1.7} />
           </Link>
           <Link href="/servers/new" className="app-topbar-publish">
-            <IconPlus aria-hidden="true" size={15} stroke={2} />
+            <IconPlus aria-hidden="true" size="0.9375rem" stroke={2} />
             Publicar
           </Link>
           {sessionPending ? (
@@ -172,7 +172,7 @@ export function SiteHeader() {
             <Link href="/profile" className="app-account-chip" aria-label="Abrir mi perfil">
               <span className="app-avatar" aria-hidden="true">{initials}</span>
               <span className="app-account-chip-copy"><strong>{displayName}</strong><small>Mi perfil</small></span>
-              <IconChevronDown aria-hidden="true" size={15} stroke={1.8} />
+              <IconChevronDown aria-hidden="true" size="0.9375rem" stroke={1.8} />
             </Link>
           ) : (
             <Link href="/sign-in" className="app-sign-in-link">Iniciar sesión</Link>
@@ -192,7 +192,7 @@ export function SiteHeader() {
           }}
           className="app-icon-button"
         >
-          {menuOpen ? <IconX aria-hidden="true" size={20} /> : <IconMenu2 aria-hidden="true" size={20} />}
+          {menuOpen ? <IconX aria-hidden="true" size="1.25rem" /> : <IconMenu2 aria-hidden="true" size="1.25rem" />}
         </button>
         <Link href="/" aria-label="OpinaCraft, inicio"><Brand compact /></Link>
         <button
@@ -206,13 +206,13 @@ export function SiteHeader() {
           }}
           className="app-icon-button"
         >
-          <IconSearch aria-hidden="true" size={19} stroke={1.7} />
+          <IconSearch aria-hidden="true" size="1.1875rem" stroke={1.7} />
         </button>
       </div>
 
       {searchOpen ? (
         <form id="mobile-header-search-form" onSubmit={submitSearch} className="app-mobile-search">
-          <IconSearch aria-hidden="true" size={17} stroke={1.8} />
+          <IconSearch aria-hidden="true" size="1.0625rem" stroke={1.8} />
           <label htmlFor="mobile-header-search" className="sr-only">Buscar servidores</label>
           <input
             id="mobile-header-search"
@@ -244,7 +244,7 @@ export function SiteHeader() {
                   onClick={() => setMenuOpen(false)}
                   className={`app-mobile-menu-link ${active ? "is-active" : ""}`}
                 >
-                  <Icon aria-hidden="true" size={18} stroke={1.7} />
+                  <Icon aria-hidden="true" size="1.125rem" stroke={1.7} />
                   {item.label}
                 </Link>
               );

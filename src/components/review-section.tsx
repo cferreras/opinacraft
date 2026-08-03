@@ -12,7 +12,7 @@ type ViewerState = {
   review: { id: string; rating: number; content: string; status: "published" | "hidden" | "deleted"; createdAt: Date; updatedAt: Date } | null;
 };
 
-function RatingStars({ rating, size = 15 }: { rating: number; size?: number }) {
+function RatingStars({ rating, size = "0.9375rem" }: { rating: number; size?: number | string }) {
   return (
     <span className="inline-flex items-center gap-0.5 text-[#f4aa00]" aria-label={`${rating} de 5 estrellas`}>
       {[1, 2, 3, 4, 5].map((star) => (
@@ -30,13 +30,13 @@ function Summary({ summary }: { summary: ReviewSummary }) {
     : summary.average.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   return (
-    <div className="grid gap-5 border-y border-[#e7ebef] py-5 sm:grid-cols-[154px_1fr] sm:gap-7">
+    <div className="grid gap-5 border-y border-[#e7ebef] py-5 sm:grid-cols-[9.625rem_1fr] sm:gap-7">
       <div>
-        <p className="text-[11px] font-medium text-[#6a7484]">Valoración media</p>
-        <p className="mt-1 text-[38px] font-semibold leading-none tracking-[-0.045em] text-[#101722]">{averageLabel}</p>
+        <p className="text-[0.6875rem] font-medium text-[#6a7484]">Valoración media</p>
+        <p className="mt-1 text-[2.375rem] font-semibold leading-none tracking-[-0.045em] text-[#101722]">{averageLabel}</p>
         <div className="mt-2 flex items-center gap-2">
-          <RatingStars rating={summary.average ?? 0} size={14} />
-          <span className="text-[11px] text-[#687386]">{summary.total} {summary.total === 1 ? "opinión" : "opiniones"}</span>
+          <RatingStars rating={summary.average ?? 0} size="0.875rem" />
+          <span className="text-[0.6875rem] text-[#687386]">{summary.total} {summary.total === 1 ? "opinión" : "opiniones"}</span>
         </div>
       </div>
       <div className="space-y-2 self-center" aria-label="Distribución de puntuaciones">
@@ -44,7 +44,7 @@ function Summary({ summary }: { summary: ReviewSummary }) {
           const count = summary.distribution[rating - 1];
           const width = `${Math.round((count / maximum) * 100)}%`;
           return (
-            <div key={rating} className="grid grid-cols-[18px_1fr_26px] items-center gap-2 text-[11px] text-[#687386]">
+            <div key={rating} className="grid grid-cols-[1.125rem_1fr_1.625rem] items-center gap-2 text-[0.6875rem] text-[#687386]">
               <span>{rating}</span>
               <div className="h-1.5 overflow-hidden rounded-full bg-[#edf0f3]"><div className="h-full rounded-full bg-[#f5aa00]" style={{ width }} /></div>
               <span className="text-right tabular-nums">{count}</span>
@@ -63,11 +63,11 @@ function Composer({ serverId, slug, viewer }: { serverId: string; slug: string; 
         <div className="flex items-center gap-3">
           <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#182033] text-xs font-semibold text-white">N</span>
           <div>
-            <p className="text-[12px] font-medium text-[#43506a]">Comparte tu opinión sobre este servidor...</p>
-            <p className="mt-0.5 text-[11px] text-[#8490a3]">Necesitas iniciar sesión para publicar.</p>
+            <p className="text-[0.75rem] font-medium text-[#43506a]">Comparte tu opinión sobre este servidor...</p>
+            <p className="mt-0.5 text-[0.6875rem] text-[#8490a3]">Necesitas iniciar sesión para publicar.</p>
           </div>
         </div>
-        <Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`} className="ui-button-primary h-8 px-3.5 text-[11px] sm:shrink-0">
+        <Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`} className="ui-button-primary h-8 px-3.5 text-[0.6875rem] sm:shrink-0">
           Iniciar sesión
         </Link>
       </div>
@@ -75,11 +75,11 @@ function Composer({ serverId, slug, viewer }: { serverId: string; slug: string; 
   }
 
   if (!viewer.emailVerified) {
-    return <div className="rounded-xl bg-[#fff8e7] p-4 text-sm text-[#8a6200]"><p className="font-semibold">Verifica tu email para opinar.</p><p className="mt-1 text-[12px]">Puedes reenviar el enlace desde tu perfil.</p><Link href="/profile" className="mt-3 inline-flex font-semibold underline underline-offset-4">Ir al perfil</Link></div>;
+    return <div className="rounded-xl bg-[#fff8e7] p-4 text-sm text-[#8a6200]"><p className="font-semibold">Verifica tu email para opinar.</p><p className="mt-1 text-[0.75rem]">Puedes reenviar el enlace desde tu perfil.</p><Link href="/profile" className="mt-3 inline-flex font-semibold underline underline-offset-4">Ir al perfil</Link></div>;
   }
 
   if (viewer.membershipRole) {
-    return <div className="rounded-xl bg-[#f4f6f8] p-4 text-sm text-[#647080]"><p className="font-semibold text-[#17202a]">Formas parte del equipo</p><p className="mt-1 text-[12px]">Los miembros no pueden puntuar su propio servidor.</p></div>;
+    return <div className="rounded-xl bg-[#f4f6f8] p-4 text-sm text-[#647080]"><p className="font-semibold text-[#17202a]">Formas parte del equipo</p><p className="mt-1 text-[0.75rem]">Los miembros no pueden puntuar su propio servidor.</p></div>;
   }
 
   if (viewer.review?.status === "hidden") return <DeletedReviewNotice status="hidden" content={viewer.review.content} />;
@@ -137,8 +137,8 @@ export function ReviewSection({
     <section id="reviews" className="ui-card mt-4 scroll-mt-8 p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#7a8595]">La voz de la comunidad</p>
-          <h2 className="mt-1 text-[18px] font-semibold tracking-[-0.025em] text-[#101722]">Opiniones de jugadores</h2>
+          <p className="text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-[#7a8595]">La voz de la comunidad</p>
+          <h2 className="mt-1 text-[1.125rem] font-semibold tracking-[-0.025em] text-[#101722]">Opiniones de jugadores</h2>
         </div>
         {notice ? <p className="rounded-md bg-[#eaf9f0] px-3 py-2 text-xs text-[#147644]" role="status">{notice}</p> : null}
       </div>

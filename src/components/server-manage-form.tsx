@@ -17,7 +17,7 @@ import { TagCombobox } from "@/components/tag-combobox";
 
 type Endpoint = { edition: "java" | "bedrock"; host: string; port: number };
 
-const inputClassName = "ui-input mt-2 text-[12px] disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 disabled:opacity-100";
+const inputClassName = "ui-input mt-2 text-[0.75rem] disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 disabled:opacity-100";
 const labelClassName = "ui-field-label";
 
 export function ServerManageForm({
@@ -55,7 +55,7 @@ export function ServerManageForm({
       <section className="space-y-5" aria-labelledby="identity-heading">
         <SectionHeading
           number="01 / Identity"
-          icon={<IconFileText aria-hidden="true" size={17} stroke={1.7} />}
+          icon={<IconFileText aria-hidden="true" size="1.0625rem" stroke={1.7} />}
           id="identity-heading"
           title="Identity and links"
           description="Tell players what makes this community worth joining and where to find it."
@@ -71,7 +71,7 @@ export function ServerManageForm({
 
           <label className={labelClassName}>
             Description
-            <textarea name="description" defaultValue={server.description ?? ""} maxLength={2000} rows={5} placeholder="Describe the play style, community and what players will find." className={`${inputClassName} h-auto min-h-[126px] resize-y py-3 leading-5`} />
+            <textarea name="description" defaultValue={server.description ?? ""} maxLength={2000} rows={5} placeholder="Describe the play style, community and what players will find." className={`${inputClassName} h-auto min-h-[7.875rem] resize-y py-3 leading-5`} />
             {state?.fieldErrors?.description ? <ErrorText>{state.fieldErrors.description}</ErrorText> : null}
           </label>
 
@@ -105,7 +105,7 @@ export function ServerManageForm({
       <section className="space-y-5" aria-labelledby="endpoints-heading">
         <SectionHeading
           number="02 / Connection"
-          icon={<IconLink aria-hidden="true" size={17} stroke={1.7} />}
+          icon={<IconLink aria-hidden="true" size="1.0625rem" stroke={1.7} />}
           id="endpoints-heading"
           title="Server addresses"
           description="Keep at least one public address connected to the listing."
@@ -121,11 +121,11 @@ export function ServerManageForm({
       <div className="border-t border-[#e7ebef]" />
 
       <section className="rounded-xl border border-[#e4e8ed] bg-[#fbfcff] p-4" aria-labelledby="publication-heading">
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_190px] sm:items-center">
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11.875rem] sm:items-center">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#7a86a0]">03 / Visibility</p>
-            <h3 id="publication-heading" className="mt-1 text-[14px] font-semibold text-[#1b2638]">Publication</h3>
-            <p className="mt-1 text-[11px] leading-5 text-[#718097]">Choose whether this listing is discoverable in the public directory.</p>
+            <p className="text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-[#7a86a0]">03 / Visibility</p>
+            <h3 id="publication-heading" className="mt-1 text-[0.875rem] font-semibold text-[#1b2638]">Publication</h3>
+            <p className="mt-1 text-[0.6875rem] leading-5 text-[#718097]">Choose whether this listing is discoverable in the public directory.</p>
           </div>
           <label className={labelClassName}>
             <span className="sr-only">Publication</span>
@@ -142,8 +142,8 @@ export function ServerManageForm({
       {state?.formError ? <ErrorText>{state.formError}</ErrorText> : null}
 
       <div className="flex flex-col gap-3 border-t border-[#e7ebef] pt-6 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-[280px] text-[10px] leading-4 text-[#7a8698]">Changes update the public server page after they are saved.</p>
-        <button type="submit" className="ui-button-primary h-11 px-5 text-[12px]">
+        <p className="max-w-[17.5rem] text-[0.625rem] leading-4 text-[#7a8698]">Changes update the public server page after they are saved.</p>
+        <button type="submit" className="ui-button-primary h-11 px-5 text-[0.75rem]">
           Save changes
         </button>
       </div>
@@ -161,15 +161,15 @@ function EndpointFields({ edition, endpoint, disabled }: { edition: "java" | "be
       <legend className="sr-only">{label}</legend>
       <div className="flex items-start gap-3">
         <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isJava ? "bg-[#eef0ff] text-[#2c3be2]" : "bg-[#e9f8ff] text-[#168fca]"}`}>
-          {isJava ? <IconDeviceDesktop aria-hidden="true" size={18} stroke={1.7} /> : <IconDeviceMobile aria-hidden="true" size={18} stroke={1.7} />}
+          {isJava ? <IconDeviceDesktop aria-hidden="true" size="1.125rem" stroke={1.7} /> : <IconDeviceMobile aria-hidden="true" size="1.125rem" stroke={1.7} />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-[13px] font-semibold text-[#1b2638]">{label}</p>
-              <p className="mt-0.5 text-[10px] text-[#7a8698]">{isJava ? "Minecraft Java Edition" : "Minecraft Bedrock Edition"}</p>
+              <p className="text-[0.8125rem] font-semibold text-[#1b2638]">{label}</p>
+              <p className="mt-0.5 text-[0.625rem] text-[#7a8698]">{isJava ? "Minecraft Java Edition" : "Minecraft Bedrock Edition"}</p>
             </div>
-            <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 self-start rounded-lg border border-[#dce2e7] bg-white px-2.5 text-[11px] font-medium text-[#35415b] transition hover:border-[#bfc8d4]">
+            <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 self-start rounded-lg border border-[#dce2e7] bg-white px-2.5 text-[0.6875rem] font-medium text-[#35415b] transition hover:border-[#bfc8d4]">
               {disabled ? <input type="hidden" name={`${edition}Enabled`} value={endpoint ? "on" : ""} /> : null}
               <input type="checkbox" name={`${edition}Enabled`} defaultChecked={Boolean(endpoint)} disabled={disabled} className="h-4 w-4 shrink-0 rounded border-[#bdc7d1] accent-[#3029e7]" />
               Enabled
@@ -178,7 +178,7 @@ function EndpointFields({ edition, endpoint, disabled }: { edition: "java" | "be
 
           {disabled ? <input type="hidden" name={`${edition}Host`} value={endpoint?.host ?? ""} /> : null}
           {disabled ? <input type="hidden" name={`${edition}Port`} value={endpoint?.port ?? defaultPort} /> : null}
-          <div className="mt-4 grid gap-4 border-t border-[#e6eaf1] pt-4 sm:grid-cols-[minmax(0,1fr)_120px]">
+          <div className="mt-4 grid gap-4 border-t border-[#e6eaf1] pt-4 sm:grid-cols-[minmax(0,1fr)_7.5rem]">
             <label className={labelClassName}>
               Host
               <input name={`${edition}Host`} defaultValue={endpoint?.host ?? ""} placeholder="play.example.com" disabled={disabled} className={inputClassName} />
@@ -195,5 +195,5 @@ function EndpointFields({ edition, endpoint, disabled }: { edition: "java" | "be
 }
 
 function ErrorText({ children }: { children: string }) {
-  return <p role="alert" className="mt-2 rounded-lg border border-[#f2cfd2] bg-[#fff3f3] px-3 py-2 text-[11px] leading-4 text-[#c43b45]">{children}</p>;
+  return <p role="alert" className="mt-2 rounded-lg border border-[#f2cfd2] bg-[#fff3f3] px-3 py-2 text-[0.6875rem] leading-4 text-[#c43b45]">{children}</p>;
 }
