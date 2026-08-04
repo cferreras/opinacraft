@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+
 export function ReportForm({ serverId }: { serverId: string }) {
   const [reason, setReason] = useState("inappropriate");
   const [details, setDetails] = useState("");
@@ -24,18 +31,17 @@ export function ReportForm({ serverId }: { serverId: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="ui-card p-4 sm:p-5">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div><h2 className="text-[0.9375rem] font-semibold text-[#17202a]">¿Hay algo que debamos revisar?</h2><p className="mt-1 text-[0.6875rem] text-[#7a8595]">Ayúdanos a mantener el directorio fiable y útil.</p></div>
-      </div>
-      <div className="mt-4 grid gap-2.5 sm:grid-cols-[15rem_minmax(0,1fr)_auto]">
-        <label className="sr-only" htmlFor="report-reason">Motivo del reporte</label>
-        <select id="report-reason" value={reason} onChange={(event) => setReason(event.target.value)} className="h-10 rounded-lg border border-[#d9e0e6] bg-white px-3 text-[0.75rem] text-[#33404c] outline-none focus:border-[#4655e8] focus:ring-2 focus:ring-[#4655e8]/10"><option value="inappropriate">Contenido inapropiado</option><option value="misleading">Información engañosa</option><option value="offline">Servidor fuera de línea</option><option value="copyright">Derechos de autor</option><option value="other">Otro</option></select>
-        <label className="sr-only" htmlFor="report-details">Detalles</label>
-        <input id="report-details" value={details} onChange={(event) => setDetails(event.target.value)} maxLength={2_000} placeholder="Detalles opcionales" className="h-10 rounded-lg border border-[#d9e0e6] bg-white px-3 text-[0.75rem] text-[#33404c] outline-none placeholder:text-[#929baa] focus:border-[#4655e8] focus:ring-2 focus:ring-[#4655e8]/10" />
-        <button type="submit" disabled={pending} className="h-10 rounded-lg border border-[#cfd7df] px-4 text-[0.75rem] font-semibold text-[#33404c] transition hover:border-[#a9b3bf] hover:bg-[#f7f8fa] disabled:cursor-not-allowed disabled:opacity-50">{pending ? "Enviando…" : "Enviar reporte"}</button>
-      </div>
-      {message ? <p className="mt-3 text-[0.75rem] text-[#617084]" role="status">{message}</p> : null}
-    </form>
+    <Card>
+      <CardHeader><CardTitle className="text-base">¿Hay algo que debamos revisar?</CardTitle></CardHeader>
+      <CardContent>
+        <p className="mb-4 text-sm text-muted-foreground">Ayúdanos a mantener el directorio fiable y útil.</p>
+        <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[15rem_minmax(0,1fr)_auto] sm:items-end">
+          <Field><FieldLabel htmlFor="report-reason">Motivo del reporte</FieldLabel><NativeSelect id="report-reason" value={reason} onChange={(event) => setReason(event.target.value)} className="w-full"><option value="inappropriate">Contenido inapropiado</option><option value="misleading">Información engañosa</option><option value="offline">Servidor fuera de línea</option><option value="copyright">Derechos de autor</option><option value="other">Otro</option></NativeSelect></Field>
+          <Field><FieldLabel htmlFor="report-details">Detalles opcionales</FieldLabel><Input id="report-details" value={details} onChange={(event) => setDetails(event.target.value)} maxLength={2_000} placeholder="Cuéntanos qué debemos revisar" /></Field>
+          <Button type="submit" variant="outline" disabled={pending}>{pending ? "Enviando…" : "Enviar reporte"}</Button>
+        </form>
+        {message ? <Alert className="mt-3"><AlertDescription>{message}</AlertDescription></Alert> : null}
+      </CardContent>
+    </Card>
   );
 }

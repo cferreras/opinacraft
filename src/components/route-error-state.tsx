@@ -2,6 +2,10 @@
 
 import { useEffect } from "react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 export function RouteErrorState({
   error,
   reset,
@@ -12,31 +16,21 @@ export function RouteErrorState({
   title: string;
 }) {
   useEffect(() => {
-    console.error("Route failed", {
-      name: error.name,
-      message: error.message,
-      digest: error.digest,
-    });
+    console.error("Route failed", { name: error.name, message: error.message, digest: error.digest });
   }, [error]);
 
   return (
-    <main className="app-auth-page">
-      <section className="ui-card w-full max-w-md p-8 text-center">
-        <p className="ui-eyebrow">System signal</p>
-        <h1 className="mt-3 text-2xl font-bold tracking-[-0.05em] text-zinc-950">
-          {title}
-        </h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Please try again in a moment.
-        </p>
-        <button
-          type="button"
-          onClick={reset}
-          className="ui-button-primary mt-6"
-        >
-          Try again
-        </button>
-      </section>
+    <main className="grid min-h-[60vh] place-items-center px-4 py-12">
+      <Card className="w-full max-w-md">
+        <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+        <CardContent className="grid gap-5">
+          <Alert>
+            <AlertTitle>Señal del sistema</AlertTitle>
+            <AlertDescription>Vuelve a intentarlo dentro de un momento.</AlertDescription>
+          </Alert>
+          <Button type="button" onClick={reset}>Reintentar</Button>
+        </CardContent>
+      </Card>
     </main>
   );
 }

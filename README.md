@@ -135,6 +135,8 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/internal/monitor/r
 
 Only verified endpoints are checked. A successful check marks an endpoint online immediately; an unreachable endpoint needs three monitor runs before it becomes offline. Without this request (or the scheduled GitHub workflow), health remains `unknown`.
 
+The local seed leaves endpoint latency empty on purpose. The `latency_ms` value is written only by a successful Java/Bedrock monitor observation, so seeded servers show no ping until the worker has measured them.
+
 After the initial bootstrap, grant platform roles from an operator shell with `pnpm admin:grant -- --email <email> --role admin|moderator`. Only admins can grant roles in the application.
 
 The agreed implementation roadmap for the next phase is documented in

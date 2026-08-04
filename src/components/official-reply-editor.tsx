@@ -3,10 +3,12 @@
 import { useFormStatus } from "react-dom";
 
 import { updateOfficialReplyAction } from "@/app/servers/[slug]/actions";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 function SaveButton() {
   const { pending } = useFormStatus();
-  return <button type="submit" disabled={pending} className="min-h-9 rounded-lg border border-indigo-300 px-3 text-xs font-semibold text-indigo-900 hover:bg-indigo-100 disabled:opacity-60 dark:border-indigo-800 dark:text-indigo-100 dark:hover:bg-indigo-950/50">{pending ? "Guardando…" : "Editar"}</button>;
+  return <Button type="submit" size="sm" variant="outline" disabled={pending}>{pending ? "Guardando…" : "Guardar edición"}</Button>;
 }
 
 export function OfficialReplyEditor({ replyId, slug, content }: { replyId: string; slug: string; content: string }) {
@@ -15,7 +17,7 @@ export function OfficialReplyEditor({ replyId, slug, content }: { replyId: strin
       <input type="hidden" name="replyId" value={replyId} />
       <input type="hidden" name="slug" value={slug} />
       <label className="sr-only" htmlFor={`edit-reply-${replyId}`}>Editar respuesta oficial</label>
-      <textarea id={`edit-reply-${replyId}`} name="content" defaultValue={content} minLength={10} maxLength={2_000} required rows={3} className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm leading-6 dark:border-indigo-900 dark:bg-zinc-950" />
+      <Textarea id={`edit-reply-${replyId}`} name="content" defaultValue={content} minLength={10} maxLength={2_000} required rows={3} />
       <div className="flex items-start"><SaveButton /></div>
     </form>
   );

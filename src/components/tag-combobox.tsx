@@ -1,55 +1,27 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { IconX } from "@tabler/icons-react";
+import { X } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 
 type Suggestion = { label: string; slug: string; usageCount: number };
+function isSuggestion(value: unknown): value is Suggestion { if (typeof value !== "object" || value === null) return false; const suggestion = value as { label?: unknown; slug?: unknown; usageCount?: unknown }; return typeof suggestion.label === "string" && typeof suggestion.slug === "string" && typeof suggestion.usageCount === "number" && Number.isFinite(suggestion.usageCount); }
+function parseSuggestions(value: unknown): Suggestion[] { if (typeof value !== "object" || value === null) return []; const tags = (value as { tags?: unknown }).tags; return Array.isArray(tags) && tags.every(isSuggestion) ? tags : []; }
 
-function isSuggestion(value: unknown): value is Suggestion {
-  if (typeof value !== "object" || value === null) return false;
-  const suggestion = value as { label?: unknown; slug?: unknown; usageCount?: unknown };
-  return (
-    typeof suggestion.label === "string" &&
-    typeof suggestion.slug === "string" &&
-    typeof suggestion.usageCount === "number" &&
-    Number.isFinite(suggestion.usageCount)
-  );
-}
+type TagComboboxProps = { name: string; initialTags?: string[]; allowCreate?: boolean; compact?: boolean; label?: string; ariaLabel?: string; submitOnChange?: boolean; resetPagination?: boolean };
 
-function parseSuggestions(value: unknown): Suggestion[] {
-  if (typeof value !== "object" || value === null) return [];
-  const tags = (value as { tags?: unknown }).tags;
-  return Array.isArray(tags) && tags.every(isSuggestion) ? tags : [];
-}
-
-type TagComboboxProps = {
-  name: string;
-  initialTags?: string[];
-  allowCreate?: boolean;
-  compact?: boolean;
-  label?: string;
-  ariaLabel?: string;
-  submitOnChange?: boolean;
-  resetPagination?: boolean;
-};
-
-export function TagCombobox({
-  name,
-  initialTags = [],
-  allowCreate = true,
-  compact = false,
-  label,
-  submitOnChange = false,
-  resetPagination = false,
-  ariaLabel = "Añadir etiqueta",
-}: TagComboboxProps) {
+export function TagCombobox({ name, initialTags = [], allowCreate = true, compact = false, label, submitOnChange = false, resetPagination = false, ariaLabel = "Añadir etiqueta" }: TagComboboxProps) {
   const [selected, setSelected] = useState<string[]>(initialTags);
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [active, setActive] = useState(0);
   const inputId = useId();
-  const labelId = `${inputId}-label`;
-  const listId = `${inputId}-list`;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const shouldSubmitRef = useRef(false);
@@ -60,23 +32,14 @@ export function TagCombobox({
     queueMicrotask(() => {
       const form = inputRef.current?.form;
       if (!form) return;
-
       if (!resetPagination) {
         const page = new URL(window.location.href).searchParams.get("page");
         if (page) {
           const pageField = form.querySelector<HTMLInputElement>('input[name="page"]');
-          if (pageField) {
-            pageField.value = page;
-          } else {
-            const hiddenPage = document.createElement("input");
-            hiddenPage.type = "hidden";
-            hiddenPage.name = "page";
-            hiddenPage.value = page;
-            form.appendChild(hiddenPage);
-          }
+          if (pageField) pageField.value = page;
+          else { const hiddenPage = document.createElement("input"); hiddenPage.type = "hidden"; hiddenPage.name = "page"; hiddenPage.value = page; form.appendChild(hiddenPage); }
         }
       }
-
       form.requestSubmit();
     });
   }, [selected, submitOnChange, resetPagination]);
@@ -84,138 +47,35 @@ export function TagCombobox({
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     const controller = new AbortController();
-    if (!query.trim()) {
-      queueMicrotask(() => {
-        if (controller.signal.aborted) return;
-        setSuggestions([]);
-        setActive(0);
-      });
-      return () => controller.abort();
-    }
-    timer.current = setTimeout(() => {
-      timer.current = null;
-      void fetch(`/api/tags/suggest?q=${encodeURIComponent(query)}`, { signal: controller.signal })
-        .then((response) => (response.ok ? response.json() : { tags: [] }))
-        .then((result: unknown) => {
-          if (controller.signal.aborted) return;
-          setSuggestions(parseSuggestions(result));
-          setActive(0);
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
-          setSuggestions([]);
-          setActive(0);
-        });
-    }, 200);
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-      controller.abort();
-    };
+    if (!query.trim()) return () => controller.abort();
+    timer.current = setTimeout(() => { timer.current = null; void fetch(`/api/tags/suggest?q=${encodeURIComponent(query)}`, { signal: controller.signal }).then((response) => response.ok ? response.json() : { tags: [] }).then((result: unknown) => { if (!controller.signal.aborted) { setSuggestions(parseSuggestions(result)); setActive(0); } }).catch((error: unknown) => { if (!controller.signal.aborted && !(error instanceof DOMException && error.name === "AbortError")) setSuggestions([]); }); }, 200);
+    return () => { if (timer.current) clearTimeout(timer.current); controller.abort(); };
   }, [query]);
 
-  function add(label: string) {
-    const clean = label.trim().replace(/\s+/g, " ");
+  function add(labelToAdd: string) {
+    const clean = labelToAdd.trim().replace(/\s+/g, " ");
     if (!clean || selected.length >= 8 || selected.some((item) => item.toLocaleLowerCase() === clean.toLocaleLowerCase())) return;
-    shouldSubmitRef.current = true;
-    setSelected((current) => [...current, clean]);
-    setQuery("");
-    setSuggestions([]);
+    shouldSubmitRef.current = true; setSelected((current) => [...current, clean]); setQuery(""); setSuggestions([]);
   }
+  function remove(labelToRemove: string) { shouldSubmitRef.current = true; setSelected((current) => current.filter((item) => item !== labelToRemove)); }
 
-  function remove(label: string) {
-    shouldSubmitRef.current = true;
-    setSelected((current) => current.filter((item) => item !== label));
-  }
-
-  const controlClass = compact
-    ? "min-h-9 rounded-[var(--radius-md)] px-2"
-    : "mt-2 min-h-11 rounded-lg px-2 py-1";
-  const inputClass = compact
-    ? "h-7 min-w-24 text-[0.6875rem]"
-    : "h-8 min-w-32 text-sm";
-  const placeholder = selected.length
-    ? compact
-      ? "Añadir otra…"
-      : "Añadir…"
-    : compact
-      ? "Escribe una etiqueta…"
-      : "Buscar etiquetas…";
-  const optionId = (slug: string) => `${listId}-option-${encodeURIComponent(slug)}`;
-  const activeSuggestion = suggestions[active];
-
+  const placeholder = selected.length ? (compact ? "Añadir otra…" : "Añadir…") : compact ? "Escribe una etiqueta…" : "Buscar etiquetas…";
   return (
-    <div className={compact ? "relative z-40" : undefined}>
-      {label ? <label id={labelId} htmlFor={inputId} className="mb-1.5 block text-[0.625rem] font-bold uppercase tracking-[0.08em] text-zinc-500">{label}</label> : null}
-      <div
-        className={`${controlClass} flex flex-wrap items-center gap-1.5 border border-zinc-200 bg-white transition focus-within:border-zinc-950 focus-within:ring-2 focus-within:ring-zinc-950/10`}
-        role="group"
-        aria-label="Etiquetas"
-      >
-        {selected.map((tag) => (
-          <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-[#e0e5ea] bg-[#fafbfc] px-2 py-1 text-[0.625rem] font-medium text-[#35415b]">
-            {tag}
-            <button type="button" onClick={() => remove(tag)} aria-label={`Eliminar ${tag}`} className="rounded-full text-[#7b86a0] hover:bg-[#f0f1ff] hover:text-[#2d34cf]">
-              <IconX aria-hidden="true" size="0.6875rem" stroke={2} />
-            </button>
-          </span>
-        ))}
-        <input
-          ref={inputRef}
-          id={inputId}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              setActive((value) => Math.min(value + 1, suggestions.length - 1));
-            } else if (event.key === "ArrowUp") {
-              event.preventDefault();
-              setActive((value) => Math.max(value - 1, 0));
-            } else if (event.key === "Enter") {
-              event.preventDefault();
-              const suggestion = suggestions[active];
-              if (suggestion) add(suggestion.label);
-              else if (allowCreate) add(query);
-            } else if (event.key === "Escape") {
-              setSuggestions([]);
-            } else if (event.key === "Backspace" && !query && selected.length) {
-              remove(selected[selected.length - 1]!);
-            }
-          }}
-          role="combobox"
-          aria-autocomplete="list"
-          aria-controls={listId}
-          aria-expanded={suggestions.length > 0}
-          aria-activedescendant={activeSuggestion ? optionId(activeSuggestion.slug) : undefined}
-          aria-labelledby={label ? labelId : undefined}
-          aria-label={label ? undefined : ariaLabel}
-          className={`${inputClass} flex-1 bg-transparent px-1 outline-none placeholder:text-zinc-400`}
-          placeholder={placeholder}
-        />
-      </div>
+    <Field className={compact ? "relative z-40 gap-1" : "gap-1"}>
+      {label ? <FieldLabel htmlFor={inputId}>{label}</FieldLabel> : null}
+      <Popover open={Boolean(query && suggestions.length)}>
+        <PopoverAnchor asChild>
+          <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-input bg-background px-2 py-1 transition focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+            {selected.map((tag) => <Badge key={tag} variant="outline" className="gap-1 pr-1">{tag}<Button type="button" variant="ghost" size="icon-xs" onClick={() => remove(tag)} aria-label={`Eliminar ${tag}`}><X className="size-3" /></Button></Badge>)}
+            <Input ref={inputRef} id={inputId} value={query} onChange={(event) => { const next = event.target.value; setQuery(next); if (!next.trim()) { setSuggestions([]); setActive(0); } }} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setActive((value) => Math.min(value + 1, suggestions.length - 1)); } else if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(value - 1, 0)); } else if (event.key === "Enter") { event.preventDefault(); const suggestion = suggestions[active]; if (suggestion) add(suggestion.label); else if (allowCreate) add(query); } else if (event.key === "Escape") setSuggestions([]); else if (event.key === "Backspace" && !query && selected.length) remove(selected[selected.length - 1]!); }} role="combobox" aria-autocomplete="list" aria-expanded={suggestions.length > 0} aria-label={label ? undefined : ariaLabel} placeholder={placeholder} className={`h-7 min-w-24 flex-1 border-0 px-1 shadow-none focus-visible:ring-0 ${compact ? "text-xs" : "text-sm"}`} />
+          </div>
+        </PopoverAnchor>
+        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0" onOpenAutoFocus={(event) => event.preventDefault()}>
+          <Command shouldFilter={false}><CommandList><CommandEmpty>No hay etiquetas coincidentes.</CommandEmpty><CommandGroup heading="Sugerencias">{suggestions.map((suggestion, index) => <CommandItem key={suggestion.slug} value={suggestion.label} data-selected={index === active} onSelect={() => add(suggestion.label)}><span>{suggestion.label}</span><span className="ml-auto text-xs text-muted-foreground">({suggestion.usageCount})</span></CommandItem>)}</CommandGroup></CommandList></Command>
+        </PopoverContent>
+      </Popover>
       <input type="hidden" name={name} value={selected.join(", ")} />
-      {suggestions.length ? (
-        <ul
-          id={listId}
-          role="listbox"
-          className={`${compact ? "absolute inset-x-0 top-full" : "relative"} z-50 mt-1 max-h-52 overflow-auto rounded-lg border border-zinc-200 bg-white p-1 shadow-lg`}
-        >
-          {suggestions.map((suggestion, index) => (
-            <li id={optionId(suggestion.slug)} key={suggestion.slug} role="option" aria-selected={index === active}>
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => add(suggestion.label)}
-                className={`flex w-full items-center justify-between rounded px-2 py-2 text-left text-sm ${index === active ? "bg-zinc-100" : ""}`}
-              >
-                <span>{suggestion.label}</span>
-                <span className="text-xs text-zinc-500">({suggestion.usageCount})</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {!compact ? <span className="mt-1 block text-xs font-normal text-zinc-500">Hasta 8 etiquetas. Escribe para buscar y pulsa Enter para seleccionar.</span> : null}
-    </div>
+      {!compact ? <p className="text-xs text-muted-foreground">Hasta 8 etiquetas. Escribe y pulsa Enter para seleccionar.</p> : null}
+    </Field>
   );
 }

@@ -84,6 +84,12 @@ try {
       verifiedEndpointIndexPresent: indexes.some(
         (index) => index.indexname === "server_endpoints_verified_edition_host_port_key",
       ),
+      playerSnapshotTablePresent: indexes.some(
+        (index) => index.tablename === "server_endpoint_player_snapshots",
+      ),
+      playerHourlyTablePresent: indexes.some(
+        (index) => index.tablename === "server_endpoint_player_hourly",
+      ),
       ownerTriggerPresent: triggers.some(
         (trigger) => trigger.trigger_name === "servers_owner_invariant_trigger",
       ),

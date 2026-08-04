@@ -64,6 +64,7 @@ async function main() {
     await addColumn(client, "user", '"image_bytes" integer');
 
     await ensureEnum(client, "server_endpoint_health", ["unknown", "online", "offline"]);
+    await ensureEnum(client, "server_endpoint_sample_failure", ["unreachable", "timeout", "invalid_response", "dns_error", "blocked_target", "monitor_error"]);
     await ensureEnum(client, "server_tag_status", ["active", "blocked", "merged"]);
     await ensureEnum(client, "server_media_kind", ["logo", "banner"]);
     await ensureEnum(client, "server_media_status", ["pending", "active", "failed", "deleted"]);
@@ -99,6 +100,7 @@ async function main() {
       '"moderation_status" "server_moderation_status" DEFAULT \'active\'::"server_moderation_status" NOT NULL',
     );
     await addColumn(client, "servers", '"availability_hidden_at" timestamp with time zone');
+    await addColumn(client, "servers", '"store_url" text');
 
     await addColumn(
       client,
@@ -121,6 +123,8 @@ async function main() {
       "server_endpoints",
       '"consecutive_failures" smallint DEFAULT 0 NOT NULL',
     );
+    await addColumn(client, "server_endpoints", '"history_source_id" uuid DEFAULT gen_random_uuid() NOT NULL');
+    await createIndex(client, 'CREATE UNIQUE INDEX IF NOT EXISTS "server_endpoints_history_source_id_key" ON "server_endpoints" ("history_source_id")');
 
     await addColumn(
       client,
@@ -370,11 +374,84 @@ async function main() {
       CREATE TABLE IF NOT EXISTS "monitor_runs" (
         "run_id" varchar(100) PRIMARY KEY,
         "nonce" varchar(128) NOT NULL UNIQUE,
+        "sampled_at" timestamp with time zone NOT NULL,
         "expires_at" timestamp with time zone NOT NULL,
         "status" varchar(20) DEFAULT 'pending' NOT NULL,
+        "fallback_endpoints" jsonb DEFAULT '[]' NOT NULL,
+        "processing_started_at" timestamp with time zone,
+        "completed_at" timestamp with time zone,
+        "java_persistence_failures" integer DEFAULT 0 NOT NULL,
+        "bedrock_persistence_failures" integer DEFAULT 0 NOT NULL,
         "created_at" timestamp with time zone DEFAULT now() NOT NULL
       )
     `);
+    await addColumn(client, "monitor_runs", '"sampled_at" timestamp with time zone');
+    await addColumn(client, "monitor_runs", '"fallback_endpoints" jsonb DEFAULT \'[]\' NOT NULL');
+    await addColumn(client, "monitor_runs", '"processing_started_at" timestamp with time zone');
+    await addColumn(client, "monitor_runs", '"completed_at" timestamp with time zone');
+    await addColumn(client, "monitor_runs", '"java_persistence_failures" integer DEFAULT 0 NOT NULL');
+    await addColumn(client, "monitor_runs", '"bedrock_persistence_failures" integer DEFAULT 0 NOT NULL');
+    await client.query(`
+      WITH ranked AS (
+        SELECT ctid, created_at, row_number() OVER (PARTITION BY created_at ORDER BY run_id) - 1 AS ordinal
+        FROM "monitor_runs"
+        WHERE "sampled_at" IS NULL
+      )
+      UPDATE "monitor_runs" AS runs
+      SET "sampled_at" = ranked.created_at + (ranked.ordinal * interval '1 microsecond')
+      FROM ranked
+      WHERE runs.ctid = ranked.ctid
+    `);
+    await client.query('ALTER TABLE "monitor_runs" ALTER COLUMN "sampled_at" SET NOT NULL');
+    await createIndex(client, 'CREATE UNIQUE INDEX IF NOT EXISTS "monitor_runs_sampled_at_key" ON "monitor_runs" ("sampled_at")');
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "server_endpoint_player_snapshots" (
+        "server_id" uuid NOT NULL REFERENCES "servers"("id") ON DELETE CASCADE,
+        "edition" "minecraft_edition" NOT NULL,
+        "history_source_id" uuid NOT NULL,
+        "sampled_at" timestamp with time zone NOT NULL,
+        "recorded_at" timestamp with time zone DEFAULT now() NOT NULL,
+        "status" "server_endpoint_health" NOT NULL,
+        "failure_code" "server_endpoint_sample_failure",
+        "players_current" integer,
+        "players_max" integer,
+        "run_id" varchar(100) NOT NULL,
+        PRIMARY KEY ("server_id", "edition", "sampled_at"),
+        CHECK ("players_current" is null or "players_current" >= 0),
+        CHECK ("players_max" is null or "players_max" >= 0),
+        CHECK (("status" = 'online' and "failure_code" is null) or ("status" <> 'online')),
+        CHECK (("status" = 'online') or ("players_current" is null and "players_max" is null))
+      )
+    `);
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_endpoint_player_snapshots_server_sampled_idx" ON "server_endpoint_player_snapshots" ("server_id", "sampled_at")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_endpoint_player_snapshots_sampled_brin_idx" ON "server_endpoint_player_snapshots" USING brin ("sampled_at")');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "server_endpoint_player_hourly" (
+        "server_id" uuid NOT NULL REFERENCES "servers"("id") ON DELETE CASCADE,
+        "edition" "minecraft_edition" NOT NULL,
+        "bucket_start" timestamp with time zone NOT NULL,
+        "last_source_id" uuid,
+        "source_changed" integer DEFAULT 0 NOT NULL,
+        "sample_count" integer DEFAULT 0 NOT NULL,
+        "online_count" integer DEFAULT 0 NOT NULL,
+        "unknown_count" integer DEFAULT 0 NOT NULL,
+        "player_data_count" integer DEFAULT 0 NOT NULL,
+        "players_total" bigint DEFAULT 0 NOT NULL,
+        "players_peak" integer,
+        "capacity_data_count" integer DEFAULT 0 NOT NULL,
+        "capacity_total" bigint DEFAULT 0 NOT NULL,
+        "capacity_latest" integer,
+        "occupancy_data_count" integer DEFAULT 0 NOT NULL,
+        "occupancy_basis_points_total" bigint DEFAULT 0 NOT NULL,
+        "last_sample_at" timestamp with time zone,
+        PRIMARY KEY ("server_id", "edition", "bucket_start"),
+        CHECK ("source_changed" between 0 and 1),
+        CHECK ("sample_count" >= 0 and "online_count" >= 0 and "unknown_count" >= 0)
+      )
+    `);
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_endpoint_player_hourly_server_bucket_idx" ON "server_endpoint_player_hourly" ("server_id", "bucket_start")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_endpoint_player_hourly_bucket_brin_idx" ON "server_endpoint_player_hourly" USING brin ("bucket_start")');
 
     await client.query("CREATE INDEX IF NOT EXISTS servers_name_trgm_idx ON servers USING gin (lower(name) gin_trgm_ops)");
     await client.query("CREATE INDEX IF NOT EXISTS servers_description_trgm_idx ON servers USING gin (lower(description) gin_trgm_ops)");

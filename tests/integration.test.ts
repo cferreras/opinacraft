@@ -448,3 +448,50 @@ test("review reports reject self reports and open duplicates", testOptions, asyn
   await createReviewReport(reporterId, serverId, review!.id, { reason: "offensive", details: "Detalle del reporte" });
   await assert.rejects(() => createReviewReport(reporterId, serverId, review!.id, { reason: "offensive" }), ReviewReportAlreadyOpenError);
 });
+
+test("player observations are atomic, deduplicated and preserve source history", testOptions, async () => {
+  const ownerId = await createUser();
+  const serverId = await createServerRecord({
+    ownerId,
+    endpoint: { host: "history.example.invalid", port: 25565, verificationStatus: "verified" },
+  });
+  const [{ history_source_id: historySourceId }] = (await database().query(
+    "select history_source_id from server_endpoints where server_id = $1 and edition = 'java'",
+    [serverId],
+  )).rows;
+  const { db } = await import("../src/db.ts");
+  const { applyEndpointObservation } = await import("../src/lib/servers/monitor-persistence.ts");
+  const sampledAt = new Date("2026-08-03T12:00:00.000Z");
+  const observation = {
+    serverId,
+    edition: "java" as const,
+    historySourceId,
+    sampledAt,
+    runId: randomUUID(),
+    status: "online" as const,
+    failureCode: null,
+    playersCurrent: 12,
+    playersMax: 100,
+    version: "1.21",
+    latencyMs: 42,
+  };
+  const first = await db.transaction((tx) => applyEndpointObservation(tx, observation));
+  const duplicate = await db.transaction((tx) => applyEndpointObservation(tx, observation));
+  assert.equal(first.persisted, true);
+  assert.equal(duplicate.duplicate, true);
+
+  const raw = await database().query("select count(*)::int as count from server_endpoint_player_snapshots where server_id = $1", [serverId]);
+  const hourly = await database().query("select sample_count, players_total, players_peak from server_endpoint_player_hourly where server_id = $1 and edition = 'java'", [serverId]);
+  assert.equal(raw.rows[0].count, 1);
+  assert.deepEqual(hourly.rows[0], { sample_count: 1, players_total: "12", players_peak: 12 });
+
+  const nextSource = randomUUID();
+  await database().query("update server_endpoints set host = $2, history_source_id = $3 where server_id = $1 and edition = 'java'", [serverId, "new-history.example.invalid", nextSource]);
+  await db.transaction((tx) => applyEndpointObservation(tx, { ...observation, sampledAt: new Date("2026-08-03T12:15:00.000Z"), runId: randomUUID(), status: "offline", failureCode: "unreachable", historySourceId }));
+  await db.transaction((tx) => applyEndpointObservation(tx, { ...observation, sampledAt: new Date("2026-08-03T12:30:00.000Z"), runId: randomUUID(), historySourceId: nextSource, playersCurrent: 20 }));
+  const current = await database().query("select health_status, players_current from server_endpoints where server_id = $1 and edition = 'java'", [serverId]);
+  assert.equal(current.rows[0].health_status, "online");
+  assert.equal(current.rows[0].players_current, 20);
+  const rows = await database().query("select count(*)::int as count, count(distinct history_source_id)::int as sources from server_endpoint_player_snapshots where server_id = $1", [serverId]);
+  assert.deepEqual(rows.rows[0], { count: 3, sources: 2 });
+});

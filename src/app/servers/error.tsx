@@ -13,7 +13,7 @@ export default function ServersError({
     <RouteErrorState
       error={error}
       reset={reset}
-      title="Unable to load the server directory"
+      title="No se ha podido cargar el directorio"
     />
   );
 }

@@ -5,35 +5,43 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import {
-  IconChevronDown,
-  IconHelpCircle,
-  IconLayoutDashboard,
-  IconMenu2,
-  IconPlus,
-  IconSearch,
-  IconServer,
-  IconSettings,
-  IconShieldCheck,
-  IconX,
-} from "@tabler/icons-react";
+  ChevronRight,
+  CircleHelp,
+  LayoutDashboard,
+  Menu,
+  Plus,
+  Search,
+  Server,
+  ShieldCheck,
+  User,
+  X,
+} from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navigation = [
-  { label: "Inicio", href: "/", icon: IconLayoutDashboard },
-  { label: "Explorar", href: "/servers", icon: IconSearch },
-  { label: "Mis servidores", href: "/dashboard/servers", icon: IconServer },
+  { label: "Inicio", href: "/", icon: LayoutDashboard },
+  { label: "Explorar", href: "/servers", icon: Search },
+  { label: "Mis servidores", href: "/dashboard/servers", icon: Server },
 ] as const;
 
-const workspaceNavigation = [
-  { label: "Publicar servidor", href: "/servers/new", icon: IconPlus },
-  { label: "Moderación", href: "/admin", icon: IconShieldCheck },
-  { label: "Mi perfil", href: "/profile", icon: IconSettings },
-] as const;
+type PlatformRole = "moderator" | "admin";
+
+const moderationNavigation = { label: "Moderación", href: "/admin", icon: ShieldCheck } as const;
+
+type NavigationItem = (typeof navigation)[number] | typeof moderationNavigation;
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <span className={`app-brand ${compact ? "app-brand-compact" : ""}`}>
+    <span className="inline-flex items-center gap-2 font-semibold tracking-tight">
       <Image
         src="/brand/opinacraft-mark-v2-faceted.svg"
         alt=""
@@ -41,43 +49,102 @@ function Brand({ compact = false }: { compact?: boolean }) {
         width={compact ? 25 : 30}
         height={compact ? 25 : 30}
         priority
-        className="app-brand-mark"
+        className="rounded-md"
       />
-      <span className="app-brand-name">OpinaCraft</span>
+      {!compact && <span>OpinaCraft</span>}
     </span>
   );
 }
 
 function isNavigationActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
-  if (href === "/dashboard/servers") {
-    return pathname.startsWith("/dashboard") || pathname.endsWith("/manage");
-  }
+  if (href === "/dashboard/servers") return pathname.startsWith("/dashboard") || pathname.endsWith("/manage");
   if (href === "/servers/new") return pathname === href;
-  if (href === "/servers") {
-    return pathname === href || (
-      pathname.startsWith("/servers/") &&
-      pathname !== "/servers/new" &&
-      !pathname.endsWith("/manage")
-    );
-  }
+  if (href === "/servers") return pathname === href || (pathname.startsWith("/servers/") && pathname !== "/servers/new" && !pathname.endsWith("/manage"));
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function avatarLabel(session: { user?: { name?: string | null; email?: string | null } } | null | undefined) {
   const value = session?.user?.name || session?.user?.email || "OC";
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "OC";
+  return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "OC";
+}
+
+function NavigationLinks({ pathname, canModerate = false }: { pathname: string; canModerate?: boolean }) {
+  const items = canModerate ? [...navigation, moderationNavigation] : navigation;
+
+  return (
+    <nav aria-label="Navegación principal" className="flex items-center gap-1">
+      {items.map((item) => {
+        const active = isNavigationActive(pathname, item.href);
+        const Icon = item.icon;
+        return (
+          <Button key={item.href} variant={active ? "secondary" : "ghost"} size="sm" asChild>
+            <Link href={item.href} aria-current={active ? "page" : undefined}>
+              <Icon className="size-4" /> {item.label}
+            </Link>
+          </Button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function MobileNavigationSection({
+  label,
+  items,
+  pathname,
+  onNavigate,
+}: {
+  label: string;
+  items: readonly NavigationItem[];
+  pathname: string;
+  onNavigate: () => void;
+}) {
+  return (
+    <div>
+      <p className="px-3 pb-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <div className="grid gap-1">
+        {items.map((item) => {
+          const active = isNavigationActive(pathname, item.href);
+          const Icon = item.icon;
+
+          return (
+            <Button
+              key={item.href}
+              variant="ghost"
+              asChild
+              className={`relative h-10 w-full justify-start gap-3 rounded-md px-3 ${active ? "bg-accent text-accent-foreground before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary hover:bg-accent" : "text-foreground"}`}
+            >
+              <Link href={item.href} aria-current={active ? "page" : undefined} onClick={onNavigate}>
+                <Icon className={`size-4 ${active ? "text-primary" : "text-muted-foreground"}`} />
+                {item.label}
+              </Link>
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MobileNavigation({ pathname, canModerate, onNavigate }: { pathname: string; canModerate: boolean; onNavigate: () => void }) {
+  const managementItems: readonly NavigationItem[] = canModerate
+    ? [navigation[2], moderationNavigation]
+    : [navigation[2]];
+
+  return (
+    <nav aria-label="Navegación móvil" className="space-y-5">
+      <MobileNavigationSection label="Descubrir" items={navigation.slice(0, 2)} pathname={pathname} onNavigate={onNavigate} />
+      <MobileNavigationSection label="Gestionar" items={managementItems} pathname={pathname} onNavigate={onNavigate} />
+    </nav>
+  );
 }
 
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, isPending: sessionPending } = authClient.useSession();
+  const [platformAccess, setPlatformAccess] = useState<{ userId: string; role: PlatformRole | null }>({ userId: "", role: null });
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -87,23 +154,34 @@ export function SiteHeader() {
     function handleKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        if (window.matchMedia("(max-width: 1023px)").matches) {
-          setSearchOpen(true);
-          setMenuOpen(false);
-        } else {
-          desktopSearchRef.current?.focus();
-        }
-      }
-
-      if (event.key === "Escape") {
-        setMenuOpen(false);
-        setSearchOpen(false);
+        if (window.matchMedia("(max-width: 1023px)").matches) setSearchOpen(true);
+        else desktopSearchRef.current?.focus();
       }
     }
-
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      return () => { active = false; };
+    }
+
+    void fetch("/api/account/platform-role", { cache: "no-store" })
+      .then(async (response) => (response.ok ? (await response.json()) as { role?: string | null } : null))
+      .then((result) => {
+        if (!active) return;
+        setPlatformAccess({ userId, role: result?.role === "admin" || result?.role === "moderator" ? result.role : null });
+      })
+      .catch(() => {
+        if (active) setPlatformAccess({ userId, role: null });
+      });
+
+    return () => { active = false; };
+  }, [session?.user?.id]);
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,148 +192,98 @@ export function SiteHeader() {
   }
 
   const displayName = session?.user?.name || session?.user?.email?.split("@")[0] || "Invitado";
-  const initials = avatarLabel(session);
+  const canModerate = platformAccess.userId === session?.user?.id && platformAccess.role !== null;
 
   return (
-    <header className="app-topbar">
-      <div className="app-topbar-desktop">
-        <Link href="/" aria-label="OpinaCraft, inicio" className="app-topbar-brand">
-          <Brand />
-        </Link>
+    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menú"><Menu className="size-5" /></Button>
+          </SheetTrigger>
+          <SheetContent
+            side="left"
+            showCloseButton={false}
+            className="gap-0 overflow-hidden bg-background p-0 data-[side=left]:w-[calc(100%_-_2rem)] data-[side=left]:max-w-80 data-[side=left]:sm:inset-y-auto data-[side=left]:sm:left-3 data-[side=left]:sm:top-3 data-[side=left]:sm:h-auto data-[side=left]:sm:max-h-[calc(100vh_-_1.5rem)] data-[side=left]:sm:max-w-80 data-[side=left]:sm:rounded-xl data-[side=left]:sm:border"
+          >
+            <SheetClose asChild>
+              <Button variant="ghost" size="icon-lg" className="absolute right-3 top-3 z-10 size-10" aria-label="Cerrar menú">
+                <X className="size-4" />
+              </Button>
+            </SheetClose>
+            <SheetHeader className="border-b px-5 py-5 pr-16 text-left">
+              <SheetTitle><Brand /></SheetTitle>
+              <SheetDescription>Encuentra, publica y gestiona servidores.</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
+              <MobileNavigation pathname={pathname} canModerate={canModerate} onNavigate={() => setMenuOpen(false)} />
+            </div>
+            <div className="mt-auto border-t p-4">
+              {session ? (
+                <Button variant="ghost" asChild className="mb-3 h-auto w-full justify-start gap-3 px-2 py-2">
+                  <Link href="/profile" onClick={() => setMenuOpen(false)}>
+                    <Avatar className="size-9"><AvatarFallback className="bg-accent font-semibold text-accent-foreground">{avatarLabel(session)}</AvatarFallback></Avatar>
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="block truncate text-sm font-semibold">{displayName}</span>
+                      <span className="block truncate text-xs font-normal text-muted-foreground">Cuenta y preferencias</span>
+                    </span>
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" asChild className="mb-3 h-10 w-full"><Link href="/sign-in" onClick={() => setMenuOpen(false)}>Iniciar sesión</Link></Button>
+              )}
+              <Button asChild size="lg" className="h-10 w-full shadow-none">
+                <Link href="/servers/new" onClick={() => setMenuOpen(false)}><Plus className="size-4" /> Publicar servidor</Link>
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
 
-        <nav className="app-topbar-nav" aria-label="Navegación principal">
-          {navigation.map((item) => {
-            const active = isNavigationActive(pathname, item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={`app-topbar-nav-link ${active ? "is-active" : ""}`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <Link href="/" aria-label="OpinaCraft, inicio" className="shrink-0"><Brand compact={false} /></Link>
+        <div className="hidden lg:block"><NavigationLinks pathname={pathname} canModerate={canModerate} /></div>
 
-        <form onSubmit={submitSearch} className="app-topbar-search">
-          <IconSearch aria-hidden="true" size="1.0625rem" stroke={1.8} />
+        <form onSubmit={submitSearch} className="relative ml-auto hidden w-full max-w-xs lg:block">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <label htmlFor="header-search" className="sr-only">Buscar servidores</label>
-          <input
-            ref={desktopSearchRef}
-            id="header-search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-            placeholder="Buscar servidores"
-          />
-          <span className="app-search-shortcut" aria-hidden="true">Ctrl K</span>
+          <Input ref={desktopSearchRef} id="header-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar servidores" className="h-9 pl-8 pr-14" />
+          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Ctrl K</kbd>
         </form>
 
-        <div className="app-topbar-actions">
-          <Link href="/contact" className="app-icon-button" aria-label="Ayuda" title="Ayuda">
-            <IconHelpCircle aria-hidden="true" size="1.125rem" stroke={1.7} />
-          </Link>
-          <Link href="/servers/new" className="app-topbar-publish">
-            <IconPlus aria-hidden="true" size="0.9375rem" stroke={2} />
-            Publicar
-          </Link>
-          {sessionPending ? (
-            <span className="app-account-loading" aria-label="Cargando cuenta" role="status" />
-          ) : session ? (
-            <Link href="/profile" className="app-account-chip" aria-label="Abrir mi perfil">
-              <span className="app-avatar" aria-hidden="true">{initials}</span>
-              <span className="app-account-chip-copy"><strong>{displayName}</strong><small>Mi perfil</small></span>
-              <IconChevronDown aria-hidden="true" size="0.9375rem" stroke={1.8} />
-            </Link>
-          ) : (
-            <Link href="/sign-in" className="app-sign-in-link">Iniciar sesión</Link>
-          )}
+        <div className="ml-auto flex items-center gap-1 lg:ml-0">
+          <Button variant="ghost" size="icon" asChild className="hidden sm:inline-flex"><Link href="/contact" aria-label="Ayuda"><CircleHelp className="size-4" /></Link></Button>
+          <ThemeToggle />
+          <Button size="sm" asChild className="hidden sm:inline-flex"><Link href="/servers/new"><Plus className="size-4" /> Publicar</Link></Button>
+          {sessionPending ? <Skeleton className="size-8 rounded-full" /> : session ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-9 gap-2 px-1.5" aria-label="Abrir mi perfil">
+                  <Avatar className="size-7"><AvatarFallback>{avatarLabel(session)}</AvatarFallback></Avatar>
+                  <span className="hidden max-w-28 truncate text-sm font-medium md:inline">{displayName}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild><Link href="/profile"><User className="size-4" /> Mi perfil</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/dashboard/servers"><Server className="size-4" /> Mis servidores</Link></DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex"><Link href="/sign-in">Iniciar sesión</Link></Button>}
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSearchOpen(true)} aria-label="Buscar servidores"><Search className="size-5" /></Button>
         </div>
       </div>
 
-      <div className="app-topbar-mobile">
-        <button
-          type="button"
-          aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
-          aria-expanded={menuOpen}
-          aria-controls="mobile-navigation"
-          onClick={() => {
-            setMenuOpen((open) => !open);
-            setSearchOpen(false);
-          }}
-          className="app-icon-button"
-        >
-          {menuOpen ? <IconX aria-hidden="true" size="1.25rem" /> : <IconMenu2 aria-hidden="true" size="1.25rem" />}
-        </button>
-        <Link href="/" aria-label="OpinaCraft, inicio"><Brand compact /></Link>
-        <button
-          type="button"
-          aria-label="Buscar servidores"
-          aria-expanded={searchOpen}
-          aria-controls="mobile-header-search-form"
-          onClick={() => {
-            setSearchOpen((open) => !open);
-            setMenuOpen(false);
-          }}
-          className="app-icon-button"
-        >
-          <IconSearch aria-hidden="true" size="1.1875rem" stroke={1.7} />
-        </button>
-      </div>
-
-      {searchOpen ? (
-        <form id="mobile-header-search-form" onSubmit={submitSearch} className="app-mobile-search">
-          <IconSearch aria-hidden="true" size="1.0625rem" stroke={1.8} />
-          <label htmlFor="mobile-header-search" className="sr-only">Buscar servidores</label>
-          <input
-            id="mobile-header-search"
-            autoFocus
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-            placeholder="Buscar servidores"
-          />
-        </form>
-      ) : null}
-
-      {menuOpen ? (
-        <div id="mobile-navigation" className="app-mobile-menu">
-          <nav aria-label="Navegación móvil" className="app-mobile-menu-list">
-            {[...navigation, ...workspaceNavigation].map((item) => {
-              const active = isNavigationActive(pathname, item.href);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => setMenuOpen(false)}
-                  className={`app-mobile-menu-link ${active ? "is-active" : ""}`}
-                >
-                  <Icon aria-hidden="true" size="1.125rem" stroke={1.7} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="app-mobile-menu-actions">
-            {session ? <Link href="/profile" onClick={() => setMenuOpen(false)} className="ui-button-secondary">Mi perfil</Link> : <Link href="/sign-in" onClick={() => setMenuOpen(false)} className="ui-button-secondary">Iniciar sesión</Link>}
-            <Link href="/servers/new" onClick={() => setMenuOpen(false)} className="ui-button-primary">Publicar</Link>
-          </div>
-        </div>
-      ) : null}
+      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Buscar servidores</DialogTitle>
+            <DialogDescription>Busca por nombre, dirección o etiquetas.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitSearch} className="flex gap-2">
+            <Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ej. survival" />
+            <Button type="submit"><Search className="size-4" /> Buscar</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

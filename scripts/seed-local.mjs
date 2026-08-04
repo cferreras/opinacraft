@@ -32,6 +32,8 @@ const tags = [
 ];
 
 const seedServers = [
+  // Runtime latency is deliberately left empty in fixtures. The monitor worker
+  // is the only source of latency values shown in the public directory.
   {
     id: "20000000-0000-4000-8000-000000000001",
     name: "Skyforge Realms",
@@ -46,7 +48,7 @@ const seedServers = [
     createdAt: "2026-07-29T10:00:00.000Z",
     tags: ["aventura", "economia", "rpg"],
     endpoints: [
-      { edition: "java", host: "play.skyforge.seed.test", port: 25565, healthStatus: "online", playersCurrent: 2147, playersMax: 4000, version: "1.21.8", latencyMs: 42, minutesAgo: 4, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
+      { edition: "java", host: "play.skyforge.seed.test", port: 25565, healthStatus: "online", playersCurrent: 2147, playersMax: 4000, version: "1.21.8", latencyMs: null, minutesAgo: 4, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
     ],
     media: [{ kind: "banner", sourceFile: "skyforge-realms-banner.png", outputFile: "skyforge-realms-banner.webp" }],
     review: { rating: 5, content: "La comunidad está muy cuidada y siempre hay algo nuevo que explorar." },
@@ -65,8 +67,8 @@ const seedServers = [
     createdAt: "2026-07-28T11:00:00.000Z",
     tags: ["supervivencia", "crossplay", "aventura"],
     endpoints: [
-      { edition: "java", host: "play.astral.seed.test", port: 25565, healthStatus: "online", playersCurrent: 1843, playersMax: 3000, version: "1.21.8", latencyMs: 58, minutesAgo: 7, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
-      { edition: "bedrock", host: "bedrock.astral.seed.test", port: 19132, healthStatus: "online", playersCurrent: 611, playersMax: 1200, version: "1.21.80", latencyMs: 71, minutesAgo: 7, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
+      { edition: "java", host: "play.astral.seed.test", port: 25565, healthStatus: "online", playersCurrent: 1843, playersMax: 3000, version: "1.21.8", latencyMs: null, minutesAgo: 7, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
+      { edition: "bedrock", host: "bedrock.astral.seed.test", port: 19132, healthStatus: "online", playersCurrent: 611, playersMax: 1200, version: "1.21.80", latencyMs: null, minutesAgo: 7, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
     ],
     media: [{ kind: "logo", sourceFile: "astral-network-logo.png", outputFile: "astral-network-logo.webp" }],
     review: { rating: 4, content: "Buen equilibrio entre progreso, eventos y espacio para jugar tranquilo." },
@@ -85,8 +87,8 @@ const seedServers = [
     createdAt: "2026-07-27T09:30:00.000Z",
     tags: ["supervivencia", "crossplay", "comunidad"],
     endpoints: [
-      { edition: "java", host: "play.verdant.seed.test", port: 25565, healthStatus: "online", playersCurrent: 766, playersMax: 1800, version: "1.21.7", latencyMs: 66, minutesAgo: 10, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
-      { edition: "bedrock", host: "bedrock.verdant.seed.test", port: 19132, healthStatus: "online", playersCurrent: 284, playersMax: 800, version: "1.21.80", latencyMs: 83, minutesAgo: 10, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
+      { edition: "java", host: "play.verdant.seed.test", port: 25565, healthStatus: "online", playersCurrent: 766, playersMax: 1800, version: "1.21.7", latencyMs: null, minutesAgo: 10, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
+      { edition: "bedrock", host: "bedrock.verdant.seed.test", port: 19132, healthStatus: "online", playersCurrent: 284, playersMax: 800, version: "1.21.80", latencyMs: null, minutesAgo: 10, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
     ],
     media: [{ kind: "logo", sourceFile: "verdant-isles-logo.png", outputFile: "verdant-isles-logo.webp" }],
     review: { rating: 4, content: "Un mundo precioso y con gente amable; las islas tienen mucha personalidad." },
@@ -105,7 +107,7 @@ const seedServers = [
     createdAt: "2026-07-26T13:00:00.000Z",
     tags: ["tecnico", "construccion", "comunidad"],
     endpoints: [
-      { edition: "java", host: "play.redstone.seed.test", port: 25565, healthStatus: "online", playersCurrent: 932, playersMax: 1500, version: "1.21.8", latencyMs: 36, minutesAgo: 6, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
+      { edition: "java", host: "play.redstone.seed.test", port: 25565, healthStatus: "online", playersCurrent: 932, playersMax: 1500, version: "1.21.8", latencyMs: null, minutesAgo: 6, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
     ],
     media: [{ kind: "logo", sourceFile: "redstone-republic-logo.png", outputFile: "redstone-republic-logo.webp" }],
     review: { rating: 4, content: "Ideal si te gusta aprender mecanismos y ver cómo crecen los proyectos colectivos." },
@@ -181,7 +183,7 @@ const seedServers = [
     createdAt: "2026-07-23T09:00:00.000Z",
     tags: ["aventura", "comunidad"],
     endpoints: [
-      { edition: "bedrock", host: "play.nube.seed.test", port: 19132, healthStatus: "online", playersCurrent: 88, playersMax: 300, version: "1.21.80", latencyMs: 90, minutesAgo: 9, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
+      { edition: "bedrock", host: "play.nube.seed.test", port: 19132, healthStatus: "online", playersCurrent: 88, playersMax: 300, version: "1.21.80", latencyMs: null, minutesAgo: 9, lastOnlineDaysAgo: 0, consecutiveFailures: 0 },
     ],
     media: [],
     review: null,

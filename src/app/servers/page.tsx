@@ -1,27 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { IconSearch } from "@tabler/icons-react";
+import { Search } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { FilterSelect } from "@/components/filter-select";
 import { PublicServerRow } from "@/components/public-server-row";
 import { ServerSearchInput } from "@/components/server-search-input";
-import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 import { TagCombobox } from "@/components/tag-combobox";
 import { listPublishedServers, type PublicServerSort } from "@/lib/servers/queries";
 import { normalizeTagSlug } from "@/lib/servers/tags";
 
-export const metadata: Metadata = {
-  title: "Servidores Minecraft | OpinaCraft",
-  description: "Descubre comunidades Minecraft en OpinaCraft.",
-  alternates: { canonical: "/servers" },
-  openGraph: {
-    title: "Servidores Minecraft | OpinaCraft",
-    description: "Descubre comunidades Minecraft en OpinaCraft.",
-    type: "website",
-  },
-};
-
+export const metadata: Metadata = { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", alternates: { canonical: "/servers" }, openGraph: { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", type: "website" } };
 export const dynamic = "force-dynamic";
 
 const sortOptions: Array<{ value: PublicServerSort; label: string }> = [
@@ -30,132 +23,35 @@ const sortOptions: Array<{ value: PublicServerSort; label: string }> = [
   { value: "recent", label: "Más recientes" },
 ];
 
-function countLabel(count: number) {
-  return `${count} ${count === 1 ? "servidor" : "servidores"}`;
-}
+function countLabel(count: number) { return `${count} ${count === 1 ? "servidor" : "servidores"}`; }
 
-export default async function PublicServersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ page?: string; q?: string; tags?: string; edition?: string; status?: string; sort?: string }>;
-}) {
+export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; tags?: string; edition?: string; status?: string; sort?: string }> }) {
   const query = await searchParams;
   const requestedPage = Number.parseInt(query.page ?? "1", 10);
   const edition = query.edition === "java" || query.edition === "bedrock" ? query.edition : undefined;
   const status = query.status === "online" || query.status === "offline" || query.status === "unknown" ? query.status : undefined;
   const sort: PublicServerSort = query.sort === "players" || query.sort === "recent" ? query.sort : "rating";
   const tagSlugs = (query.tags ?? "").split(",").map((tag) => normalizeTagSlug(tag)).filter(Boolean);
-  const { servers, hasNextPage, page } = await listPublishedServers({
-    page: Number.isFinite(requestedPage) ? requestedPage : 1,
-    query: query.q ?? "",
-    tagSlugs,
-    edition,
-    status,
-    sort,
-  });
+  const { servers, hasNextPage, page } = await listPublishedServers({ page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", tagSlugs, edition, status, sort });
   const searchParamsForPage = new URLSearchParams();
   if (query.q) searchParamsForPage.set("q", query.q);
   if (query.tags) searchParamsForPage.set("tags", query.tags);
   if (query.edition) searchParamsForPage.set("edition", query.edition);
   if (query.status) searchParamsForPage.set("status", query.status);
   if (query.sort) searchParamsForPage.set("sort", query.sort);
-  const pageHref = (nextPage: number) => {
-    searchParamsForPage.set("page", String(nextPage));
-    return `/servers?${searchParamsForPage.toString()}`;
-  };
-
-  const initialTags = (query.tags ?? "")
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-  const hasActiveFilters = Boolean(
-    query.q ||
-      query.tags ||
-      query.edition ||
-      query.status ||
-      (query.sort && query.sort !== "rating"),
-  );
+  const pageHref = (nextPage: number) => { searchParamsForPage.set("page", String(nextPage)); return `/servers?${searchParamsForPage.toString()}`; };
+  const initialTags = (query.tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean);
+  const hasActiveFilters = Boolean(query.q || query.tags || query.edition || query.status || (query.sort && query.sort !== "rating"));
 
   return (
-    <div className="app-shell">
+    <div className="min-h-screen bg-background">
       <SiteHeader />
-
-      <main className="app-main page-shell px-4 pb-12 pt-7 sm:px-6 sm:pt-8 lg:px-7 2xl:px-8">
-        <section aria-labelledby="servers-heading">
-          <p className="ui-eyebrow">Directorio comunitario</p>
-          <h1 id="servers-heading" className="ui-page-title mt-2.5 max-w-[42.5rem]">
-            Encuentra tu próximo
-            <br className="hidden sm:block" /> servidor de Minecraft
-          </h1>
-          <p className="ui-page-copy mt-2">
-            Explora, compara y únete a las mejores comunidades de Minecraft.
-          </p>
-
-          <form action="/servers" method="get" className="mt-4">
-            <div className="app-header-search flex h-11 max-w-[47.8125rem] items-center bg-white px-0">
-              <IconSearch aria-hidden="true" className="ml-3.5 shrink-0 text-[#7b8793]" size="1.0625rem" stroke={1.7} />
-              <label htmlFor="server-search" className="sr-only">Buscar</label>
-              <ServerSearchInput defaultValue={query.q ?? ""} />
-            </div>
-
-            <div className="relative z-30 mt-6 overflow-visible rounded-t-2xl border-x border-y border-[#e0e6eb] bg-zinc-50 px-3 py-3 sm:px-4">
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1.05fr_1.2fr_1.35fr_1.16fr] lg:items-center">
-                <FilterSelect id="edition-filter" name="edition" label="Edición" defaultValue={query.edition ?? ""} submitOnChange>
-                  <option value="">Todas</option>
-                  <option value="java">Java</option>
-                  <option value="bedrock">Bedrock</option>
-                </FilterSelect>
-                <FilterSelect id="status-filter" name="status" label="Estado" defaultValue={query.status ?? ""} submitOnChange>
-                  <option value="">Todos</option>
-                  <option value="online">En línea</option>
-                  <option value="offline">Fuera de línea</option>
-                  <option value="unknown">Desconocido</option>
-                </FilterSelect>
-                <TagCombobox name="tags" initialTags={initialTags} compact label="Etiquetas" submitOnChange resetPagination />
-                <FilterSelect id="sort-filter" name="sort" label="Ordenar" defaultValue={sort} submitOnChange>
-                  {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </FilterSelect>
-              </div>
-              <div className="mt-3 flex items-center justify-between border-t border-[#e0e6eb] pt-3 text-[0.6875rem] text-[#77838e]">
-                <span>Mostrando {countLabel(servers.length)} en esta página</span>
-                {hasActiveFilters ? (
-                  <Link href="/servers" className="font-medium text-[#2d34cf] hover:underline">Limpiar filtros</Link>
-                ) : null}
-              </div>
-            </div>
-            <button type="submit" className="sr-only">Aplicar filtros</button>
-          </form>
+      <main className="mx-auto w-full max-w-6xl px-4 pb-12 pt-8 sm:px-6 lg:px-8">
+        <section aria-labelledby="servers-heading"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">Directorio comunitario</p><h1 id="servers-heading" className="mt-2 text-4xl font-semibold tracking-tight">Encuentra tu próximo servidor de Minecraft</h1><p className="mt-2 max-w-2xl text-base leading-7 text-muted-foreground">Explora, compara y únete a las mejores comunidades de Minecraft.</p>
+          <form action="/servers" method="get" className="mt-6"><Card className="overflow-visible"><CardContent className="p-4"><div className="flex items-center gap-2"><Search aria-hidden="true" className="size-4 text-muted-foreground" /><label htmlFor="server-search" className="sr-only">Buscar</label><ServerSearchInput defaultValue={query.q ?? ""} /></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.05fr_1.2fr_1.35fr_1.16fr]"><FilterSelect id="edition-filter" name="edition" label="Edición" defaultValue={query.edition ?? ""} submitOnChange><option value="">Todas</option><option value="java">Java</option><option value="bedrock">Bedrock</option></FilterSelect><FilterSelect id="status-filter" name="status" label="Estado" defaultValue={query.status ?? ""} submitOnChange><option value="">Todos</option><option value="online">En línea</option><option value="offline">Fuera de línea</option><option value="unknown">Desconocido</option></FilterSelect><TagCombobox name="tags" initialTags={initialTags} compact label="Etiquetas" submitOnChange resetPagination /><FilterSelect id="sort-filter" name="sort" label="Ordenar" defaultValue={sort} submitOnChange>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect></div><div className="mt-4 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground"><span>Mostrando {countLabel(servers.length)} en esta página</span>{hasActiveFilters ? <Button variant="link" asChild size="sm" className="h-auto p-0"><Link href="/servers">Limpiar filtros</Link></Button> : null}</div></CardContent></Card><Button type="submit" variant="ghost" className="sr-only">Aplicar filtros</Button></form>
         </section>
-
-        {servers.length === 0 ? (
-          <div className="rounded-b-2xl border-x border-b border-[#e0e6eb] bg-[#fbfcff] px-6 py-14 text-center">
-            <h2 className="text-lg font-semibold text-[#17202a]">Todavía no hay servidores publicados</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#687580]">Sé el primero en publicar una comunidad Minecraft en OpinaCraft.</p>
-            <Link href="/servers/new" className="mt-6 inline-flex h-10 items-center rounded-lg bg-[#3029e7] px-4 text-sm font-semibold text-white shadow-[0_0.3125rem_0.75rem_rgba(48,41,231,0.16)] transition hover:bg-[#2821c8]">Añadir servidor</Link>
-          </div>
-        ) : (
-          <section aria-labelledby="server-results-heading">
-            <h2 id="server-results-heading" className="sr-only">Resultados de servidores</h2>
-            <div className="overflow-hidden rounded-b-2xl border-x border-b border-[#e0e6eb] bg-white shadow-[0_0.0625rem_0.125rem_rgba(16,30,45,0.02)]">
-              <div className="hidden h-10 items-center border-b border-[#e0e6eb] bg-[#f7f8fa] px-4 text-[0.5625rem] font-medium uppercase tracking-[0.035em] text-[#7c8799] xl:grid xl:grid-cols-[minmax(15.625rem,1.5fr)_4.5rem_6.125rem_5.125rem_3.625rem_4.5rem_1.75rem] xl:items-center xl:gap-2">
-                <span>Servidor</span>
-                <span>Edición</span>
-                <span>Jugadores</span>
-                <span>Versión</span>
-                <span>Latencia</span>
-                <span>Valoración</span>
-                <span className="text-left">IP</span>
-              </div>
-              {servers.map((server) => <PublicServerRow key={server.id} server={server} />)}
-            </div>
-            <nav className="mt-5 flex items-center justify-between text-xs" aria-label="Páginas de servidores">
-              {page > 1 ? <Link href={pageHref(page - 1)} className="rounded-lg border border-[#cbd2ff] bg-white px-3.5 py-2 font-medium text-[#2d34cf] transition hover:bg-[#f0f1ff]">Anterior</Link> : <span />}
-              {hasNextPage ? <Link href={pageHref(page + 1)} className="rounded-lg border border-[#cbd2ff] bg-white px-3.5 py-2 font-medium text-[#2d34cf] transition hover:bg-[#f0f1ff]">Siguiente</Link> : null}
-            </nav>
-          </section>
-        )}
+        {servers.length === 0 ? <Empty className="mt-4 rounded-xl border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>Todavía no hay servidores publicados</EmptyTitle><EmptyDescription>Sé el primero en publicar una comunidad Minecraft en OpinaCraft.</EmptyDescription></EmptyHeader><Button asChild><Link href="/servers/new">Añadir servidor</Link></Button></Empty> : <section className="mt-4" aria-labelledby="server-results-heading"><h2 id="server-results-heading" className="sr-only">Resultados de servidores</h2><Card className="overflow-hidden"><CardHeader className="border-b bg-muted/30 px-4 py-3"><CardTitle className="text-sm">Resultados</CardTitle></CardHeader><CardContent className="p-0"><div className="hidden h-10 items-center border-b bg-muted/20 px-4 text-[10px] font-medium uppercase tracking-[0.035em] text-muted-foreground xl:grid xl:grid-cols-[minmax(15.625rem,1.5fr)_5.25rem_6.125rem_5.125rem_3.625rem_4.5rem_1.75rem] xl:items-center xl:gap-2"><span>Servidor</span><span>Edición</span><span>Jugadores</span><span>Versión</span><span>Latencia</span><span>Valoración</span><span>IP</span></div>{servers.map((server) => <PublicServerRow key={server.id} server={server} />)}</CardContent></Card><nav className="mt-5 flex items-center justify-between" aria-label="Páginas de servidores">{page > 1 ? <Button asChild variant="outline" size="sm"><Link href={pageHref(page - 1)}>Anterior</Link></Button> : <span />}{hasNextPage ? <Button asChild variant="outline" size="sm"><Link href={pageHref(page + 1)}>Siguiente</Link></Button> : null}</nav></section>}
       </main>
-
       <SiteFooter />
     </div>
   );

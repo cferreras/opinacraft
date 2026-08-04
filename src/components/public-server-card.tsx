@@ -1,18 +1,26 @@
 import Link from "next/link";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { CopyAddressButton } from "@/components/copy-address-button";
 import type { PublicServer } from "@/lib/servers/queries";
 import { formatEndpoint } from "@/lib/servers/format";
-import { CopyAddressButton } from "@/components/copy-address-button";
 
 export function PublicServerCard({ server }: { server: PublicServer }) {
   const banner = server.media.find((media) => media.kind === "banner");
-  return <article className="ui-card ui-signal p-5 pl-6">
-    {banner ? <img src={banner.url} alt="" className="mb-5 h-32 w-full rounded-lg object-cover" /> : null}
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-semibold text-zinc-950 dark:text-white">{server.name}</h2><p className="mt-1 text-sm text-zinc-500">/{server.slug}</p></div><span className={`rounded-full px-3 py-1 text-xs font-medium ${server.aggregateStatus === "online" ? "bg-emerald-100 text-emerald-800" : server.aggregateStatus === "offline" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{server.aggregateStatus === "online" ? "Online" : server.aggregateStatus === "offline" ? "Offline" : "Estado desconocido"}</span></div>
-    {server.description ? <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{server.description}</p> : null}
-    <div className="mt-4 flex flex-wrap gap-2">{server.endpoints.map((endpoint) => <div key={endpoint.edition} className="rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"><code>{endpoint.edition}: {formatEndpoint(endpoint)}</code><CopyAddressButton value={formatEndpoint(endpoint)} /><span className="ml-2 capitalize text-zinc-500">{endpoint.verificationStatus === "verified" ? "verificado" : "no verificado"}</span></div>)}</div>
-    <div className="mt-4 flex flex-wrap gap-3 text-xs text-zinc-500">{server.endpoints.map((endpoint) => <span key={`${endpoint.edition}-health`} className={endpoint.healthStatus === "online" ? "text-emerald-700 dark:text-emerald-300" : endpoint.healthStatus === "offline" ? "text-red-700 dark:text-red-300" : undefined}>{endpoint.edition}: {endpoint.healthStatus}{endpoint.playersCurrent !== null && endpoint.playersMax !== null ? ` · ${endpoint.playersCurrent}/${endpoint.playersMax}` : ""}{endpoint.version ? ` · ${endpoint.version}` : ""}{endpoint.latencyMs !== null ? ` · ${endpoint.latencyMs} ms` : ""}{endpoint.lastCheckedAt ? ` · ${endpoint.lastCheckedAt.toLocaleString("es-ES")}` : ""}</span>)}</div>
-    {server.tags.length > 0 ? <div className="mt-4 flex flex-wrap gap-2">{server.tags.map((tag) => <span key={tag.slug} className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-200">{tag.label}</span>)}</div> : null}
-    <Link href={`/servers/${server.slug}`} className="mt-5 inline-flex text-sm font-medium text-zinc-950 hover:underline dark:text-white">Ver servidor</Link>
-  </article>;
+  const statusLabel = server.aggregateStatus === "online" ? "En línea" : server.aggregateStatus === "offline" ? "Fuera de línea" : "Estado desconocido";
+  return (
+    <Card className="overflow-hidden">
+      {banner ? <img src={banner.url} alt="" className="h-32 w-full object-cover" /> : null}
+      <CardHeader className="flex flex-row items-start justify-between gap-3"><div><CardTitle>{server.name}</CardTitle><p className="mt-1 text-sm text-muted-foreground">/{server.slug}</p></div><Badge variant={server.aggregateStatus === "online" ? "default" : "secondary"}>{statusLabel}</Badge></CardHeader>
+      <CardContent className="grid gap-4">
+        {server.description ? <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">{server.description}</p> : null}
+        <div className="flex flex-wrap gap-2">{server.endpoints.map((endpoint) => <div key={endpoint.edition} className="flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs"><code>{endpoint.edition}: {formatEndpoint(endpoint)}</code><CopyAddressButton value={formatEndpoint(endpoint)} iconOnly className="size-6" /><span className="capitalize text-muted-foreground">{endpoint.verificationStatus === "verified" ? "verificado" : "no verificado"}</span></div>)}</div>
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">{server.endpoints.map((endpoint) => <span key={`${endpoint.edition}-health`} className={endpoint.healthStatus === "online" ? "text-success" : endpoint.healthStatus === "offline" ? "text-destructive" : undefined}>{endpoint.edition}: {endpoint.healthStatus}{endpoint.playersCurrent !== null && endpoint.playersMax !== null ? ` · ${endpoint.playersCurrent}/${endpoint.playersMax}` : ""}{endpoint.version ? ` · ${endpoint.version}` : ""}{endpoint.latencyMs !== null ? ` · ${endpoint.latencyMs} ms` : ""}{endpoint.lastCheckedAt ? ` · ${endpoint.lastCheckedAt.toLocaleString("es-ES")}` : ""}</span>)}</div>
+        {server.tags.length > 0 ? <div className="flex flex-wrap gap-2">{server.tags.map((tag) => <Badge key={tag.slug} variant="outline">{tag.label}</Badge>)}</div> : null}
+      </CardContent>
+      <CardFooter><Button asChild variant="link" className="px-0"><Link href={`/servers/${server.slug}`}>Ver servidor</Link></Button></CardFooter>
+    </Card>
+  );
 }

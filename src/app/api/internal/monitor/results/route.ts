@@ -1,19 +1,24 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+
 import { and, eq } from "drizzle-orm";
 import * as z from "zod";
 import { NextResponse } from "next/server";
 
 import { db } from "@/db";
-import { monitorRuns, notificationJobs, serverEndpoints, serverMembers } from "@/schema";
-import { user } from "@/auth-schema";
+import { monitorRuns } from "@/schema";
 import { serverEnv } from "@/env/server";
+import { applyEndpointObservation } from "@/lib/servers/monitor-persistence";
+import { updateAvailabilityVisibility } from "@/lib/servers/monitor";
 
 export const runtime = "nodejs";
+export const maxDuration = 180;
 
 const resultSchema = z.object({
   serverId: z.uuid(),
   edition: z.literal("bedrock"),
+  historySourceId: z.uuid(),
   online: z.boolean(),
+  failureCode: z.enum(["unreachable", "timeout", "invalid_response", "dns_error", "blocked_target", "monitor_error"]).nullable().optional(),
   playersCurrent: z.number().int().nonnegative().nullable().optional(),
   playersMax: z.number().int().nonnegative().nullable().optional(),
   version: z.string().max(100).nullable().optional(),
@@ -26,13 +31,32 @@ const payloadSchema = z.object({
   results: z.array(resultSchema).max(200),
 });
 
+function resultKey(result: { serverId: string; edition: "bedrock"; historySourceId: string }) {
+  return `${result.serverId}:${result.edition}:${result.historySourceId}`;
+}
+
+async function runPool<T>(items: T[], concurrency: number, task: (item: T) => Promise<void>) {
+  let cursor = 0;
+  async function worker() {
+    while (true) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      await task(items[index]!);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, () => worker()));
+}
+
 export async function POST(request: Request) {
   const secret = serverEnv.MONITOR_SECRET;
   const signature = request.headers.get("x-monitor-signature") ?? "";
   const raw = await request.text();
   if (!secret || !signature) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const expected = createHmac("sha256", secret).update(raw).digest("hex");
-  if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
   let parsedBody: unknown;
   try {
     parsedBody = JSON.parse(raw);
@@ -42,61 +66,75 @@ export async function POST(request: Request) {
   const parsed = payloadSchema.safeParse(parsedBody);
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   const body = parsed.data;
-  const results = [...new Map(body.results.map((result) => [`${result.serverId}:${result.edition}`, result])).values()];
-  const outcome = await db.transaction(async (tx) => {
+
+  const claim = await db.transaction(async (tx) => {
     const [run] = await tx
       .select()
       .from(monitorRuns)
       .where(and(eq(monitorRuns.runId, body.runId), eq(monitorRuns.nonce, body.nonce)))
       .for("update")
       .limit(1);
-    if (!run || run.expiresAt <= new Date()) return { error: "Expired run", status: 409 as const };
-    if (run.status !== "pending") return { error: "Expired run", status: 409 as const };
-    const dispatched = new Set(run.fallbackEndpoints.map((endpoint) => `${endpoint.serverId}:${endpoint.edition}`));
-    if (results.some((result) => !dispatched.has(`${result.serverId}:${result.edition}`))) {
-      return { error: "Result is not part of this monitor run.", status: 400 as const };
+    if (!run) return { error: "Unknown monitor run", status: 409 as const };
+    if (run.status === "done") return { duplicate: true as const };
+    if (run.expiresAt <= new Date()) return { error: "Expired run", status: 409 as const };
+    if (run.status === "processing" && run.processingStartedAt && Date.now() - run.processingStartedAt.getTime() < 2 * 60 * 1000) {
+      return { error: "Monitor results are already being processed.", status: 409 as const };
     }
-    for (const result of results) {
-      const [current] = await tx
-        .select({ healthStatus: serverEndpoints.healthStatus, consecutiveFailures: serverEndpoints.consecutiveFailures })
-        .from(serverEndpoints)
-        .where(and(eq(serverEndpoints.serverId, result.serverId), eq(serverEndpoints.edition, result.edition), eq(serverEndpoints.verificationStatus, "verified")))
-        .for("update")
-        .limit(1);
-      if (!current) continue;
-      const now = new Date();
-      const failures = result.online ? 0 : current.consecutiveFailures + 1;
-      const nextHealth = result.online ? "online" : failures >= 3 ? "offline" : current.healthStatus;
-      await tx
-        .update(serverEndpoints)
-        .set({ healthStatus: nextHealth, playersCurrent: result.playersCurrent ?? null, playersMax: result.playersMax ?? null, version: result.version ?? null, latencyMs: result.latencyMs ?? null, lastCheckedAt: now, lastOnlineAt: result.online ? now : undefined, consecutiveFailures: failures })
-        .where(and(eq(serverEndpoints.serverId, result.serverId), eq(serverEndpoints.edition, result.edition)));
-      const transition = result.online && current.healthStatus === "offline"
-        ? "recovered"
-        : !result.online && failures >= 3 && current.healthStatus !== "offline"
-          ? "down"
-          : null;
-      if (transition) {
-        const [owner] = await tx
-          .select({ userId: serverMembers.userId, email: user.email })
-          .from(serverMembers)
-          .innerJoin(user, eq(serverMembers.userId, user.id))
-          .where(and(eq(serverMembers.serverId, result.serverId), eq(serverMembers.role, "owner")))
-          .limit(1);
-        if (owner?.email) {
-          await tx.insert(notificationJobs).values({
-            dedupeKey: `endpoint:${result.serverId}:${result.edition}:${transition}:${now.toISOString().slice(0, 10)}`,
-            recipientUserId: owner.userId,
-            recipientEmail: owner.email,
-            template: `endpoint_${transition}`,
-            payload: { serverId: result.serverId, edition: result.edition, transition },
-          }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
-        }
-      }
+
+    const dispatched = new Set(run.fallbackEndpoints.map(resultKey));
+    const uniqueResults = new Map(body.results.map((result) => [resultKey(result), result]));
+    const supplied = new Set(uniqueResults.keys());
+    if (supplied.size !== dispatched.size || [...dispatched].some((key) => !supplied.has(key))) {
+      return { error: "Results do not match the dispatched Bedrock endpoints.", status: 400 as const };
     }
-    await tx.update(monitorRuns).set({ status: "done" }).where(eq(monitorRuns.runId, run.runId));
-    return { processed: results.length };
+
+    await tx.update(monitorRuns).set({ status: "processing", processingStartedAt: new Date() }).where(eq(monitorRuns.runId, run.runId));
+    return { duplicate: false as const, results: [...uniqueResults.values()], sampledAt: run.sampledAt, javaPersistenceFailures: run.javaPersistenceFailures };
   });
-  if ("error" in outcome) return NextResponse.json({ error: outcome.error }, { status: outcome.status });
-  return NextResponse.json({ ok: true, processed: outcome.processed });
+
+  if ("error" in claim) return NextResponse.json({ error: claim.error }, { status: claim.status });
+  if (claim.duplicate) return NextResponse.json({ ok: true, duplicate: true });
+
+  let persistenceFailures = 0;
+  let persisted = 0;
+  await runPool(claim.results, 2, async (result) => {
+    try {
+      await db.transaction(async (tx) => {
+        const outcome = await applyEndpointObservation(tx, {
+          serverId: result.serverId,
+          edition: "bedrock",
+          historySourceId: result.historySourceId,
+          sampledAt: claim.sampledAt,
+          runId: body.runId,
+          status: result.online ? "online" : result.failureCode === "monitor_error" ? "unknown" : "offline",
+          failureCode: result.failureCode ?? (result.online ? null : "unreachable"),
+          playersCurrent: result.playersCurrent ?? null,
+          playersMax: result.playersMax ?? null,
+          version: result.version ?? null,
+          latencyMs: result.latencyMs ?? null,
+        });
+        if (outcome.persisted || outcome.duplicate) persisted += 1;
+      });
+    } catch (error) {
+      persistenceFailures += 1;
+      console.error("[monitor] Bedrock observation persistence failed", { serverId: result.serverId, error });
+    }
+  });
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(monitorRuns)
+      .set({
+        status: persistenceFailures || claim.javaPersistenceFailures ? "partial" : "done",
+        bedrockPersistenceFailures: persistenceFailures,
+        completedAt: persistenceFailures || claim.javaPersistenceFailures ? null : new Date(),
+      })
+      .where(eq(monitorRuns.runId, body.runId));
+    await updateAvailabilityVisibility(tx);
+  });
+
+  if (persistenceFailures || claim.javaPersistenceFailures) {
+    return NextResponse.json({ error: "Some monitor observations could not be persisted.", persisted, persistenceFailures, javaPersistenceFailures: claim.javaPersistenceFailures }, { status: 503 });
+  }
+  return NextResponse.json({ ok: true, processed: persisted });
 }
