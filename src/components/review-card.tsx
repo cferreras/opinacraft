@@ -1,6 +1,10 @@
-import { IconStarFilled } from "@tabler/icons-react";
+import { Star } from "lucide-react";
 
 import { deleteOfficialReplyAction } from "@/app/servers/[slug]/actions";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { OfficialReplyEditor } from "@/components/official-reply-editor";
 import { OfficialReplyForm } from "@/components/official-reply-form";
 import { ReviewReportForm } from "@/components/review-report-form";
@@ -8,10 +12,9 @@ import type { ReviewView } from "@/lib/servers/reviews";
 
 function Rating({ rating }: { rating: number }) {
   return (
-    <span className="inline-flex items-center gap-0.5 text-[#f4aa00]" aria-label={`${rating} de 5 estrellas`}>
-      {[1, 2, 3, 4, 5].map((star) => <IconStarFilled key={star} aria-hidden="true" size="0.8125rem" className={star <= rating ? "opacity-100" : "opacity-25"} />)}
-      <span className="ml-1 text-[0.6875rem] font-medium text-[#4b5667]">{rating.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-      <span className="sr-only">{rating} de 5</span>
+    <span className="inline-flex items-center gap-0.5 text-warning" aria-label={`${rating} de 5 estrellas`}>
+      {[1, 2, 3, 4, 5].map((star) => <Star key={star} aria-hidden="true" className={`size-3.5 ${star <= rating ? "fill-current" : "opacity-25"}`} />)}
+      <span className="ml-1 text-xs font-medium tabular-nums text-muted-foreground">{rating.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
     </span>
   );
 }
@@ -20,14 +23,7 @@ function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "U";
 }
 
-export function ReviewCard({
-  review,
-  serverId,
-  slug,
-  canReport,
-  canReply,
-  canManageReplies,
-}: {
+export function ReviewCard({ review, serverId, slug, canReport, canReply, canManageReplies }: {
   review: ReviewView;
   serverId: string;
   slug: string;
@@ -36,37 +32,48 @@ export function ReviewCard({
   canManageReplies: boolean;
 }) {
   return (
-    <article id={`review-${review.id}`} className="ui-card p-3.5 sm:p-4">
-      <div className="flex items-start gap-3">
-        <span aria-hidden="true" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#65c78d] text-[0.6875rem] font-semibold text-white">{initials(review.authorName)}</span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-            <div>
-              <p className="text-[0.75rem] font-semibold text-[#17202a]">{review.authorName}</p>
-              <p className="mt-0.5 text-[0.625rem] text-[#7b8796]">{review.createdAt.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</p>
+    <Card id={`review-${review.id}`}>
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <Avatar className="size-8 shrink-0"><AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">{initials(review.authorName)}</AvatarFallback></Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+              <div>
+                <p className="text-sm font-semibold">{review.authorName}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{review.createdAt.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</p>
+              </div>
+              <Rating rating={review.rating} />
             </div>
-            <Rating rating={review.rating} />
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{review.content}</p>
           </div>
-          <p className="mt-2.5 whitespace-pre-wrap text-[0.75rem] leading-[1.55] text-[#344154]">{review.content}</p>
         </div>
-      </div>
 
-      {review.reply ? (
-        <div className="mt-3 rounded-lg border border-[#dfe0ff] bg-[#f5f5ff] p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div><p className="text-[0.6875rem] font-semibold text-[#3b35bf]">Respuesta oficial</p><p className="mt-0.5 text-[0.625rem] text-[#7b7ca3]">{review.reply.authorName} · {review.reply.createdAt.toLocaleDateString("es-ES")}</p></div>
-            {canManageReplies ? <form action={deleteOfficialReplyAction}><input type="hidden" name="replyId" value={review.reply.id} /><input type="hidden" name="slug" value={slug} /><button type="submit" className="text-[0.625rem] font-semibold text-[#4a45ba] underline underline-offset-4">Eliminar</button></form> : null}
+        {review.reply ? (
+          <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold text-primary">Respuesta oficial</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{review.reply.authorName} · {review.reply.createdAt.toLocaleDateString("es-ES")}</p>
+              </div>
+              {canManageReplies ? <form action={deleteOfficialReplyAction}><input type="hidden" name="replyId" value={review.reply.id} /><input type="hidden" name="slug" value={slug} /><Button type="submit" variant="link" size="sm" className="h-auto p-0 text-xs text-primary">Eliminar</Button></form> : null}
+            </div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{review.reply.content}</p>
+            {canManageReplies ? <OfficialReplyEditor replyId={review.reply.id} slug={slug} content={review.reply.content} /> : null}
           </div>
-          <p className="mt-2 text-[0.75rem] leading-[1.55] text-[#333572]">{review.reply.content}</p>
-          {canManageReplies ? <OfficialReplyEditor replyId={review.reply.id} slug={slug} content={review.reply.content} /> : null}
-        </div>
-      ) : canReply ? <OfficialReplyForm reviewId={review.id} slug={slug} /> : null}
+        ) : canReply ? <OfficialReplyForm reviewId={review.id} slug={slug} /> : null}
 
-      {canReport ? <ReviewReportForm serverId={serverId} reviewId={review.id} /> : null}
-    </article>
+        {canReport ? <><Separator className="my-4" /><ReviewReportForm serverId={serverId} reviewId={review.id} /></> : null}
+      </CardContent>
+    </Card>
   );
 }
 
 export function DeletedReviewNotice({ status, content }: { status: "hidden" | "deleted"; content: string }) {
-  return <div className="rounded-xl border border-[#f1d89d] bg-[#fff8e7] p-4 text-sm text-[#8a6200]"><p className="font-semibold">{status === "hidden" ? "Tu opinión está oculta por moderación" : "Has eliminado tu opinión"}</p><p className="mt-1 leading-6">{status === "hidden" ? "No aparece públicamente mientras se revisa el reporte." : "La valoración y el estado ya no se muestran públicamente."}</p>{status === "hidden" ? <p className="mt-3 whitespace-pre-wrap text-xs text-[#8a6200]/80">{content}</p> : null}</div>;
+  return (
+    <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-foreground">
+      <p className="font-semibold">{status === "hidden" ? "Tu opinión está oculta por moderación" : "Has eliminado tu opinión"}</p>
+      <p className="mt-1 leading-6">{status === "hidden" ? "No aparece públicamente mientras se revisa el reporte." : "La valoración y el estado ya no se muestran públicamente."}</p>
+      {status === "hidden" ? <p className="mt-3 whitespace-pre-wrap text-xs opacity-80">{content}</p> : null}
+    </div>
+  );
 }

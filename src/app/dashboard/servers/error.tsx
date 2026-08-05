@@ -13,7 +13,7 @@ export default function ManagedServersError({
     <RouteErrorState
       error={error}
       reset={reset}
-      title="Unable to load your servers"
+      title="No se han podido cargar tus servidores"
     />
   );
 }

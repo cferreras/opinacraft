@@ -80,6 +80,15 @@ export const serverEndpointHealth = pgEnum("server_endpoint_health", [
   "offline",
 ]);
 
+export const serverEndpointSampleFailure = pgEnum("server_endpoint_sample_failure", [
+  "unreachable",
+  "timeout",
+  "invalid_response",
+  "dns_error",
+  "blocked_target",
+  "monitor_error",
+]);
+
 export const platformRoleName = pgEnum("platform_role_name", ["moderator", "admin"]);
 export const serverReportReason = pgEnum("server_report_reason", ["inappropriate", "misleading", "offline", "copyright", "other"]);
 export const serverReportStatus = pgEnum("server_report_status", ["open", "dismissed", "actioned"]);
@@ -148,6 +157,7 @@ export const serverEndpoints = pgTable(
       .notNull()
       .references(() => servers.id, { onDelete: "cascade" }),
     edition: minecraftEdition("edition").notNull(),
+    historySourceId: uuid("history_source_id").defaultRandom().notNull(),
     host: varchar("host", { length: 253 }).notNull(),
     port: integer("port").notNull(),
     verificationStatus: serverVerificationStatus("verification_status")
@@ -171,6 +181,7 @@ export const serverEndpoints = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.serverId, table.edition] }),
+    uniqueIndex("server_endpoints_history_source_id_key").on(table.historySourceId),
     uniqueIndex("server_endpoints_verified_edition_host_port_key")
       .on(
       table.edition,
@@ -542,11 +553,74 @@ export const monitorRuns = pgTable(
   {
     runId: varchar("run_id", { length: 100 }).primaryKey(),
     nonce: varchar("nonce", { length: 128 }).notNull().unique(),
+    sampledAt: timestamp("sampled_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     status: varchar("status", { length: 20 }).default("pending").notNull(),
-    fallbackEndpoints: jsonb("fallback_endpoints").$type<Array<{ serverId: string; edition: "bedrock"; host: string; port: number }>>().default([]).notNull(),
+    fallbackEndpoints: jsonb("fallback_endpoints").$type<Array<{ serverId: string; edition: "bedrock"; host: string; port: number; historySourceId: string }>>().default([]).notNull(),
+    processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    javaPersistenceFailures: integer("java_persistence_failures").default(0).notNull(),
+    bedrockPersistenceFailures: integer("bedrock_persistence_failures").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
+  (table) => [uniqueIndex("monitor_runs_sampled_at_key").on(table.sampledAt)],
+);
+
+export const serverEndpointPlayerSnapshots = pgTable(
+  "server_endpoint_player_snapshots",
+  {
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    edition: minecraftEdition("edition").notNull(),
+    historySourceId: uuid("history_source_id").notNull(),
+    sampledAt: timestamp("sampled_at", { withTimezone: true }).notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+    status: serverEndpointHealth("status").notNull(),
+    failureCode: serverEndpointSampleFailure("failure_code"),
+    playersCurrent: integer("players_current"),
+    playersMax: integer("players_max"),
+    runId: varchar("run_id", { length: 100 }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.serverId, table.edition, table.sampledAt] }),
+    index("server_endpoint_player_snapshots_server_sampled_idx").on(table.serverId, table.sampledAt),
+    check("server_endpoint_player_snapshots_current_check", sql`${table.playersCurrent} is null or ${table.playersCurrent} >= 0`),
+    check("server_endpoint_player_snapshots_max_check", sql`${table.playersMax} is null or ${table.playersMax} >= 0`),
+    check("server_endpoint_player_snapshots_status_check", sql`(${table.status} = 'online' and ${table.failureCode} is null) or (${table.status} <> 'online')`),
+    check("server_endpoint_player_snapshots_online_players_check", sql`(${table.status} = 'online') or (${table.playersCurrent} is null and ${table.playersMax} is null)`),
+  ],
+);
+
+export const serverEndpointPlayerHourly = pgTable(
+  "server_endpoint_player_hourly",
+  {
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    edition: minecraftEdition("edition").notNull(),
+    bucketStart: timestamp("bucket_start", { withTimezone: true }).notNull(),
+    lastSourceId: uuid("last_source_id"),
+    sourceChanged: integer("source_changed").default(0).notNull(),
+    sampleCount: integer("sample_count").default(0).notNull(),
+    onlineCount: integer("online_count").default(0).notNull(),
+    unknownCount: integer("unknown_count").default(0).notNull(),
+    playerDataCount: integer("player_data_count").default(0).notNull(),
+    playersTotal: bigint("players_total", { mode: "number" }).default(0).notNull(),
+    playersPeak: integer("players_peak"),
+    capacityDataCount: integer("capacity_data_count").default(0).notNull(),
+    capacityTotal: bigint("capacity_total", { mode: "number" }).default(0).notNull(),
+    capacityLatest: integer("capacity_latest"),
+    occupancyDataCount: integer("occupancy_data_count").default(0).notNull(),
+    occupancyBasisPointsTotal: bigint("occupancy_basis_points_total", { mode: "number" }).default(0).notNull(),
+    lastSampleAt: timestamp("last_sample_at", { withTimezone: true }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.serverId, table.edition, table.bucketStart] }),
+    index("server_endpoint_player_hourly_server_bucket_idx").on(table.serverId, table.bucketStart),
+    check("server_endpoint_player_hourly_source_changed_check", sql`${table.sourceChanged} between 0 and 1`),
+    check("server_endpoint_player_hourly_counts_check", sql`${table.sampleCount} >= 0 and ${table.onlineCount} >= 0 and ${table.unknownCount} >= 0`),
+  ],
 );
 
 export const tagAliases = pgTable(

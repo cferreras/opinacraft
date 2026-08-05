@@ -1,90 +1,205 @@
+import { randomBytes, randomUUID } from "node:crypto";
+
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import { db, withAdvisoryLock } from "@/db";
-import { notificationJobs, serverEndpoints, serverMembers, servers } from "@/schema";
+import { notificationJobs, monitorRuns, serverEndpoints, serverMembers, servers } from "@/schema";
 import { user } from "@/auth-schema";
 import { resolveMinecraftTarget, resolveMinecraftBedrockTarget } from "@/lib/minecraft/network";
-import { MinecraftOfflineError, MinecraftResponseError, MinecraftTimeoutError, pingJavaServer } from "@/lib/minecraft/ping";
-import { BedrockOfflineError, pingBedrockServer } from "@/lib/minecraft/bedrock-ping";
+import { pingJavaServer } from "@/lib/minecraft/ping";
+import { pingBedrockServer } from "@/lib/minecraft/bedrock-ping";
 import { runMediaCleanup } from "@/lib/media/cleanup";
 import { runNotificationOutbox } from "@/lib/notifications";
+import {
+  applyEndpointObservation,
+  classifyProbeError,
+  getMonitorSampleSlot,
+  prunePlayerHistory,
+  type EndpointObservation,
+  type MonitorEdition,
+  type MonitorSampleStatus,
+} from "@/lib/servers/monitor-persistence";
 
 const MAX_ENDPOINTS_PER_RUN = 200;
-const MAX_CONCURRENCY = 10;
-const FAILURE_THRESHOLD = 3;
+const MAX_NETWORK_CONCURRENCY = 10;
+const MAX_PERSISTENCE_CONCURRENCY = 2;
 const MONITOR_LOCK = "opinacraft:endpoint-monitor";
+const RUN_TTL_MS = 10 * 60 * 1000;
+
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 type Endpoint = {
   serverId: string;
-  edition: "java" | "bedrock";
+  edition: MonitorEdition;
   host: string;
   port: number;
-  healthStatus: "unknown" | "online" | "offline";
-  consecutiveFailures: number;
+  historySourceId: string;
+};
+
+type ProbeResult = EndpointObservation & {
+  probeStatus: "online" | "offline" | "unknown";
 };
 
 function pingData(value: unknown) {
   const result = value as { players?: { online?: number; max?: number }; version?: { name?: string } };
   return {
-    playersCurrent: Number.isInteger(result.players?.online) ? result.players?.online ?? null : null,
-    playersMax: Number.isInteger(result.players?.max) ? result.players?.max ?? null : null,
+    playersCurrent: Number.isInteger(result.players?.online) && (result.players?.online ?? 0) >= 0 ? result.players?.online ?? null : null,
+    playersMax: Number.isInteger(result.players?.max) && (result.players?.max ?? 0) >= 0 ? result.players?.max ?? null : null,
     version: typeof result.version?.name === "string" ? result.version.name.slice(0, 100) : null,
   };
 }
 
-async function checkEndpoint(endpoint: Endpoint) {
-  const startedAt = Date.now();
+async function probeEndpoint(endpoint: Endpoint, runId: string, sampledAt: Date): Promise<ProbeResult> {
+  const observedAt = new Date();
+  const startedAt = observedAt.getTime();
   try {
     const result = endpoint.edition === "bedrock"
       ? await resolveMinecraftBedrockTarget(endpoint.host, endpoint.port).then((target) => pingBedrockServer(target))
       : await resolveMinecraftTarget(endpoint.host, endpoint.port).then((target) => pingJavaServer(target));
     const data = pingData(result);
-    await db.transaction(async (tx) => {
-      await tx.update(serverEndpoints).set({ healthStatus: "online", playersCurrent: data.playersCurrent, playersMax: data.playersMax, version: data.version, latencyMs: Date.now() - startedAt, lastCheckedAt: new Date(), lastOnlineAt: new Date(), consecutiveFailures: 0 }).where(and(eq(serverEndpoints.serverId, endpoint.serverId), eq(serverEndpoints.edition, endpoint.edition)));
-      if (endpoint.healthStatus === "offline") await enqueueEndpointNotification(tx, endpoint.serverId, endpoint.edition, "recovered");
-    });
-    return "online" as const;
+    return {
+      serverId: endpoint.serverId,
+      edition: endpoint.edition,
+      historySourceId: endpoint.historySourceId,
+      sampledAt,
+      observedAt,
+      runId,
+      status: "online",
+      probeStatus: "online",
+      failureCode: null,
+      playersCurrent: data.playersCurrent,
+      playersMax: data.playersMax,
+      version: data.version,
+      latencyMs: Date.now() - startedAt,
+    };
   } catch (error) {
-    const failures = endpoint.consecutiveFailures + 1;
-    await db.transaction(async (tx) => {
-      await tx.update(serverEndpoints).set({ healthStatus: failures >= FAILURE_THRESHOLD ? "offline" : endpoint.healthStatus, lastCheckedAt: new Date(), consecutiveFailures: failures, latencyMs: null }).where(and(eq(serverEndpoints.serverId, endpoint.serverId), eq(serverEndpoints.edition, endpoint.edition)));
-      if (failures >= FAILURE_THRESHOLD && endpoint.healthStatus !== "offline") await enqueueEndpointNotification(tx, endpoint.serverId, endpoint.edition, "down");
-    });
-    if (!(error instanceof MinecraftOfflineError || error instanceof MinecraftResponseError || error instanceof MinecraftTimeoutError || error instanceof BedrockOfflineError)) {
-      console.warn("[monitor] endpoint check failed", error instanceof Error ? error.name : "unknown");
+    const failureCode = classifyProbeError(error);
+    const status: MonitorSampleStatus = failureCode === "monitor_error" ? "unknown" : "offline";
+    if (failureCode === "monitor_error") {
+      console.warn("[monitor] internal endpoint probe failure", error instanceof Error ? error : new Error("unknown error"));
     }
-    return "offline" as const;
+    return {
+      serverId: endpoint.serverId,
+      edition: endpoint.edition,
+      historySourceId: endpoint.historySourceId,
+      sampledAt,
+      observedAt,
+      runId,
+      status,
+      probeStatus: status,
+      failureCode,
+      playersCurrent: null,
+      playersMax: null,
+      version: null,
+      latencyMs: null,
+    };
   }
 }
 
-async function enqueueEndpointNotification(tx: DatabaseTransaction, serverId: string, edition: "java" | "bedrock", transition: "down" | "recovered") {
-  const [owner] = await tx.select({ userId: serverMembers.userId, email: user.email }).from(serverMembers).innerJoin(user, eq(serverMembers.userId, user.id)).where(and(eq(serverMembers.serverId, serverId), eq(serverMembers.role, "owner"))).limit(1);
-  if (!owner?.email) return;
-  await tx.insert(notificationJobs).values({ dedupeKey: `endpoint:${serverId}:${edition}:${transition}:${new Date().toISOString().slice(0, 10)}`, recipientUserId: owner.userId, recipientEmail: owner.email, template: `endpoint_${transition}`, payload: { serverId, edition, transition } }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
+async function runPool<T>(items: T[], concurrency: number, task: (item: T) => Promise<void>) {
+  let cursor = 0;
+  async function worker() {
+    while (true) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      await task(items[index]!);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, () => worker()));
 }
 
+export type MonitorRunResult = {
+  processed: number;
+  online: number;
+  offline: number;
+  unknown: number;
+  persistenceFailures: number;
+  fallback: Array<{ serverId: string; edition: "bedrock"; host: string; port: number; historySourceId: string }>;
+  runId: string;
+  nonce: string;
+  sampledAt: string;
+  expiresAt: string;
+};
+
 export async function runEndpointMonitor() {
-  const result = await withAdvisoryLock(MONITOR_LOCK, async () => {
-    const endpoints = await db.select({ serverId: serverEndpoints.serverId, edition: serverEndpoints.edition, host: serverEndpoints.host, port: serverEndpoints.port, healthStatus: serverEndpoints.healthStatus, consecutiveFailures: serverEndpoints.consecutiveFailures }).from(serverEndpoints).where(eq(serverEndpoints.verificationStatus, "verified")).orderBy(asc(sql`${serverEndpoints.lastCheckedAt} is not null`), asc(serverEndpoints.lastCheckedAt), asc(serverEndpoints.serverId), asc(serverEndpoints.edition)).limit(MAX_ENDPOINTS_PER_RUN);
+  const result = await withAdvisoryLock(MONITOR_LOCK, async (): Promise<MonitorRunResult | null> => {
+    const sampledAt = getMonitorSampleSlot();
+    const runId = randomUUID();
+    const nonce = randomBytes(24).toString("hex");
+    const expiresAt = new Date(Date.now() + RUN_TTL_MS);
+    const endpoints = await db
+      .select({
+        serverId: serverEndpoints.serverId,
+        edition: serverEndpoints.edition,
+        host: serverEndpoints.host,
+        port: serverEndpoints.port,
+        historySourceId: serverEndpoints.historySourceId,
+      })
+      .from(serverEndpoints)
+      .where(eq(serverEndpoints.verificationStatus, "verified"))
+      .orderBy(asc(sql`${serverEndpoints.lastCheckedAt} is not null`), asc(serverEndpoints.lastCheckedAt), asc(serverEndpoints.serverId), asc(serverEndpoints.edition))
+      .limit(MAX_ENDPOINTS_PER_RUN);
+
+    const fallback = endpoints
+      .filter((endpoint) => endpoint.edition === "bedrock")
+      .map((endpoint) => ({ serverId: endpoint.serverId, edition: "bedrock" as const, host: endpoint.host, port: endpoint.port, historySourceId: endpoint.historySourceId }));
+
+    const [run] = await db
+      .insert(monitorRuns)
+      .values({ runId, nonce, sampledAt, expiresAt, fallbackEndpoints: fallback, status: "pending" })
+      .onConflictDoNothing({ target: monitorRuns.sampledAt })
+      .returning({ runId: monitorRuns.runId });
+    if (!run) return null;
+
     const javaEndpoints = endpoints.filter((endpoint) => endpoint.edition === "java");
-    let cursor = 0;
-    let online = 0;
-    let offline = 0;
-    let skipped = 0;
-    async function worker() {
-      while (cursor < javaEndpoints.length) {
-        const endpoint = javaEndpoints[cursor++];
-        const result = await checkEndpoint(endpoint);
-        if (result === "online") online += 1;
-        else if (result === "offline") offline += 1;
-        else skipped += 1;
+    const probes: ProbeResult[] = [];
+    await runPool(javaEndpoints, MAX_NETWORK_CONCURRENCY, async (endpoint) => {
+      probes.push(await probeEndpoint(endpoint, runId, sampledAt));
+    });
+
+    let persistenceFailures = 0;
+    await runPool(probes, MAX_PERSISTENCE_CONCURRENCY, async (observation) => {
+      try {
+        await db.transaction((tx) => applyEndpointObservation(tx, observation));
+      } catch (error) {
+        persistenceFailures += 1;
+        console.error("[monitor] endpoint observation persistence failed", {
+          serverId: observation.serverId,
+          edition: observation.edition,
+          error,
+        });
       }
-    }
-    await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, javaEndpoints.length) }, () => worker()));
-    await db.transaction((tx) => updateAvailabilityVisibility(tx));
-    return { processed: javaEndpoints.length, online, offline, skipped, fallback: endpoints.filter((endpoint) => endpoint.edition === "bedrock").map((endpoint) => ({ serverId: endpoint.serverId, edition: "bedrock" as const, host: endpoint.host, port: endpoint.port })) };
+    });
+
+    const status = fallback.length ? (persistenceFailures ? "partial" : "pending") : persistenceFailures ? "partial" : "done";
+    await db.transaction(async (tx) => {
+      await tx
+        .update(monitorRuns)
+        .set({
+          status,
+          processingStartedAt: new Date(),
+          completedAt: fallback.length ? null : new Date(),
+          javaPersistenceFailures: persistenceFailures,
+        })
+        .where(eq(monitorRuns.runId, runId));
+      await updateAvailabilityVisibility(tx);
+      await prunePlayerHistory(tx);
+    });
+
+    return {
+      processed: probes.length,
+      online: probes.filter((probe) => probe.probeStatus === "online").length,
+      offline: probes.filter((probe) => probe.probeStatus === "offline").length,
+      unknown: probes.filter((probe) => probe.probeStatus === "unknown").length,
+      persistenceFailures,
+      fallback,
+      runId,
+      nonce,
+      sampledAt: sampledAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    };
   });
+
   if (result) {
     await runMediaCleanup();
     await runNotificationOutbox();
@@ -92,29 +207,51 @@ export async function runEndpointMonitor() {
   return result;
 }
 
-async function updateAvailabilityVisibility(tx: DatabaseTransaction) {
+export async function updateAvailabilityVisibility(tx: DatabaseTransaction) {
   const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const staleCutoff = new Date(Date.now() - 30 * 60 * 1000);
   const candidates = await tx.select({ id: servers.id }).from(servers).where(and(eq(servers.publicationStatus, "published"), eq(servers.moderationStatus, "active")));
   for (const server of candidates) {
-    const rows = await tx.select({ healthStatus: serverEndpoints.healthStatus, lastCheckedAt: serverEndpoints.lastCheckedAt, lastOnlineAt: serverEndpoints.lastOnlineAt }).from(serverEndpoints).where(and(eq(serverEndpoints.serverId, server.id), eq(serverEndpoints.verificationStatus, "verified")));
+    const rows = await tx
+      .select({ healthStatus: serverEndpoints.healthStatus, lastCheckedAt: serverEndpoints.lastCheckedAt, lastOnlineAt: serverEndpoints.lastOnlineAt })
+      .from(serverEndpoints)
+      .where(and(eq(serverEndpoints.serverId, server.id), eq(serverEndpoints.verificationStatus, "verified")));
     if (!rows.length) continue;
     const fresh = rows.filter((row) => row.lastCheckedAt && row.lastCheckedAt >= staleCutoff);
     const allOffline = fresh.length === rows.length && rows.every((row) => row.healthStatus === "offline");
     const sevenDaysOffline = rows.every((row) => !row.lastOnlineAt || row.lastOnlineAt <= cutoff);
     if (allOffline && sevenDaysOffline) {
-      const [changed] = await tx.update(servers).set({ availabilityHiddenAt: sql`coalesce(${servers.availabilityHiddenAt}, now())` }).where(and(eq(servers.id, server.id), isNull(servers.availabilityHiddenAt))).returning({ id: servers.id, hiddenAt: servers.availabilityHiddenAt });
+      const [changed] = await tx
+        .update(servers)
+        .set({ availabilityHiddenAt: sql`coalesce(${servers.availabilityHiddenAt}, now())` })
+        .where(and(eq(servers.id, server.id), isNull(servers.availabilityHiddenAt)))
+        .returning({ id: servers.id, hiddenAt: servers.availabilityHiddenAt });
       if (changed) await enqueueAvailabilityNotification(tx, server.id, "hidden", changed.hiddenAt);
     } else if (rows.some((row) => row.healthStatus === "online")) {
-      const [changed] = await tx.update(servers).set({ availabilityHiddenAt: null }).where(and(eq(servers.id, server.id), sql`${servers.availabilityHiddenAt} is not null`)).returning({ id: servers.id });
+      const [changed] = await tx
+        .update(servers)
+        .set({ availabilityHiddenAt: null })
+        .where(and(eq(servers.id, server.id), sql`${servers.availabilityHiddenAt} is not null`))
+        .returning({ id: servers.id });
       if (changed) await enqueueAvailabilityNotification(tx, server.id, "restored");
     }
   }
 }
 
 async function enqueueAvailabilityNotification(tx: DatabaseTransaction, serverId: string, transition: "hidden" | "restored", marker?: Date | null) {
-  const [owner] = await tx.select({ userId: serverMembers.userId, email: user.email }).from(serverMembers).innerJoin(user, eq(serverMembers.userId, user.id)).where(and(eq(serverMembers.serverId, serverId), eq(serverMembers.role, "owner"))).limit(1);
+  const [owner] = await tx
+    .select({ userId: serverMembers.userId, email: user.email })
+    .from(serverMembers)
+    .innerJoin(user, eq(serverMembers.userId, user.id))
+    .where(and(eq(serverMembers.serverId, serverId), eq(serverMembers.role, "owner")))
+    .limit(1);
   if (!owner?.email) return;
   const markerKey = marker?.toISOString() ?? new Date().toISOString().slice(0, 10);
-  await tx.insert(notificationJobs).values({ dedupeKey: `availability:${serverId}:${transition}:${markerKey}`, recipientUserId: owner.userId, recipientEmail: owner.email, template: `availability_${transition}`, payload: { serverId, transition } }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
+  await tx.insert(notificationJobs).values({
+    dedupeKey: `availability:${serverId}:${transition}:${markerKey}`,
+    recipientUserId: owner.userId,
+    recipientEmail: owner.email,
+    template: `availability_${transition}`,
+    payload: { serverId, transition },
+  }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
 }

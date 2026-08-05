@@ -239,6 +239,7 @@ export async function updateServer(
         edition: serverEndpoints.edition,
         host: serverEndpoints.host,
         port: serverEndpoints.port,
+        historySourceId: serverEndpoints.historySourceId,
         verificationStatus: serverEndpoints.verificationStatus,
       })
       .from(serverEndpoints)
@@ -299,22 +300,57 @@ export async function updateServer(
     }
 
     if (endpointsChanged) {
-      await tx.delete(serverEndpoints).where(eq(serverEndpoints.serverId, serverId));
+      const nextEditions = new Set(input.endpoints.map((endpoint) => endpoint.edition));
+      for (const current of currentEndpoints) {
+        if (!nextEditions.has(current.edition)) {
+          await tx
+            .delete(serverEndpoints)
+            .where(
+              and(
+                eq(serverEndpoints.serverId, serverId),
+                eq(serverEndpoints.edition, current.edition),
+              ),
+            );
+        }
+      }
       for (const endpoint of input.endpoints) {
         const current = currentEndpoints.find((item) => item.edition === endpoint.edition);
-        await tx.insert(serverEndpoints).values({
-          serverId,
-          edition: endpoint.edition,
-          host: endpoint.host,
-          port: endpoint.port,
-          verificationStatus:
-            current?.verificationStatus === "verified" &&
-            !changedEditions.includes(endpoint.edition) &&
-            current?.host === endpoint.host &&
-            current?.port === endpoint.port
-              ? "verified"
-              : "unverified",
-        });
+        if (!current) {
+          await tx.insert(serverEndpoints).values({
+            serverId,
+            edition: endpoint.edition,
+            host: endpoint.host,
+            port: endpoint.port,
+            verificationStatus: "unverified",
+          });
+          continue;
+        }
+
+        const changed = current.host !== endpoint.host || current.port !== endpoint.port;
+        if (changed) {
+          await tx
+            .update(serverEndpoints)
+            .set({
+              host: endpoint.host,
+              port: endpoint.port,
+              historySourceId: randomUUID(),
+              verificationStatus: "unverified",
+              healthStatus: "unknown",
+              playersCurrent: null,
+              playersMax: null,
+              version: null,
+              latencyMs: null,
+              lastCheckedAt: null,
+              lastOnlineAt: null,
+              consecutiveFailures: 0,
+            })
+            .where(
+              and(
+                eq(serverEndpoints.serverId, serverId),
+                eq(serverEndpoints.edition, endpoint.edition),
+              ),
+            );
+        }
       }
     }
 

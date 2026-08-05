@@ -1,7 +1,4 @@
 import { NextResponse } from "next/server";
-import { randomUUID, randomBytes } from "node:crypto";
-import { monitorRuns } from "@/schema";
-import { db } from "@/db";
 
 import { serverEnv } from "@/env/server";
 import { runEndpointMonitor } from "@/lib/servers/monitor";
@@ -18,9 +15,5 @@ export async function POST(request: Request) {
 
   const result = await runEndpointMonitor();
   if (!result) return NextResponse.json({ error: "Monitor already running." }, { status: 409 });
-  const runId = randomUUID();
-  const nonce = randomBytes(24).toString("hex");
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  await db.insert(monitorRuns).values({ runId, nonce, expiresAt, fallbackEndpoints: result.fallback });
-  return NextResponse.json({ ...result, runId, nonce, expiresAt: expiresAt.toISOString() });
+  return NextResponse.json(result, { status: result.persistenceFailures && result.fallback.length === 0 ? 503 : 200 });
 }

@@ -4,114 +4,17 @@ import Link from "next/link";
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AuthShell } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
 
-export default function ResetPasswordPage() {
-  return (
-    <Suspense fallback={<p className="p-8 text-center">Loading...</p>}>
-      <ResetPasswordForm />
-    </Suspense>
-  );
-}
-
+export default function ResetPasswordPage() { return <Suspense fallback={<main className="grid min-h-screen place-items-center"><Skeleton className="h-32 w-full max-w-md" /></main>}><ResetPasswordForm /></Suspense>; }
 function ResetPasswordForm() {
-  const router = useRouter();
-  const token = useSearchParams().get("token");
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-
-    if (!token) {
-      setError("This reset link is missing or invalid.");
-      return;
-    }
-
-    if (password !== confirmation) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    setIsPending(true);
-    try {
-      const { error: resetError } = await authClient.resetPassword({
-        newPassword: password,
-        token,
-      });
-
-      if (resetError) {
-        setError(resetError.message ?? "Unable to reset your password.");
-        return;
-      }
-
-      router.push("/sign-in?reset=success");
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Unable to reset your password.",
-      );
-    } finally {
-      setIsPending(false);
-    }
-  }
-
-  return (
-    <AuthShell
-      title="Choose a new password"
-      description="Set a new password for your OpinaCraft account."
-      footer={
-        <Link
-          href="/sign-in"
-          className="font-medium text-zinc-950 hover:underline dark:text-white"
-        >
-          Back to sign in
-        </Link>
-      }
-    >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          New password
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-            className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-zinc-300"
-          />
-        </label>
-        <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Confirm password
-          <input
-            type="password"
-            value={confirmation}
-            onChange={(event) => setConfirmation(event.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-            className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-zinc-300"
-          />
-        </label>
-        {error ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
-            {error}
-          </p>
-        ) : null}
-        <button
-          type="submit"
-          disabled={isPending || !token}
-          className="h-11 w-full rounded-lg bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-        >
-          {isPending ? "Updating password..." : "Update password"}
-        </button>
-      </form>
-    </AuthShell>
-  );
+  const router = useRouter(); const token = useSearchParams().get("token"); const [password, setPassword] = useState(""); const [confirmation, setConfirmation] = useState(""); const [error, setError] = useState<string | null>(null); const [isPending, setIsPending] = useState(false);
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setError(null); if (!token) { setError("Este enlace no es válido o ha caducado."); return; } if (password !== confirmation) { setError("Las contraseñas no coinciden."); return; } setIsPending(true); try { const { error: resetError } = await authClient.resetPassword({ newPassword: password, token }); if (resetError) { setError(resetError.message ?? "No se ha podido restablecer la contraseña."); return; } router.push("/sign-in?reset=success"); } catch (caughtError) { setError(caughtError instanceof Error ? caughtError.message : "No se ha podido restablecer la contraseña."); } finally { setIsPending(false); } }
+  return <AuthShell title="Elige una contraseña nueva" description="Define una contraseña nueva para tu cuenta de OpinaCraft." footer={<Link href="/sign-in" className="font-medium text-primary hover:underline">Volver a iniciar sesión</Link>}><form onSubmit={handleSubmit} className="grid gap-5"><Field><FieldLabel htmlFor="reset-password">Nueva contraseña</FieldLabel><Input id="reset-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} autoComplete="new-password" /></Field><Field><FieldLabel htmlFor="reset-confirmation">Confirmar contraseña</FieldLabel><Input id="reset-confirmation" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required minLength={8} autoComplete="new-password" /></Field>{error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}<Button type="submit" disabled={isPending || !token}>{isPending ? "Actualizando contraseña…" : "Actualizar contraseña"}</Button></form></AuthShell>;
 }

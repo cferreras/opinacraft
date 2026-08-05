@@ -22,15 +22,15 @@ export function statusLabel(status: ServerStatus) {
 }
 
 export function statusClass(status: ServerStatus) {
-  if (status === "online") return "text-[#0e9a55]";
-  if (status === "offline") return "text-[#d83a42]";
-  return "text-[#7c8799]";
+  if (status === "online") return "text-success";
+  if (status === "offline") return "text-destructive";
+  return "text-muted-foreground";
 }
 
 export function statusDot(status: ServerStatus) {
-  if (status === "online") return "bg-[#0e9a55]";
-  if (status === "offline") return "bg-[#d83a42]";
-  return "bg-[#adb6c2]";
+  if (status === "online") return "bg-success";
+  if (status === "offline") return "bg-destructive";
+  return "bg-muted-foreground/40";
 }
 
 export function playersLabel(server: ServerWithEndpoints, empty = "—") {
@@ -50,7 +50,7 @@ export function formatEndpoint(endpoint: {
 }
 
 export function latencyClass(latency: number | null) {
-  if (latency === null) return "text-[#7c8799]";
-  if (latency <= 60) return "text-[#0e9a55]";
-  return "text-[#e48b18]";
+  if (latency === null) return "text-muted-foreground";
+  if (latency <= 60) return "text-success";
+  return "text-warning";
 }

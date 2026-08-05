@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { IconCheck, IconCopy } from "@tabler/icons-react";
+import { Check, Copy } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function CopyAddressButton({
   value,
-  className = "",
+  className,
   iconOnly = false,
   showIcon = false,
   label = "Copiar",
@@ -20,11 +23,8 @@ export function CopyAddressButton({
 
   async function copyAddress() {
     try {
-      const clipboard = navigator.clipboard;
-      if (!clipboard || typeof clipboard.writeText !== "function") {
-        throw new Error("Clipboard API unavailable");
-      }
-      await clipboard.writeText(value);
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(value);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -32,20 +32,20 @@ export function CopyAddressButton({
     }
   }
 
+  const Icon = copied ? Check : Copy;
+
   return (
-    <button
+    <Button
       type="button"
       onClick={() => void copyAddress()}
       aria-label={iconOnly ? (copied ? "Dirección copiada" : `Copiar ${value}`) : undefined}
       title={iconOnly ? (copied ? "Dirección copiada" : "Copiar dirección") : undefined}
-      className={iconOnly ? `inline-flex h-9 w-9 items-center justify-center rounded-md transition ${className}` : `inline-flex min-h-10 items-center justify-center gap-2 transition ${className}`}
+      variant="ghost"
+      size={iconOnly ? "icon" : "default"}
+      className={cn("text-muted-foreground hover:text-foreground", className)}
     >
-      {iconOnly ? (copied ? <IconCheck aria-hidden="true" size="0.9375rem" /> : <IconCopy aria-hidden="true" size="0.9375rem" />) : (
-        <>
-          {showIcon ? (copied ? <IconCheck aria-hidden="true" size="1.0625rem" /> : <IconCopy aria-hidden="true" size="1.0625rem" />) : null}
-          <span>{copied ? "Copiada" : label}</span>
-        </>
-      )}
-    </button>
+      {iconOnly || showIcon ? <Icon aria-hidden="true" /> : null}
+      {!iconOnly && <span>{copied ? "Copiada" : label}</span>}
+    </Button>
   );
 }

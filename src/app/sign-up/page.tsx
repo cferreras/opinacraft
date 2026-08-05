@@ -3,162 +3,19 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { AuthShell } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
 import { clientEnv } from "@/env/client";
 import { safeCallbackUrl } from "@/lib/callback-url";
 
 export default function SignUpPage() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
-  const discordEnabled = clientEnv.NEXT_PUBLIC_DISCORD_ENABLED === "true";
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setMessage(null);
-    setIsPending(true);
-    const callbackURL = safeCallbackUrl(
-      new URLSearchParams(window.location.search).get("callbackURL"),
-      "/profile",
-    );
-
-    try {
-      const { error: signUpError } = await authClient.signUp.email({
-        name,
-        email,
-        password,
-        callbackURL,
-      });
-
-      if (signUpError) {
-        setError(signUpError.message ?? "Unable to create your account.");
-        return;
-      }
-
-      setMessage(
-        "Cuenta creada. Revisa tu email y confirma el enlace antes de iniciar sesión.",
-      );
-    } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Unable to create your account.",
-      );
-    } finally {
-      setIsPending(false);
-    }
-  }
-
-  async function handleDiscordSignIn() {
-    setError(null);
-    const callbackURL = safeCallbackUrl(
-      new URLSearchParams(window.location.search).get("callbackURL"),
-      "/profile",
-    );
-    await authClient.signIn.social({
-      provider: "discord",
-      callbackURL,
-    });
-  }
-
-  return (
-    <AuthShell
-      title="Create your account"
-      description="Start building your OpinaCraft workspace today."
-      footer={
-        <>
-          Already have an account?{" "}
-          <Link
-            href="/sign-in"
-            className="font-medium text-zinc-950 hover:underline dark:text-white"
-          >
-            Sign in
-          </Link>
-        </>
-      }
-    >
-      {message ? (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-          {message}{" "}
-          <Link
-            className="font-medium underline"
-            href="/sign-in"
-          >
-            Ir a iniciar sesión
-          </Link>
-        </p>
-      ) : null}
-      {!message ? <form onSubmit={handleSubmit} className="space-y-5">
-        <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Name
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-            autoComplete="name"
-            className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-zinc-300"
-          />
-        </label>
-        <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-            autoComplete="email"
-            className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-zinc-300"
-          />
-        </label>
-        <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-            className="mt-2 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-950 dark:focus:border-zinc-300"
-          />
-          <span className="mt-2 block text-xs font-normal text-zinc-500">
-            Use at least 8 characters.
-          </span>
-        </label>
-        {error ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
-            {error}
-          </p>
-        ) : null}
-        <button
-          type="submit"
-          disabled={isPending}
-          className="h-11 w-full rounded-lg bg-zinc-950 px-4 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-        >
-          {isPending ? "Creating account..." : "Create account"}
-        </button>
-        {discordEnabled ? (
-          <>
-            <div className="relative py-1 text-center text-xs text-zinc-500">
-              <span className="relative z-10 bg-white px-3 dark:bg-zinc-900">or</span>
-              <div className="absolute inset-x-0 top-1/2 border-t border-zinc-200 dark:border-zinc-800" />
-            </div>
-            <button
-              type="button"
-              onClick={handleDiscordSignIn}
-              className="h-11 w-full rounded-lg border border-zinc-300 px-4 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            >
-              Continue with Discord
-            </button>
-          </>
-        ) : null}
-      </form> : null}
-    </AuthShell>
-  );
+  const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState<string | null>(null); const [message, setMessage] = useState<string | null>(null); const [isPending, setIsPending] = useState(false); const discordEnabled = clientEnv.NEXT_PUBLIC_DISCORD_ENABLED === "true";
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setError(null); setMessage(null); setIsPending(true); const callbackURL = safeCallbackUrl(new URLSearchParams(window.location.search).get("callbackURL"), "/profile"); try { const { error: signUpError } = await authClient.signUp.email({ name, email, password, callbackURL }); if (signUpError) { setError(signUpError.message ?? "No se ha podido crear la cuenta."); return; } setMessage("Cuenta creada. Revisa tu email y confirma el enlace antes de iniciar sesión."); } catch (caughtError) { setError(caughtError instanceof Error ? caughtError.message : "No se ha podido crear la cuenta."); } finally { setIsPending(false); } }
+  async function handleDiscordSignIn() { setError(null); const callbackURL = safeCallbackUrl(new URLSearchParams(window.location.search).get("callbackURL"), "/profile"); await authClient.signIn.social({ provider: "discord", callbackURL }); }
+  return <AuthShell title="Crea tu cuenta" description="Empieza a construir tu espacio de OpinaCraft." footer={<>¿Ya tienes una cuenta? <Link href="/sign-in" className="font-medium text-primary hover:underline">Iniciar sesión</Link></>}>{message ? <Alert><AlertDescription>{message} <Button variant="link" asChild size="sm" className="h-auto p-0"><Link href="/sign-in">Ir a iniciar sesión</Link></Button></AlertDescription></Alert> : <form onSubmit={handleSubmit} className="grid gap-5"><Field><FieldLabel htmlFor="sign-up-name">Nombre</FieldLabel><Input id="sign-up-name" type="text" value={name} onChange={(event) => setName(event.target.value)} required autoComplete="name" /></Field><Field><FieldLabel htmlFor="sign-up-email">Email</FieldLabel><Input id="sign-up-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></Field><Field><FieldLabel htmlFor="sign-up-password">Contraseña</FieldLabel><Input id="sign-up-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} autoComplete="new-password" /><FieldDescription>Usa al menos 8 caracteres.</FieldDescription></Field>{error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}<Button type="submit" disabled={isPending}>{isPending ? "Creando cuenta…" : "Crear cuenta"}</Button>{discordEnabled ? <><div className="relative py-1 text-center text-xs text-muted-foreground"><Separator /><span className="relative -top-3 bg-card px-3">o</span></div><Button type="button" variant="outline" onClick={handleDiscordSignIn}>Continuar con Discord</Button></> : null}</form>}</AuthShell>;
 }

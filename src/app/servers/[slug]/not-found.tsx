@@ -1,25 +1,8 @@
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 export default function ServerNotFound() {
-  return (
-    <main className="app-auth-page">
-      <section className="ui-card w-full max-w-md p-8 text-center">
-        <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
-          OpinaCraft
-        </p>
-        <h1 className="mt-4 text-3xl font-bold tracking-[-0.05em] text-zinc-950">
-          Server not found
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-          This page does not exist or is not public yet.
-        </p>
-        <Link
-          href="/"
-          className="ui-button-primary mt-6"
-        >
-          Back home
-        </Link>
-      </section>
-    </main>
-  );
+  return <main className="grid min-h-[70vh] place-items-center px-4 py-12"><Card className="w-full max-w-md text-center"><CardHeader><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">OpinaCraft</p><CardTitle className="mt-2 text-3xl">Servidor no encontrado</CardTitle></CardHeader><CardContent><p className="text-sm leading-6 text-muted-foreground">Esta página no existe o todavía no es pública.</p><Button asChild className="mt-6"><Link href="/">Volver al inicio</Link></Button></CardContent></Card></main>;
 }
