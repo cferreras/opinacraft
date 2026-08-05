@@ -8,6 +8,14 @@ test("monitor samples are normalized to a UTC fifteen-minute slot", async () => 
   assert.equal(getMonitorSampleSlot(new Date("2026-08-03T12:15:01.000Z")).toISOString(), "2026-08-03T12:15:00.000Z");
 });
 
+test("rollup coverage counts the fifteen-minute samples in each chart bucket", async () => {
+  const { getExpectedSamplesPerPoint } = await import("../src/lib/servers/player-history.ts");
+  assert.equal(getExpectedSamplesPerPoint(15), 1);
+  assert.equal(getExpectedSamplesPerPoint(60), 4);
+  assert.equal(getExpectedSamplesPerPoint(240), 16);
+  assert.equal(getExpectedSamplesPerPoint(720), 48);
+});
+
 test("probe failures are classified without exposing target details", async () => {
   const { classifyProbeError } = await import("../src/lib/servers/monitor-persistence.ts");
   const { BlockedMinecraftTargetError, MinecraftDnsError } = await import("../src/lib/minecraft/network.ts");

@@ -36,6 +36,7 @@ export type EndpointObservation = {
   edition: MonitorEdition;
   historySourceId: string;
   sampledAt: Date;
+  observedAt: Date;
   runId: string;
   status: MonitorSampleStatus;
   failureCode?: MonitorFailureCode | null;
@@ -170,12 +171,12 @@ export async function applyEndpointObservation(tx: DatabaseTransaction, observat
   await upsertHourlyPlayerRollup(tx, observation);
 
   const sourceChanged = Boolean(current && current.historySourceId !== observation.historySourceId);
-  const currentIsFresh = Boolean(current && (!current.lastCheckedAt || current.lastCheckedAt <= observation.sampledAt));
+  const currentIsFresh = Boolean(current && (!current.lastCheckedAt || current.lastCheckedAt <= observation.observedAt));
   let currentUpdated = false;
   let transition: ObservationResult["transition"] = null;
 
   if (current && !sourceChanged && currentIsFresh && observation.status !== "unknown") {
-    const now = observation.sampledAt;
+    const now = observation.observedAt;
     if (observation.status === "online") {
       currentUpdated = true;
       await tx

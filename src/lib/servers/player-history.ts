@@ -63,6 +63,12 @@ const windows: Record<HistoryPeriod, HistoryWindow> = {
   "90d": { durationMs: 90 * 24 * 60 * 60 * 1000, resolutionMs: 12 * 60 * 60 * 1000, resolutionMinutes: 720, raw: false },
 };
 
+const MONITOR_SAMPLE_INTERVAL_MINUTES = 15;
+
+export function getExpectedSamplesPerPoint(resolutionMinutes: number) {
+  return Math.max(1, Math.round(resolutionMinutes / MONITOR_SAMPLE_INTERVAL_MINUTES));
+}
+
 function alignToResolution(value: Date, resolutionMs: number) {
   return new Date(Math.floor(value.getTime() / resolutionMs) * resolutionMs);
 }
@@ -293,7 +299,7 @@ export async function queryPlayerHistory(serverId: string, period: HistoryPeriod
         occupancyBasisPointsTotal: row.occupancyBasisPointsTotal,
       });
     }
-    return buildSeriesFromBuckets(item, slots, buckets, window.resolutionMs / (60 * 60 * 1000));
+    return buildSeriesFromBuckets(item, slots, buckets, getExpectedSamplesPerPoint(window.resolutionMinutes));
   });
   return { period, edition: editionFilter, resolutionMinutes: window.resolutionMinutes, generatedAt: now.toISOString(), series };
 }

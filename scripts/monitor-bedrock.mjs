@@ -31,11 +31,12 @@ async function resolvePublicAddress(host) {
 }
 
 async function ping(endpoint) {
+  const observedAt = new Date().toISOString();
   let address;
   try {
     address = await resolvePublicAddress(endpoint.host);
   } catch {
-    return { ...endpoint, online: false, failureCode: "blocked_target", latencyMs: null };
+    return { ...endpoint, observedAt, online: false, failureCode: "blocked_target", latencyMs: null };
   }
   return new Promise((resolve) => {
     const socket = dgram.createSocket(isIP(address) === 6 ? "udp6" : "udp4");
@@ -51,7 +52,7 @@ async function ping(endpoint) {
       try { socket.close(); } catch {}
       resolve(value);
     };
-    timer = setTimeout(() => settle({ ...endpoint, online: false, failureCode: "timeout", latencyMs: null }), 5000);
+    timer = setTimeout(() => settle({ ...endpoint, observedAt, online: false, failureCode: "timeout", latencyMs: null }), 5000);
     socket.on("message", (message) => {
       if (message.length < 35 || message[0] !== 0x1c || message.readBigInt64BE(1) !== timestamp || !message.subarray(17, 33).equals(magic)) return;
       const length = message.readUInt16BE(33);
@@ -60,14 +61,14 @@ async function ping(endpoint) {
       const playersCurrent = Number(fields[4]);
       const playersMax = Number(fields[5]);
       if (!Number.isInteger(playersCurrent) || playersCurrent < 0 || !Number.isInteger(playersMax) || playersMax < 0) {
-        settle({ ...endpoint, online: false, failureCode: "invalid_response", latencyMs: null });
+        settle({ ...endpoint, observedAt, online: false, failureCode: "invalid_response", latencyMs: null });
         return;
       }
-      settle({ ...endpoint, online: true, playersCurrent, playersMax, version: fields[3], latencyMs: Date.now() - started });
+      settle({ ...endpoint, observedAt, online: true, playersCurrent, playersMax, version: fields[3], latencyMs: Date.now() - started });
     });
-    socket.on("error", () => settle({ ...endpoint, online: false, failureCode: "unreachable", latencyMs: null }));
+    socket.on("error", () => settle({ ...endpoint, observedAt, online: false, failureCode: "unreachable", latencyMs: null }));
     socket.send(packet, endpoint.port, address, (error) => {
-      if (error) settle({ ...endpoint, online: false, failureCode: "unreachable", latencyMs: null });
+      if (error) settle({ ...endpoint, observedAt, online: false, failureCode: "unreachable", latencyMs: null });
     });
   });
 }

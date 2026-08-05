@@ -50,7 +50,8 @@ function pingData(value: unknown) {
 }
 
 async function probeEndpoint(endpoint: Endpoint, runId: string, sampledAt: Date): Promise<ProbeResult> {
-  const startedAt = Date.now();
+  const observedAt = new Date();
+  const startedAt = observedAt.getTime();
   try {
     const result = endpoint.edition === "bedrock"
       ? await resolveMinecraftBedrockTarget(endpoint.host, endpoint.port).then((target) => pingBedrockServer(target))
@@ -61,6 +62,7 @@ async function probeEndpoint(endpoint: Endpoint, runId: string, sampledAt: Date)
       edition: endpoint.edition,
       historySourceId: endpoint.historySourceId,
       sampledAt,
+      observedAt,
       runId,
       status: "online",
       probeStatus: "online",
@@ -81,6 +83,7 @@ async function probeEndpoint(endpoint: Endpoint, runId: string, sampledAt: Date)
       edition: endpoint.edition,
       historySourceId: endpoint.historySourceId,
       sampledAt,
+      observedAt,
       runId,
       status,
       probeStatus: status,

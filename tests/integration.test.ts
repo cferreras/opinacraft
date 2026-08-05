@@ -462,11 +462,13 @@ test("player observations are atomic, deduplicated and preserve source history",
   const { db } = await import("../src/db.ts");
   const { applyEndpointObservation } = await import("../src/lib/servers/monitor-persistence.ts");
   const sampledAt = new Date("2026-08-03T12:00:00.000Z");
+  const observedAt = new Date("2026-08-03T12:00:30.000Z");
   const observation = {
     serverId,
     edition: "java" as const,
     historySourceId,
     sampledAt,
+    observedAt,
     runId: randomUUID(),
     status: "online" as const,
     failureCode: null,
@@ -487,11 +489,12 @@ test("player observations are atomic, deduplicated and preserve source history",
 
   const nextSource = randomUUID();
   await database().query("update server_endpoints set host = $2, history_source_id = $3 where server_id = $1 and edition = 'java'", [serverId, "new-history.example.invalid", nextSource]);
-  await db.transaction((tx) => applyEndpointObservation(tx, { ...observation, sampledAt: new Date("2026-08-03T12:15:00.000Z"), runId: randomUUID(), status: "offline", failureCode: "unreachable", historySourceId }));
-  await db.transaction((tx) => applyEndpointObservation(tx, { ...observation, sampledAt: new Date("2026-08-03T12:30:00.000Z"), runId: randomUUID(), historySourceId: nextSource, playersCurrent: 20 }));
-  const current = await database().query("select health_status, players_current from server_endpoints where server_id = $1 and edition = 'java'", [serverId]);
+  await db.transaction((tx) => applyEndpointObservation(tx, { ...observation, sampledAt: new Date("2026-08-03T12:15:00.000Z"), observedAt: new Date("2026-08-03T12:15:30.000Z"), runId: randomUUID(), status: "offline", failureCode: "unreachable", historySourceId }));
+  await db.transaction((tx) => applyEndpointObservation(tx, { ...observation, sampledAt: new Date("2026-08-03T12:30:00.000Z"), observedAt: new Date("2026-08-03T12:30:30.000Z"), runId: randomUUID(), historySourceId: nextSource, playersCurrent: 20 }));
+  const current = await database().query("select health_status, players_current, last_checked_at from server_endpoints where server_id = $1 and edition = 'java'", [serverId]);
   assert.equal(current.rows[0].health_status, "online");
   assert.equal(current.rows[0].players_current, 20);
+  assert.equal(current.rows[0].last_checked_at.toISOString(), "2026-08-03T12:30:30.000Z");
   const rows = await database().query("select count(*)::int as count, count(distinct history_source_id)::int as sources from server_endpoint_player_snapshots where server_id = $1", [serverId]);
   assert.deepEqual(rows.rows[0], { count: 3, sources: 2 });
 });
