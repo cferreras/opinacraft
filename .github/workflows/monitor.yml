@@ -19,7 +19,12 @@ jobs:
         run: |
           test -n "$MONITOR_URL"
           test -n "$CRON_MONITOR_SECRET"
+          if [[ "${MONITOR_URL,,}" != https://* ]]; then
+            echo "MONITOR_URL must use HTTPS"
+            exit 1
+          fi
           HTTP_STATUS=$(curl --silent --max-time 240 --output /dev/null --write-out "%{http_code}" \
+            --proto '=https' --proto-redir '=https' \
             -X POST "$MONITOR_URL/api/internal/monitor/run" \
             -H "Authorization: Bearer $CRON_MONITOR_SECRET")
           case "$HTTP_STATUS" in

@@ -174,20 +174,29 @@ export async function runEndpointMonitor() {
     });
 
     const status = persistenceFailures ? "partial" : "done";
+    const completedAt = new Date();
     await db.transaction(async (tx) => {
       await tx
         .update(monitorRuns)
         .set({
           status,
           processingStartedAt,
-          completedAt: new Date(),
+          completedAt,
           javaPersistenceFailures,
           bedrockPersistenceFailures,
         })
         .where(eq(monitorRuns.runId, runId));
-      await updateAvailabilityVisibility(tx);
-      await prunePlayerHistory(tx);
     });
+    try {
+      await db.transaction(async (tx) => {
+        await updateAvailabilityVisibility(tx);
+        await prunePlayerHistory(tx);
+      });
+    } catch (error) {
+      console.error("[monitor] secondary maintenance failed", {
+        error: error instanceof Error ? error.name : "unknown",
+      });
+    }
 
     return {
       processed: probes.length,

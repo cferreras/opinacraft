@@ -117,7 +117,8 @@ async function insertSnapshots(client, rows) {
          failure_code = excluded.failure_code,
          players_current = excluded.players_current,
          players_max = excluded.players_max,
-         run_id = excluded.run_id`,
+         run_id = excluded.run_id
+       where server_endpoint_player_snapshots.run_id like 'seed-history-%'`,
       values,
     );
   }

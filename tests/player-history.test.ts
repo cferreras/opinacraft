@@ -48,7 +48,7 @@ test("server view avoids summing potentially duplicated Java and Bedrock counts"
     status: "online" as const,
     sourceChanged: false,
   });
-  const summary = (players: number, capacity: number) => ({
+  const summary = (players: number, capacity: number, lastSampleAt = "2026-08-03T12:00:00.000Z") => ({
     currentPlayers: players,
     currentCapacity: capacity,
     currentStatus: "online" as const,
@@ -58,14 +58,15 @@ test("server view avoids summing potentially duplicated Java and Bedrock counts"
     responseRatePct: 100,
     monitorCoveragePct: 100,
     sampleCount: 1,
-    lastSampleAt: "2026-08-03T12:00:00.000Z",
+    lastSampleAt,
     sourceChanges: 0,
   });
   const aggregate = aggregateHistorySeries([
     { edition: "java", points: [point("2026-08-03T12:00:00.000Z", 120, 300)], summary: summary(120, 300) },
-    { edition: "bedrock", points: [point("2026-08-03T12:00:00.000Z", 80, 200)], summary: summary(80, 200) },
+    { edition: "bedrock", points: [point("2026-08-03T12:00:00.000Z", 80, 200)], summary: summary(80, 200, "2026-08-03T12:15:30.000Z") },
   ]);
   assert.equal(aggregate?.edition, "server");
   assert.equal(aggregate?.points[0]?.averagePlayers, 120);
   assert.equal(aggregate?.summary.averagePlayers, 120);
+  assert.equal(aggregate?.summary.lastSampleAt, "2026-08-03T12:15:30.000Z");
 });

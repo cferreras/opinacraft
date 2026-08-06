@@ -172,7 +172,10 @@ function buildSeriesFromBuckets(edition: HistoryEdition, slots: Date[], buckets:
   const playerPoints = populated.filter((point) => point.averagePlayers !== null);
   const occupancyPoints = populated.filter((point) => point.averageOccupancyPct !== null);
   const lastPoint = [...populated].reverse()[0] ?? null;
-  const lastSample = lastPoint?.at ?? null;
+  const latestSample = buckets.flat().reduce<Date | null>((latest, row) => (
+    !latest || row.sampledAt.getTime() > latest.getTime() ? row.sampledAt : latest
+  ), null);
+  const lastSample = latestSample?.toISOString() ?? null;
   const sourceChanges = points.filter((point) => point.sourceChanged).length;
   const expectedSlots = points.length;
   const totalSamples = populated.reduce((sum, point) => sum + point.sampleCount, 0);
