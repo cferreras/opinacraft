@@ -1,8 +1,6 @@
-name: Endpoint monitor
+name: Emergency endpoint monitor
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -11,25 +9,25 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MONITOR_URL: ${{ secrets.OPINACRAFT_MONITOR_URL }}
+      CRON_MONITOR_SECRET: ${{ secrets.OPINACRAFT_CRON_MONITOR_SECRET }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 11.9.0
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prod
-      - name: Run endpoint monitor
-        env:
-          MONITOR_URL: ${{ secrets.OPINACRAFT_MONITOR_URL }}
-          MONITOR_SECRET: ${{ secrets.OPINACRAFT_MONITOR_SECRET }}
+      - name: Run monitor over HTTP
+        shell: bash
         run: |
           test -n "$MONITOR_URL"
-          test -n "$MONITOR_SECRET"
-          RESPONSE=$(curl --fail-with-body --max-time 240 -sS -X POST "$MONITOR_URL/api/internal/monitor/run" \
-            -H "Authorization: Bearer $MONITOR_SECRET")
-          MONITOR_RUN_JSON="$RESPONSE" node scripts/monitor-bedrock.mjs
+          test -n "$CRON_MONITOR_SECRET"
+          if [[ "${MONITOR_URL,,}" != https://* ]]; then
+            echo "MONITOR_URL must use HTTPS"
+            exit 1
+          fi
+          HTTP_STATUS=$(curl --silent --max-time 240 --output /dev/null --write-out "%{http_code}" \
+            --proto '=https' --proto-redir '=https' \
+            -X POST "$MONITOR_URL/api/internal/monitor/run" \
+            -H "Authorization: Bearer $CRON_MONITOR_SECRET")
+          case "$HTTP_STATUS" in
+            2*) ;;
+            *) echo "Monitor endpoint returned HTTP $HTTP_STATUS"; exit 1 ;;
+          esac

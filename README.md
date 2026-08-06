@@ -122,18 +122,18 @@ For Production, use the Production environment values, run reviewed migrations t
 
 ## Current phase notes
 
-The public-beta foundation now includes email verification, safe callback redirects, keyboard tag autocomplete, fuzzy search, Vercel Blob WebP media uploads with quota guards and cleanup retries, Java/Bedrock endpoint verification and monitoring, signed fallback results, availability hiding, reporting/moderation, server deletion, account export and Spanish legal pages.
+The public-beta foundation now includes email verification, safe callback redirects, keyboard tag autocomplete, fuzzy search, Vercel Blob WebP media uploads with quota guards and cleanup retries, Java/Bedrock endpoint verification and in-app monitoring, availability hiding, reporting/moderation, server deletion, account export and Spanish legal pages.
 
-Vercel Blob is optional in local development. Preview/Production media uploads require `BLOB_READ_WRITE_TOKEN`; the monitor workflow requires `MONITOR_SECRET` plus the two GitHub secrets documented in `.github/workflows/monitor.yml`. Hobby quota counters default to 1 GB and 2,000 advanced operations and are conservative estimates; Vercel Observability remains the exact source for transfer, cache and monthly usage.
+Vercel Blob is optional in local development. Preview/Production media uploads require `BLOB_READ_WRITE_TOKEN`; the deployed monitor requires `CRON_MONITOR_SECRET`, configured in Vercel and in the cron-job.org request. The GitHub workflow is manual-only for emergencies. Hobby quota counters default to 1 GB and 2,000 advanced operations and are conservative estimates; Vercel Observability remains the exact source for transfer, cache and monthly usage.
 
-To trigger the monitor locally, add a development-only `MONITOR_SECRET` (at least 32 characters), start the app, and call the internal route:
+To trigger the monitor locally, add a development-only `CRON_MONITOR_SECRET` (at least 32 characters), start the app, and call the internal route:
 
 ```powershell
-$headers = @{ Authorization = "Bearer $env:MONITOR_SECRET" }
+$headers = @{ Authorization = "Bearer $env:CRON_MONITOR_SECRET" }
 Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/internal/monitor/run -Headers $headers
 ```
 
-Only verified endpoints are checked. A successful check marks an endpoint online immediately; an unreachable endpoint needs three monitor runs before it becomes offline. Without this request (or the scheduled GitHub workflow), health remains `unknown`.
+Only verified endpoints are checked. A successful check marks an endpoint online immediately; an unreachable endpoint needs three monitor runs before it becomes offline. Without this request, health remains `unknown`. For production scheduling, see [`docs/cron-job-monitor.md`](docs/cron-job-monitor.md).
 
 The local seed leaves endpoint latency empty on purpose. The `latency_ms` value is written only by a successful Java/Bedrock monitor observation, so seeded servers show no ping until the worker has measured them.
 

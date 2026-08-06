@@ -10,7 +10,7 @@ export const serverEnv = createEnv({
     BETTER_AUTH_URL: z.url().default("http://localhost:3000"),
     BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
     SERVER_VERIFICATION_SECRET: z.string().min(32).optional(),
-    MONITOR_SECRET: z.string().min(32).optional(),
+    CRON_MONITOR_SECRET: z.string().min(32).optional(),
     RESEND_API_KEY: z.string().min(1).optional(),
     EMAIL_FROM: z.string().min(1).optional(),
     BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
@@ -27,5 +27,15 @@ export const serverEnv = createEnv({
   // },
   // For Next.js >= 13.4.4, you can just reference process.env:
   experimental__runtimeEnv: process.env,
+  createFinalSchema: (shape) =>
+    z.object(shape).superRefine((env, ctx) => {
+      if (env.NODE_ENV === "production" && !env.CRON_MONITOR_SECRET) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["CRON_MONITOR_SECRET"],
+          message: "CRON_MONITOR_SECRET is required in production",
+        });
+      }
+    }),
   emptyStringAsUndefined: true,
 });

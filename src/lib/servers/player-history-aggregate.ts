@@ -66,6 +66,11 @@ export function aggregateHistorySeries(series: HistorySeries[]): HistorySeries |
   const playerPoints = populated.filter((point) => point.averagePlayers !== null);
   const occupancyPoints = populated.filter((point) => point.averageOccupancyPct !== null);
   const lastPoint = [...populated].reverse()[0] ?? null;
+  const lastSampleAt = series
+    .map((item) => item.summary.lastSampleAt)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? null;
   const totalSamples = populated.reduce((sum, point) => sum + point.sampleCount, 0);
   const totalResponding = populated.reduce((sum, point) => sum + (point.sampleCount * point.responseRatePct) / 100, 0);
   const coverage = populated.length ? populated.reduce((sum, point) => sum + point.monitorCoveragePct, 0) / populated.length : 0;
@@ -83,7 +88,7 @@ export function aggregateHistorySeries(series: HistorySeries[]): HistorySeries |
       responseRatePct: totalSamples ? round((totalResponding / totalSamples) * 100) ?? 0 : 0,
       monitorCoveragePct: round(coverage) ?? 0,
       sampleCount: totalSamples,
-      lastSampleAt: lastPoint?.at ?? null,
+      lastSampleAt,
       sourceChanges: points.filter((point) => point.sourceChanged).length,
     },
   } satisfies HistorySeries;
