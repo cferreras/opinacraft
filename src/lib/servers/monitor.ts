@@ -76,7 +76,7 @@ async function probeEndpoint(endpoint: Endpoint, runId: string, sampledAt: Date)
     const failureCode = classifyProbeError(error);
     const status: MonitorSampleStatus = failureCode === "monitor_error" ? "unknown" : "offline";
     if (failureCode === "monitor_error") {
-      console.warn("[monitor] internal endpoint probe failure", error instanceof Error ? error : new Error("unknown error"));
+      console.warn("[monitor] endpoint probe failed", { edition: endpoint.edition, failureCode });
     }
     return {
       serverId: endpoint.serverId,
@@ -114,11 +114,6 @@ export type MonitorRunResult = {
   offline: number;
   unknown: number;
   persistenceFailures: number;
-  fallback: Array<{ serverId: string; edition: "bedrock"; host: string; port: number; historySourceId: string }>;
-  runId: string;
-  nonce: string;
-  sampledAt: string;
-  expiresAt: string;
 };
 
 export async function runEndpointMonitor() {
@@ -127,6 +122,7 @@ export async function runEndpointMonitor() {
     const runId = randomUUID();
     const nonce = randomBytes(24).toString("hex");
     const expiresAt = new Date(Date.now() + RUN_TTL_MS);
+    const processingStartedAt = new Date();
     const endpoints = await db
       .select({
         serverId: serverEndpoints.serverId,
@@ -140,46 +136,53 @@ export async function runEndpointMonitor() {
       .orderBy(asc(sql`${serverEndpoints.lastCheckedAt} is not null`), asc(serverEndpoints.lastCheckedAt), asc(serverEndpoints.serverId), asc(serverEndpoints.edition))
       .limit(MAX_ENDPOINTS_PER_RUN);
 
-    const fallback = endpoints
-      .filter((endpoint) => endpoint.edition === "bedrock")
-      .map((endpoint) => ({ serverId: endpoint.serverId, edition: "bedrock" as const, host: endpoint.host, port: endpoint.port, historySourceId: endpoint.historySourceId }));
-
     const [run] = await db
       .insert(monitorRuns)
-      .values({ runId, nonce, sampledAt, expiresAt, fallbackEndpoints: fallback, status: "pending" })
+      .values({
+        runId,
+        nonce,
+        sampledAt,
+        expiresAt,
+        fallbackEndpoints: [],
+        status: "processing",
+        processingStartedAt,
+      })
       .onConflictDoNothing({ target: monitorRuns.sampledAt })
       .returning({ runId: monitorRuns.runId });
     if (!run) return null;
 
-    const javaEndpoints = endpoints.filter((endpoint) => endpoint.edition === "java");
     const probes: ProbeResult[] = [];
-    await runPool(javaEndpoints, MAX_NETWORK_CONCURRENCY, async (endpoint) => {
+    await runPool(endpoints, MAX_NETWORK_CONCURRENCY, async (endpoint) => {
       probes.push(await probeEndpoint(endpoint, runId, sampledAt));
     });
 
     let persistenceFailures = 0;
+    let javaPersistenceFailures = 0;
+    let bedrockPersistenceFailures = 0;
     await runPool(probes, MAX_PERSISTENCE_CONCURRENCY, async (observation) => {
       try {
         await db.transaction((tx) => applyEndpointObservation(tx, observation));
       } catch (error) {
         persistenceFailures += 1;
-        console.error("[monitor] endpoint observation persistence failed", {
-          serverId: observation.serverId,
+        if (observation.edition === "java") javaPersistenceFailures += 1;
+        else bedrockPersistenceFailures += 1;
+        console.error("[monitor] observation persistence failed", {
           edition: observation.edition,
-          error,
+          error: error instanceof Error ? error.name : "unknown",
         });
       }
     });
 
-    const status = fallback.length ? (persistenceFailures ? "partial" : "pending") : persistenceFailures ? "partial" : "done";
+    const status = persistenceFailures ? "partial" : "done";
     await db.transaction(async (tx) => {
       await tx
         .update(monitorRuns)
         .set({
           status,
-          processingStartedAt: new Date(),
-          completedAt: fallback.length ? null : new Date(),
-          javaPersistenceFailures: persistenceFailures,
+          processingStartedAt,
+          completedAt: new Date(),
+          javaPersistenceFailures,
+          bedrockPersistenceFailures,
         })
         .where(eq(monitorRuns.runId, runId));
       await updateAvailabilityVisibility(tx);
@@ -192,11 +195,6 @@ export async function runEndpointMonitor() {
       offline: probes.filter((probe) => probe.probeStatus === "offline").length,
       unknown: probes.filter((probe) => probe.probeStatus === "unknown").length,
       persistenceFailures,
-      fallback,
-      runId,
-      nonce,
-      sampledAt: sampledAt.toISOString(),
-      expiresAt: expiresAt.toISOString(),
     };
   });
 

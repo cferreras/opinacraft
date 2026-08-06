@@ -1,19 +1,35 @@
-import { NextResponse } from "next/server";
-
 import { serverEnv } from "@/env/server";
 import { runEndpointMonitor } from "@/lib/servers/monitor";
+import { createMonitorPostHandler, methodNotAllowed } from "@/lib/servers/monitor-route";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
 
-export async function POST(request: Request) {
-  const expected = serverEnv.MONITOR_SECRET;
-  const authorization = request.headers.get("authorization");
-  if (!expected || authorization !== `Bearer ${expected}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const POST = createMonitorPostHandler({
+  expectedSecret: serverEnv.CRON_MONITOR_SECRET,
+  runMonitor: runEndpointMonitor,
+});
 
-  const result = await runEndpointMonitor();
-  if (!result) return NextResponse.json({ error: "Monitor already running." }, { status: 409 });
-  return NextResponse.json(result, { status: result.persistenceFailures && result.fallback.length === 0 ? 503 : 200 });
+export function GET() {
+  return methodNotAllowed();
+}
+
+export function PUT() {
+  return methodNotAllowed();
+}
+
+export function PATCH() {
+  return methodNotAllowed();
+}
+
+export function DELETE() {
+  return methodNotAllowed();
+}
+
+export function HEAD() {
+  return methodNotAllowed();
+}
+
+export function OPTIONS() {
+  return methodNotAllowed();
 }

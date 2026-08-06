@@ -108,10 +108,9 @@ límites publicados por Vercel.
 
 ### Ejecución del monitor
 
-- Un workflow programado de GitHub Actions invocará cada 15 minutos un endpoint
-  interno firmado desplegado en Vercel Hobby.
+- cron-job.org invocará cada 15 minutos el endpoint interno desplegado en Vercel Hobby.
 - `POST /api/internal/monitor/run` exigirá
-  `Authorization: Bearer <MONITOR_SECRET>`.
+  `Authorization: Bearer <CRON_MONITOR_SECRET>`.
 - Cada ejecución procesará hasta 200 endpoints con concurrencia máxima 10,
   timeout de cinco segundos y bloqueo para impedir trabajos solapados.
 - Las conexiones TCP y UDP reutilizarán las protecciones existentes contra
@@ -124,9 +123,8 @@ límites publicados por Vercel.
   ocultará automáticamente.
 - Al recuperarse un endpoint, la ficha volverá a mostrarse únicamente si el
   propietario sigue queriendo publicarla y no existe un bloqueo de moderación.
-- Preview deberá demostrar conectividad TCP Java y UDP Bedrock. Si Vercel no
-  permite el ping UDP de forma fiable, el workflow ejecutará el conector Bedrock
-  y enviará resultados firmados sin recibir credenciales de la base de datos.
+- Preview deberá demostrar conectividad TCP Java y UDP Bedrock dentro de la misma
+  función, sin enviar credenciales ni resultados a un worker externo.
 
 ## Hito 4: moderación, ciclo de vida y lanzamiento
 
