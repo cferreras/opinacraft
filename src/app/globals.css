@@ -111,8 +111,8 @@
 html {
   min-width: 320px;
   scroll-behavior: smooth;
-  /* Scale the rem-based interface gradually while preserving the browser baseline. */
-  font-size: clamp(1rem, calc(0.75rem + 0.333vw), 1.25rem);
+  /* Scale with the viewport while keeping the browser's configured base size. */
+  font-size: clamp(100%, calc(75% + 0.333vw), 125%);
 }
 
 body {
