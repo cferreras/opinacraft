@@ -27,15 +27,7 @@ export const serverEnv = createEnv({
   // },
   // For Next.js >= 13.4.4, you can just reference process.env:
   experimental__runtimeEnv: process.env,
-  createFinalSchema: (shape) =>
-    z.object(shape).superRefine((env, ctx) => {
-      if (env.NODE_ENV === "production" && !env.CRON_MONITOR_SECRET) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["CRON_MONITOR_SECRET"],
-          message: "CRON_MONITOR_SECRET is required in production",
-        });
-      }
-    }),
+  // The monitor is disabled until its authorization secret is configured.
+  // Keep this optional so deployments that do not use the monitor can build.
   emptyStringAsUndefined: true,
 });
