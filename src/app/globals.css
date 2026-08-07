@@ -111,6 +111,8 @@
 html {
   min-width: 320px;
   scroll-behavior: smooth;
+  /* Scale the rem-based interface gradually on wide screens without changing mobile. */
+  font-size: clamp(16px, calc(12px + 0.333vw), 20px);
 }
 
 body {
