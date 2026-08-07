@@ -247,7 +247,7 @@ export function SiteHeader() {
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <label htmlFor="header-search" className="sr-only">Buscar servidores</label>
           <Input ref={desktopSearchRef} id="header-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar servidores" className="h-9 pl-8 pr-14" />
-          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Ctrl K</kbd>
+          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">Ctrl K</kbd>
         </form>
 
         <div className="ml-auto flex items-center gap-1 lg:ml-0">

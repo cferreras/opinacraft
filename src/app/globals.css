@@ -111,6 +111,8 @@
 html {
   min-width: 320px;
   scroll-behavior: smooth;
+  /* Scale with the viewport while keeping the browser's configured base size. */
+  font-size: clamp(100%, calc(75% + 0.333vw), 125%);
 }
 
 body {
