@@ -24,5 +24,5 @@ export function ServerSearchInput({ defaultValue }: { defaultValue: string }) {
     router.push(queryString ? `${action}?${queryString}` : action);
   }
 
-  return <Input id="server-search" name="q" defaultValue={defaultValue} onKeyDown={submitOnEnter} placeholder="Buscar por nombre, modalidad o dirección" className="h-10 min-w-0 flex-1" />;
+  return <Input id="server-search" name="q" defaultValue={defaultValue} onKeyDown={submitOnEnter} placeholder="Buscar por nombre, modalidad o dirección" className="h-10 min-w-0 flex-1 pl-8 text-sm" />;
 }

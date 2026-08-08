@@ -58,6 +58,7 @@ export function FilterSelect({
       <NativeSelect
         id={id}
         name={name}
+        size="lg"
         aria-label={accessibleLabel && accessibleLabel !== label ? accessibleLabel : undefined}
         defaultValue={defaultValue}
         onChange={submitOnChange ? handleChange : undefined}
