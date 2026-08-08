@@ -253,7 +253,7 @@ export function SiteHeader() {
         <div className="ml-auto flex items-center gap-1 lg:ml-0">
           <Button variant="ghost" size="icon" asChild className="hidden sm:inline-flex"><Link href="/contact" aria-label="Ayuda"><CircleHelp className="size-4" /></Link></Button>
           <ThemeToggle />
-          <Button size="sm" asChild className="hidden sm:inline-flex"><Link href="/servers/new"><Plus className="size-4" /> Publicar</Link></Button>
+          <Button size="lg" asChild className="hidden sm:inline-flex"><Link href="/servers/new"><Plus className="size-4" /> Publicar</Link></Button>
           {sessionPending ? <Skeleton className="size-8 rounded-full" /> : session ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -262,7 +262,7 @@ export function SiteHeader() {
                   <span className="hidden max-w-28 truncate text-sm font-medium md:inline">{displayName}</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-40">
                 <DropdownMenuItem asChild><Link href="/profile"><User className="size-4" /> Mi perfil</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href="/dashboard/servers"><Server className="size-4" /> Mis servidores</Link></DropdownMenuItem>
               </DropdownMenuContent>
@@ -279,8 +279,8 @@ export function SiteHeader() {
             <DialogDescription>Busca por nombre, dirección o etiquetas.</DialogDescription>
           </DialogHeader>
           <form onSubmit={submitSearch} className="flex gap-2">
-            <Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ej. survival" />
-            <Button type="submit"><Search className="size-4" /> Buscar</Button>
+            <Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ej. survival" className="h-9" />
+            <Button type="submit" size="lg"><Search className="size-4" /> Buscar</Button>
           </form>
         </DialogContent>
       </Dialog>

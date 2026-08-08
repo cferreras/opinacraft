@@ -82,6 +82,19 @@ test("monitor route returns 401 without exposing the configured secret", async (
   assert.equal(body.includes(secret), false);
 });
 
+test("monitor route stays disabled when no secret is configured", async () => {
+  const handler = createMonitorPostHandler({
+    expectedSecret: undefined,
+    runMonitor: async () => {
+      throw new Error("must not run");
+    },
+  });
+
+  const response = await handler(request({ authorization: "Bearer any-secret" }));
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "Unauthorized" });
+});
+
 test("monitor route maps runner failures and partial persistence to 500", async () => {
   const logs: unknown[] = [];
   const failing = createMonitorPostHandler({
