@@ -30,6 +30,7 @@ function formatDate(value: string | null, withYear = false) {
   return new Intl.DateTimeFormat("es-ES", {
     day: "numeric",
     month: "short",
+    timeZone: "UTC",
     ...(withYear ? { year: "numeric" } : {}),
     hour: "2-digit",
     minute: "2-digit",
@@ -98,18 +99,26 @@ export function PlayerHistoryCard({ serverId, initialData, mode = "public" }: Pr
   useEffect(() => {
     if (requestKey === 0) return;
     const controller = new AbortController();
+    let active = true;
     fetch("/api/servers/" + serverId + "/player-history?period=" + period + "&edition=" + edition, { signal: controller.signal, headers: { accept: "application/json" } })
       .then(async (response) => {
         if (!response.ok) throw new Error("No se pudo cargar el histórico.");
         return response.json() as Promise<PlayerHistoryResponse>;
       })
-      .then(setData)
+      .then((nextData) => {
+        if (active) setData(nextData);
+      })
       .catch((reason: unknown) => {
-        if (reason instanceof Error && reason.name === "AbortError") return;
+        if (!active || (reason instanceof Error && reason.name === "AbortError")) return;
         setError("No se pudo cargar el histórico ahora.");
       })
-      .finally(() => setLoading(false));
-    return () => controller.abort();
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [edition, period, requestKey, serverId]);
 
   useEffect(() => {
@@ -168,17 +177,15 @@ export function PlayerHistoryCard({ serverId, initialData, mode = "public" }: Pr
       </CardHeader>
       <CardContent className="grid gap-5">
         {error ? <Alert variant="destructive"><RefreshCcw className="size-4" /><AlertTitle>Error al cargar el histórico</AlertTitle><AlertDescription className="flex flex-wrap items-center gap-2">{error}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RefreshCcw className="size-3.5" /> Reintentar</Button></AlertDescription></Alert> : null}
-        {!error && !hasData ? <div className="flex items-start gap-3 rounded-lg border border-dashed p-6"><Info className="mt-0.5 size-5 text-muted-foreground" /><div><strong className="text-sm">Aún no hay histórico suficiente</strong><p className="mt-1 text-sm text-muted-foreground">Las muestras se recopilan cada 15 minutos. Vuelve cuando el monitor haya registrado actividad.</p></div></div> : null}
-        {loading && hasData ? <Skeleton className="h-72 w-full" /> : null}
+        {!error && !loading && !hasData ? <div className="flex items-start gap-3 rounded-lg border border-dashed p-6"><Info className="mt-0.5 size-5 text-muted-foreground" /><div><strong className="text-sm">Aún no hay histórico suficiente</strong><p className="mt-1 text-sm text-muted-foreground">Las muestras se recopilan cada 15 minutos. Vuelve cuando el monitor haya registrado actividad.</p></div></div> : null}
+        {loading ? <Skeleton className="h-72 w-full" /> : null}
         {hasData && !loading ? (
           <div className="grid gap-5">
             <ChartContainer
               config={chartConfig}
               className="h-[276px] w-full aspect-auto"
-              role="img"
-              aria-label={"Histórico de jugadores conectados: " + seriesLabel(data.edition)}
             >
-              <LineChart data={chartData} margin={{ top: 10, right: 12, left: 2, bottom: 0 }} accessibilityLayer>
+              <LineChart data={chartData} margin={{ top: 10, right: 12, left: 2, bottom: 0 }} accessibilityLayer desc={"Histórico de jugadores conectados: " + seriesLabel(data.edition)}>
                 <CartesianGrid stroke="var(--history-grid)" vertical={false} />
                 <XAxis dataKey="at" tickFormatter={(value) => formatDate(value)} tick={{ fill: "var(--history-muted)", fontSize: "0.625rem" }} tickLine={false} axisLine={false} tickMargin={10} minTickGap={28} />
                 <YAxis allowDecimals={false} tick={{ fill: "var(--history-muted)", fontSize: "0.625rem" }} tickLine={false} axisLine={false} tickMargin={8} width={42} />
