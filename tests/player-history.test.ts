@@ -70,3 +70,27 @@ test("server view avoids summing potentially duplicated Java and Bedrock counts"
   assert.equal(aggregate?.summary.averagePlayers, 120);
   assert.equal(aggregate?.summary.lastSampleAt, "2026-08-03T12:15:30.000Z");
 });
+
+test("server history keeps gaps and derives weighted response statistics", async () => {
+  const { aggregateHistorySeries } = await import("../src/lib/servers/player-history-aggregate.ts");
+  const at = "2026-08-03T12:00:00.000Z";
+  const aggregate = aggregateHistorySeries([
+    {
+      edition: "java",
+      points: [{ at, averagePlayers: null, peakPlayers: null, capacity: null, averageOccupancyPct: null, responseRatePct: 0, monitorCoveragePct: 50, sampleCount: 0, status: "no_data", sourceChanged: false }],
+      summary: { currentPlayers: null, currentCapacity: null, currentStatus: "no_data", averagePlayers: null, peakPlayers: null, averageOccupancyPct: null, responseRatePct: 0, monitorCoveragePct: 50, sampleCount: 0, lastSampleAt: null, sourceChanges: 0 },
+    },
+    {
+      edition: "bedrock",
+      points: [{ at, averagePlayers: 30, peakPlayers: 40, capacity: 100, averageOccupancyPct: 30, responseRatePct: 75, monitorCoveragePct: 100, sampleCount: 4, status: "online", sourceChanged: true }],
+      summary: { currentPlayers: 30, currentCapacity: 100, currentStatus: "online", averagePlayers: 30, peakPlayers: 40, averageOccupancyPct: 30, responseRatePct: 75, monitorCoveragePct: 100, sampleCount: 4, lastSampleAt: "2026-08-03T12:14:00.000Z", sourceChanges: 1 },
+    },
+  ]);
+  assert.equal(aggregate?.points[0]?.status, "online");
+  assert.equal(aggregate?.points[0]?.sourceChanged, true);
+  assert.equal(aggregate?.summary.responseRatePct, 75);
+  assert.equal(aggregate?.summary.monitorCoveragePct, 100);
+  assert.equal(aggregate?.summary.sampleCount, 4);
+  assert.equal(aggregate?.summary.sourceChanges, 1);
+  assert.equal(aggregateHistorySeries([]), null);
+});

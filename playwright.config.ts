@@ -28,7 +28,7 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: `pnpm exec next dev --hostname 127.0.0.1 --port ${e2ePort}`,
+        command: `corepack pnpm exec next dev --hostname 127.0.0.1 --port ${e2ePort}`,
         url: baseURL,
         reuseExistingServer: process.env.E2E_REUSE_EXISTING_SERVER === "true",
         timeout: 120_000,

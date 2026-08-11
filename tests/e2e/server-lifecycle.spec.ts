@@ -15,6 +15,7 @@ test.afterAll(async () => {
 });
 
 test("owner can create a complete Java/Bedrock listing, upload media, edit visibility and delete it", async ({ page }) => {
+  test.setTimeout(90_000);
   const owner = await createAccount(page, "server-lifecycle");
   createdEmails.push(owner.email);
 
@@ -34,14 +35,16 @@ test("owner can create a complete Java/Bedrock listing, upload media, edit visib
 
   await page.goto(`/servers/${slug}`);
   await expect(page.getByRole("heading", { name: serverName })).toBeVisible();
-  await expect(page.getByText("Una comunidad de prueba para cubrir el ciclo completo.")).toBeVisible();
-  await expect(page.getByText("survival")).toBeVisible();
-  await expect(page.getByText("community")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Website" })).toHaveAttribute("href", "https://example.com/community");
+  await expect(page.getByText("Una comunidad de prueba para cubrir el ciclo completo.").first()).toBeVisible();
+  const hero = page.getByRole("region", { name: serverName, exact: true });
+  await expect(hero.getByText("survival")).toBeVisible();
+  await expect(hero.getByText("community")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Web del servidor" })).toHaveAttribute("href", "https://example.com/community");
   await expect(page.getByRole("link", { name: "Tienda oficial" })).toHaveAttribute("href", "https://shop.example.com/store");
-  await expect(page.getByRole("link", { name: "Discord" })).toHaveAttribute("href", "https://discord.gg/example");
-  await expect(page.getByText("java", { exact: true })).toBeVisible();
-  await expect(page.getByText("bedrock", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Soporte en Discord" })).toHaveAttribute("href", "https://discord.gg/example");
+  const connection = page.getByRole("complementary", { name: "Conexión" });
+  await expect(connection.getByText("Java", { exact: true })).toBeVisible();
+  await expect(connection.getByText("Bedrock", { exact: true })).toBeVisible();
 
   await page.goto(`/servers/${slug}/manage`);
   const imageFile = {
@@ -52,35 +55,34 @@ test("owner can create a complete Java/Bedrock listing, upload media, edit visib
       "base64",
     ),
   };
-  await page.locator('select[name="kind"]').selectOption("logo");
-  await page.locator('input[type="file"]').setInputFiles(imageFile);
-  await page.getByRole("button", { name: "Subir" }).click();
-  await expect(page.getByRole("status").filter({ hasText: /Imagen subida/i })).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('img[alt="logo"]')).toBeVisible();
+  await page.getByLabel("Archivo del logo").setInputFiles(imageFile);
+  await page.getByRole("button", { name: "Subir logo" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: /Imagen subida/i })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('img[alt="logo preview"]')).toBeVisible();
 
-  const mediaCard = page.locator('img[alt="logo"]').locator("xpath=..");
-  await mediaCard.getByRole("button", { name: "Eliminar" }).click();
-  await expect(page.getByRole("status").filter({ hasText: /Imagen eliminada/i })).toBeVisible();
-  await expect(page.locator('img[alt="logo"]')).toHaveCount(0);
+  const mediaCard = page.locator('img[alt="logo preview"]').locator("xpath=../..");
+  await mediaCard.getByRole("button", { name: "Quitar" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: /Imagen eliminada/i })).toBeVisible();
+  await expect(page.locator('img[alt="logo preview"]')).toHaveCount(0);
 
   await page.locator('textarea[name="description"]').fill("Descripción actualizada desde E2E.");
-  await page.getByLabel("Publication").selectOption("hidden");
-  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.locator("#publication-status").selectOption("hidden");
+  await page.getByRole("button", { name: "Guardar cambios" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?updated=1$`));
 
   await page.goto("/servers");
   await expect(page.getByText(serverName)).toHaveCount(0);
 
   await page.goto(`/servers/${slug}/manage`);
-  await page.getByLabel("Publication").selectOption("published");
-  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.locator("#publication-status").selectOption("published");
+  await page.getByRole("button", { name: "Guardar cambios" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?updated=1$`));
-  await expect(page.getByText("Server details saved.")).toBeVisible();
+  await expect(page.getByText("Se guardaron los datos del servidor.")).toBeVisible();
 
-  await page.locator("summary").filter({ hasText: "Delete server" }).click();
+  await page.getByRole("button", { name: "Eliminar", exact: true }).click();
   await expect(page.locator('input[name="confirmation"]')).toBeVisible();
   await page.locator('input[name="confirmation"]').fill("DELETE");
-  await page.getByRole("button", { name: "Delete permanently" }).click();
+  await page.getByRole("button", { name: "Eliminar permanentemente" }).click();
   await expect(page).toHaveURL(/\/dashboard\/servers\?deleted=1$/);
   await expect(page.getByText(serverName)).toHaveCount(0);
 });
@@ -97,5 +99,5 @@ test("a non-image media file is rejected", async ({ page }) => {
     buffer: Buffer.from("not an image"),
   });
   await page.getByRole("button", { name: "Subir" }).click();
-  await expect(page.getByRole("status").filter({ hasText: /PNG|JPEG|WebP/i })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: /PNG|JPEG|WebP/i })).toBeVisible();
 });

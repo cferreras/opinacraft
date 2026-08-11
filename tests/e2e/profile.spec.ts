@@ -31,7 +31,7 @@ test("a user can edit their public profile and request an email change", async (
   });
   await page.getByRole("button", { name: "Guardar cambios" }).click();
 
-  await expect(page.getByRole("heading", { name: "OpinaCraft Explorer" })).toBeVisible();
+  await expect(page.getByText("OpinaCraft Explorer", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Perfil actualizado.")).toBeVisible({ timeout: 15_000 });
 
   const pool = openPool();
@@ -61,11 +61,11 @@ test("a user can edit their public profile and request an email change", async (
   await page.getByLabel("Nombre visible").fill("OpinaCraft Explorer");
   const nextEmail = `e2e-profile-next-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.invalid`;
   await page.getByLabel("Nuevo correo electrónico").fill(account.email);
-  await page.getByRole("button", { name: "Solicitar cambio de correo" }).click();
+  await page.getByRole("button", { name: "Solicitar cambio" }).click();
   await expect(page.getByText("Escribe un correo diferente al actual.")).toBeVisible();
 
   await page.getByLabel("Nuevo correo electrónico").fill(nextEmail);
-  await page.getByRole("button", { name: "Solicitar cambio de correo" }).click();
+  await page.getByRole("button", { name: "Solicitar cambio" }).click();
   await expect(page.getByText(/Revisa tu correo actual para aprobar el cambio/)).toBeVisible();
 
   const pendingEmailResult = await pool.query(
@@ -105,13 +105,15 @@ test("a Discord-only account can edit its profile without a local password", asy
   await setOnlySocialAccount(account.email);
 
   await page.goto("/profile");
+  await page.getByRole("tab", { name: "Seguridad" }).click();
   await expect(page.getByText("Acceso administrado por Discord")).toBeVisible();
   await expect(page.getByText("Esta cuenta no tiene una contraseña local.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Cambiar contraseña" })).toHaveCount(0);
 
+  await page.getByRole("tab", { name: "Identidad" }).click();
   await page.getByLabel("Nombre visible").fill("Discord Explorer");
   await page.getByRole("button", { name: "Guardar cambios" }).click();
-  await expect(page.getByRole("heading", { name: "Discord Explorer" })).toBeVisible();
+  await expect(page.getByText("Discord Explorer", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Perfil actualizado.")).toBeVisible();
 
   const pool = openPool();

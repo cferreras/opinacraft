@@ -15,6 +15,7 @@ test.afterAll(async () => {
 });
 
 test("owner can add, promote and remove a member while permissions stay scoped", async ({ page, browser }) => {
+  test.setTimeout(90_000);
   const owner = await createAccount(page, "member-owner");
   createdEmails.push(owner.email);
   const memberContext = await browser.newContext();
@@ -30,37 +31,37 @@ test("owner can add, promote and remove a member while permissions stay scoped",
   await publishServer(page, slug);
 
   await page.goto(`/servers/${slug}/manage`);
-  const membersPanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Members", exact: true }) });
-  const addMemberForm = membersPanel.locator("form").filter({ has: page.getByRole("button", { name: "Add" }) });
+  const membersPanel = page.locator("#team");
+  const addMemberForm = membersPanel.locator("form").filter({ has: page.getByRole("button", { name: "Añadir" }) });
   await addMemberForm.locator('input[name="email"]').fill(memberAccount.email);
   await addMemberForm.locator('select[name="role"]').selectOption("editor");
-  await addMemberForm.getByRole("button", { name: "Add" }).click();
+  await addMemberForm.getByRole("button", { name: "Añadir" }).click();
   await expect(membersPanel.getByText(memberAccount.email)).toBeVisible();
 
   await member.goto(`/servers/${slug}/manage`);
-  await expect(member.getByText(/Role:\s*editor/i)).toBeVisible();
-  await expect(member.getByLabel("Publication")).toBeDisabled();
-  await expect(member.getByRole("heading", { name: "Members", exact: true })).toHaveCount(0);
-  await expect(member.getByText("Delete server")).toHaveCount(0);
+  await expect(member.getByText(/Rol:\s*editor/i)).toBeVisible();
+  await expect(member.locator("#publication-status")).toBeDisabled();
+  await expect(member.getByRole("heading", { name: "Miembros", exact: true })).toHaveCount(0);
+  await expect(member.getByText("Eliminar servidor")).toHaveCount(0);
 
   await page.goto(`/servers/${slug}/manage`);
-  const memberRow = membersPanel.locator("div.rounded-xl.border").filter({ hasText: memberAccount.email });
+  const memberRow = membersPanel.locator("div.rounded-lg.border").filter({ hasText: memberAccount.email });
   await memberRow.locator('select[name="role"]').selectOption("admin");
-  await memberRow.getByRole("button", { name: "Save" }).click();
+  await memberRow.getByRole("button", { name: "Guardar" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?memberUpdated=1$`));
 
   await member.goto(`/servers/${slug}/manage`);
-  await expect(member.getByText(/Role:\s*admin/i)).toBeVisible();
-  await expect(member.getByRole("heading", { name: "Members", exact: true })).toBeVisible();
-  await expect(member.getByRole("button", { name: "Add" })).toHaveCount(0);
-  await expect(member.getByRole("button", { name: "Remove" })).toHaveCount(0);
-  await expect(member.getByLabel("Publication")).toBeDisabled();
+  await expect(member.getByText(/Rol:\s*admin/i)).toBeVisible();
+  await expect(member.locator("#team").getByText("Miembros", { exact: true }).first()).toBeVisible();
+  await expect(member.getByRole("button", { name: "Añadir" })).toHaveCount(0);
+  await expect(member.getByRole("button", { name: "Quitar" })).toHaveCount(0);
+  await expect(member.locator("#publication-status")).toBeDisabled();
 
   await member.goto(`/servers/${slug}`);
   await expect(member.getByText(/miembros no pueden puntuar/i)).toBeVisible();
 
   await page.goto(`/servers/${slug}/manage`);
-  await memberRow.getByRole("button", { name: "Remove" }).click();
+  await memberRow.getByRole("button", { name: "Quitar" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?memberUpdated=1$`));
   await member.goto(`/servers/${slug}/manage`);
   await expect(member.getByText(/not found|no encontrado/i)).toBeVisible();

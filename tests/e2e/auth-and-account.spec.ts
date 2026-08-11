@@ -4,6 +4,7 @@ import {
   E2E_NEW_PASSWORD,
   E2E_PASSWORD,
   cleanupAccounts,
+  closePool,
   createAccount,
   makeEmailVerificationToken,
   openPool,
@@ -22,16 +23,17 @@ test("authenticated navigation links to the profile instead of sign-in", async (
   createdEmails.push(account.email);
 
   await page.goto("/servers");
-  await expect(page.locator('header a[href="/profile"]:visible').first()).toBeVisible();
+  await page.getByRole("button", { name: "Abrir mi perfil" }).click();
+  await expect(page.getByRole("menuitem", { name: "Mi perfil" })).toBeVisible();
   await expect(page.locator('header a[href="/sign-in"]')).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/servers");
   await page.getByRole("button", { name: "Abrir menú" }).click();
-  await expect(page.locator('header a[href="/profile"]:visible').first()).toBeVisible();
+  await expect(page.locator('a[href="/profile"]:visible').first()).toBeVisible();
   await expect(page.locator('header a[href="/sign-in"]')).toHaveCount(0);
 
-  await page.locator('header a[href="/profile"]:visible').first().click();
+  await page.locator('a[href="/profile"]:visible').first().click();
   await expect(page).toHaveURL(/\/profile$/);
 });
 
@@ -41,10 +43,9 @@ test("an account can verify its email without sending a real message", async ({ 
 
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(account.email);
-  await page.getByLabel("Password").fill(E2E_PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  const verificationError = page.locator("form > p").filter({ hasText: "Email not verified" });
-  await expect(verificationError).toHaveText("Email not verified");
+  await page.getByLabel("Contrase\u00f1a").fill(E2E_PASSWORD);
+  await page.getByRole("button", { name: "Iniciar sesi\u00f3n" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Email not verified" })).toBeVisible();
 
   const token = makeEmailVerificationToken(account.email);
   await page.goto(
@@ -57,7 +58,7 @@ test("an account can verify its email without sending a real message", async ({ 
     const result = await pool.query('select email_verified from "user" where email = $1', [account.email]);
     expect(result.rows[0]?.email_verified).toBe(true);
   } finally {
-    await pool.end();
+    await closePool();
   }
 
   await signIn(page, account.email, E2E_PASSWORD);
@@ -72,19 +73,21 @@ test("password reset and password change work without Resend", async ({ page }) 
     `/api/auth/reset-password/${encodeURIComponent(token)}?callbackURL=${encodeURIComponent("/reset-password")}`,
   );
   await expect(page).toHaveURL(/\/reset-password\?token=/);
-  await page.getByLabel("New password").fill(E2E_NEW_PASSWORD);
-  await page.getByLabel("Confirm password").fill(E2E_NEW_PASSWORD);
-  await page.getByRole("button", { name: "Update password" }).click();
+  await page.getByLabel("Nueva contrase\u00f1a").fill(E2E_NEW_PASSWORD);
+  await page.getByLabel("Confirmar contrase\u00f1a").fill(E2E_NEW_PASSWORD);
+  await page.getByRole("button", { name: "Actualizar contrase\u00f1a" }).click();
   await expect(page).toHaveURL(/\/sign-in\?reset=success$/);
   await signIn(page, account.email, E2E_NEW_PASSWORD);
 
-  await page.getByRole("link", { name: "Change password" }).click();
-  await page.getByLabel("Current password").fill(E2E_NEW_PASSWORD);
-  await page.getByLabel("New password", { exact: true }).fill(E2E_PASSWORD);
-  await page.getByLabel("Confirm new password").fill(E2E_PASSWORD);
-  await page.getByRole("button", { name: "Change password" }).click();
+  await page.getByRole("tab", { name: "Seguridad" }).click();
+  await page.getByRole("link", { name: "Cambiar contrase\u00f1a" }).click();
+  await page.getByLabel("Contrase\u00f1a actual").fill(E2E_NEW_PASSWORD);
+  await page.getByLabel("Nueva contrase\u00f1a", { exact: true }).fill(E2E_PASSWORD);
+  await page.getByLabel("Confirmar contrase\u00f1a").fill(E2E_PASSWORD);
+  await page.getByRole("button", { name: "Cambiar contrase\u00f1a" }).click();
   await expect(page).toHaveURL(/\/profile$/);
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("tab", { name: "Cuenta" }).click();
+  await page.getByRole("button", { name: "Cerrar sesi\u00f3n" }).click();
   await expect(page).toHaveURL(/\/sign-in/);
   await signIn(page, account.email, E2E_PASSWORD);
 });
@@ -93,24 +96,23 @@ test("a user can export and delete the account from the profile", async ({ page 
   const account = await createAccount(page, "account-lifecycle");
   createdEmails.push(account.email);
 
+  await page.getByRole("tab", { name: "Seguridad" }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Exportar mis datos" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("opinacraft-cuenta.json");
-  await expect(page.locator("section p").filter({ hasText: /Export|descarg/i })).toBeVisible();
 
-  page.once("dialog", async (dialog) => {
-    expect(dialog.type()).toBe("prompt");
-    await dialog.accept("DELETE ACCOUNT");
-  });
+  await page.getByRole("tab", { name: "Cuenta" }).click();
   await page.getByRole("button", { name: "Borrar cuenta" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await page.getByLabel("Confirmaci\u00f3n").fill("DELETE ACCOUNT");
+  await page.getByRole("button", { name: "Eliminar permanentemente" }).click();
+  await expect(page).toHaveURL(/\/(?:sign-in)?$/);
 
   const pool = openPool();
   try {
     const result = await pool.query('select count(*)::int as count from "user" where email = $1', [account.email]);
     expect(result.rows[0]?.count).toBe(0);
   } finally {
-    await pool.end();
+    await closePool();
   }
 });

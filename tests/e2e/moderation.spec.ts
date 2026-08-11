@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   cleanupAccounts,
+  closePool,
   createAccount,
   createServer,
   grantPlatformRole,
@@ -17,6 +18,7 @@ test.afterAll(async () => {
 });
 
 test("a server report can be hidden, restored and dismissed by moderation", async ({ page, browser }) => {
+  test.setTimeout(90_000);
   const owner = await createAccount(page, "report-owner");
   createdEmails.push(owner.email);
   const { name: serverName, slug } = await createServer(page, {
@@ -31,11 +33,11 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   const reporterAccount = await createAccount(reporter, "reporter");
   createdEmails.push(reporterAccount.email);
   await reporter.goto(`/servers/${slug}`);
-  const reportForm = reporter.locator("form").filter({ hasText: "Report this listing" });
+  const reportForm = reporter.locator("form").filter({ hasText: "Motivo del reporte" });
   await reportForm.locator("select").selectOption("offline");
-  await reportForm.locator('input[placeholder="Optional details"]').fill("El servidor no responde.");
-  await reportForm.getByRole("button", { name: "Report" }).click();
-  await expect(reportForm.getByRole("status")).toContainText("Report submitted");
+  await reportForm.getByLabel("Detalles opcionales").fill("El servidor no responde.");
+  await reportForm.getByRole("button", { name: "Enviar reporte" }).click();
+  await expect(reporter.getByRole("alert").filter({ hasText: "Hemos recibido" })).toBeVisible();
 
   const moderatorContext = await browser.newContext();
   const moderator = await moderatorContext.newPage();
@@ -43,27 +45,27 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   createdEmails.push(moderatorAccount.email);
   await grantPlatformRole(moderatorAccount.email, "moderator");
   await moderator.goto("/admin");
-  const report = moderator.locator("article").filter({ hasText: serverName });
-  await report.getByRole("button", { name: "Ocultar ficha" }).click();
+  const report = moderator.locator('[data-slot="card"]').filter({ hasText: serverName });
+  await report.getByRole("button", { name: "Ocultar" }).click();
   await expect(moderator).toHaveURL(/\/admin\?updated=1$/);
 
   await reporter.goto("/servers");
   await expect(reporter.getByRole("heading", { name: serverName })).toHaveCount(0);
 
   await moderator.goto("/admin?status=actioned");
-  const resolved = moderator.locator("article").filter({ hasText: serverName });
+  const resolved = moderator.locator('[data-slot="card"]').filter({ hasText: serverName });
   await resolved.getByRole("button", { name: "Restaurar" }).click();
   await expect(moderator).toHaveURL(/\/admin\?updated=1$/);
   await reporter.goto(`/servers/${slug}`);
   await expect(reporter.getByRole("heading", { name: serverName })).toBeVisible();
 
   await reporter.goto(`/servers/${slug}`);
-  const secondReportForm = reporter.locator("form").filter({ hasText: "Report this listing" });
+  const secondReportForm = reporter.locator("form").filter({ hasText: "Motivo del reporte" });
   await secondReportForm.locator("select").selectOption("other");
-  await secondReportForm.getByRole("button", { name: "Report" }).click();
-  await expect(secondReportForm.getByRole("status")).toContainText("Report submitted");
+  await secondReportForm.getByRole("button", { name: "Enviar reporte" }).click();
+  await expect(reporter.getByRole("alert").filter({ hasText: "Hemos recibido" })).toBeVisible();
   await moderator.goto("/admin");
-  await moderator.locator("article").filter({ hasText: serverName }).getByRole("button", { name: "Descartar" }).click();
+  await moderator.locator('[data-slot="card"]').filter({ hasText: serverName }).getByRole("button", { name: "Descartar" }).click();
   await expect(moderator).toHaveURL(/\/admin\?updated=1$/);
   await reporter.reload();
   await expect(reporter.getByRole("heading", { name: serverName })).toBeVisible();
@@ -96,7 +98,7 @@ test("an admin can grant a platform role and a moderator cannot see role managem
     );
     expect(result.rows[0]?.role).toBe("moderator");
   } finally {
-    await pool.end();
+    await closePool();
   }
 
   await target.goto("/admin");

@@ -62,10 +62,10 @@ export async function createAccount(
   await page.context().setExtraHTTPHeaders({ "x-forwarded-for": rateLimitIp });
   await clearRateLimits(rateLimitIp);
   await page.goto("/sign-up");
-  await page.getByLabel("Name").fill(`E2E ${label}`);
+  await page.getByLabel("Nombre").fill(`E2E ${label}`);
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(E2E_PASSWORD);
-  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByLabel("Contrase\u00f1a").fill(E2E_PASSWORD);
+  await page.getByRole("button", { name: "Crear cuenta" }).click();
   await expect(page.getByText("Cuenta creada")).toBeVisible({ timeout: 15_000 });
 
   await setEmailVerified(email, verified);
@@ -79,8 +79,8 @@ export async function createAccount(
 export async function signIn(page: Page, email: string, password: string) {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("Contrase\u00f1a").fill(password);
+  await page.getByRole("button", { name: "Iniciar sesi\u00f3n" }).click();
   await expect(page).toHaveURL(/\/profile$/);
 }
 
@@ -111,13 +111,13 @@ export async function createServer(
   if (options.javaPort !== undefined) await page.locator('input[name="javaPort"]').fill(String(options.javaPort));
 
   if (options.bedrockHost) {
-    await page.locator('input[name="bedrockEnabled"]').check();
+    await page.getByRole("checkbox", { name: "Activar Bedrock" }).check();
     await page.locator('input[name="bedrockHost"]').fill(options.bedrockHost);
     if (options.bedrockPort !== undefined) await page.locator('input[name="bedrockPort"]').fill(String(options.bedrockPort));
   }
 
   if (options.tags?.length) {
-    const tagInput = page.locator('input[role="combobox"][aria-label]').first();
+    const tagInput = page.getByRole("combobox", { name: "Etiquetas" });
     for (const tag of options.tags) {
       await tagInput.fill(tag);
       await tagInput.press("Enter");
@@ -146,8 +146,8 @@ export async function markServerVerified(slug: string, editions: Array<"java" | 
 
 export async function publishServer(page: Page, slug: string) {
   await page.goto(`/servers/${slug}/manage`);
-  await page.getByLabel("Publication").selectOption("published");
-  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.locator("#publication-status").selectOption("published");
+  await page.getByRole("button", { name: "Guardar cambios" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?updated=1$`));
 }
 
@@ -219,13 +219,18 @@ export function makeEmailChangeToken(
 export async function requestPasswordReset(page: Page, email: string) {
   await page.goto("/forgot-password");
   await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: "Send reset link" }).click();
-  await expect(page.getByText(/If an account exists/i)).toBeVisible();
+  await page.getByRole("button", { name: "Enviar enlace" }).click();
+  await expect(page.getByText(/Si existe una cuenta/i)).toBeVisible();
 
   const pool = openPool();
   const result = await pool.query(
-    "select identifier from verification where identifier = $1 order by created_at desc limit 1",
-    [`reset-password:${email}`],
+    `select verification.identifier
+     from verification
+     join "user" on "user".id = verification.value
+     where "user".email = $1 and verification.identifier like 'reset-password:%'
+     order by verification.created_at desc
+     limit 1`,
+    [email],
   );
   const identifier = result.rows[0]?.identifier as string | undefined;
   if (!identifier) throw new Error("The reset token was not created.");

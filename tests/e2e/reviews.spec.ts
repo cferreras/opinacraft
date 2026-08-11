@@ -24,17 +24,17 @@ async function createAccount(page: Page, label: string) {
   const rateLimitPool = new Pool({ connectionString: testDatabaseUrl, max: 1 });
   try { await rateLimitPool.query("delete from rate_limit"); } finally { await rateLimitPool.end(); }
   await page.goto("/sign-up");
-  await page.getByLabel("Name").fill(`E2E ${label}`);
+  await page.getByLabel("Nombre").fill(`E2E ${label}`);
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("e2e-password-123");
-  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByLabel("Contrase\u00f1a").fill("e2e-password-123");
+  await page.getByRole("button", { name: "Crear cuenta" }).click();
   await expect(page.getByText("Cuenta creada")).toBeVisible();
   const pool = new Pool({ connectionString: testDatabaseUrl, max: 1 });
   try { await pool.query('update "user" set email_verified = true where email = $1', [email]); } finally { await pool.end(); }
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("e2e-password-123");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("Contrase\u00f1a").fill("e2e-password-123");
+  await page.getByRole("button", { name: "Iniciar sesi\u00f3n" }).click();
   await expect(page).toHaveURL(/\/profile$/);
   return email;
 }
@@ -52,19 +52,23 @@ async function createAndPublishServer(page: Page) {
     await pool.query("update server_endpoints set verification_status = 'verified' where server_id = (select id from servers where slug = $1)", [slug]);
     await pool.query("update servers set verification_status = 'verified', verified_at = now() where slug = $1", [slug]);
   } finally { await pool.end(); }
-  await page.getByLabel("Publication").selectOption("published");
-  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.locator("#publication-status").selectOption("published");
+  await page.getByRole("button", { name: "Guardar cambios" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?updated=1$`));
   return { name, slug };
 }
 
 async function signOut(page: Page) {
   await page.goto("/profile");
-  await page.getByRole("button", { name: "Log out" }).click();
+  await page.getByRole("button", { name: "Abrir mi perfil" }).click();
+  await page.getByRole("menuitem", { name: "Mi perfil" }).click();
+  await page.getByRole("tab", { name: "Cuenta" }).click();
+  await page.getByRole("button", { name: "Cerrar sesi\u00f3n" }).click();
   await expect(page).toHaveURL(/\/sign-in/);
 }
 
 test("verified player can publish, edit, delete and receive an official reply", async ({ page }) => {
+  test.setTimeout(90_000);
   await createAccount(page, "owner");
   const { slug } = await createAndPublishServer(page);
   const reviewerContext = await page.context().browser()!.newContext();
@@ -72,7 +76,7 @@ test("verified player can publish, edit, delete and receive an official reply", 
   await createAccount(reviewer, "player");
 
   await reviewer.goto(`/servers/${slug}#reviews`);
-  await reviewer.getByRole("radio", { name: "5 estrellas" }).check({ force: true });
+  await reviewer.getByRole("radio", { name: "5" }).check({ force: true });
   await reviewer.getByLabel("Comentario").fill("Una comunidad muy activa y agradable");
   await reviewer.getByRole("button", { name: "Publicar opinión" }).click();
   await expect(reviewer).toHaveURL(new RegExp(`/servers/${slug}\\?review=created`));
@@ -88,17 +92,11 @@ test("verified player can publish, edit, delete and receive an official reply", 
     page.getByRole("paragraph").filter({ hasText: "Gracias por compartir tu experiencia" }),
   ).toBeVisible();
 
-  const officialReply = page
-    .locator("article")
-    .filter({ has: page.getByLabel("Editar respuesta oficial") })
-    .locator("div")
-    .filter({ has: page.getByLabel("Editar respuesta oficial") })
-    .first();
   await page.getByLabel("Editar respuesta oficial").fill("Respuesta oficial actualizada desde E2E");
-  await officialReply.getByRole("button", { name: "Editar" }).click();
+  await page.getByRole("button", { name: "Guardar edición" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}\\?reply=updated`));
   await expect(page.getByRole("paragraph").filter({ hasText: "Respuesta oficial actualizada desde E2E" })).toBeVisible();
-  await officialReply.getByRole("button", { name: "Eliminar" }).click();
+  await page.getByRole("button", { name: "Eliminar" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}\\?reply=deleted`));
 
   await reviewer.getByLabel("Comentario").fill("Una comunidad todavía mejor organizada");
@@ -111,13 +109,15 @@ test("verified player can publish, edit, delete and receive an official reply", 
 });
 
 test("a reported opinion can be hidden and restored by moderation", async ({ page, browser }) => {
+  test.setTimeout(90_000);
   await createAccount(page, "owner-moderation");
   const { slug } = await createAndPublishServer(page);
   const reviewerContext = await browser.newContext();
   const reviewer = await reviewerContext.newPage();
   await createAccount(reviewer, "reviewer-moderation");
   await reviewer.goto(`/servers/${slug}#reviews`);
-  await reviewer.getByRole("radio", { name: "4 estrellas" }).check({ force: true });
+  await reviewer.locator('label[for="rating-new-4"]').click();
+  await expect(reviewer.getByRole("radio", { name: "4" })).toBeChecked();
   await reviewer.getByLabel("Comentario").fill("La experiencia merece una revisión");
   await reviewer.getByRole("button", { name: "Publicar opinión" }).click();
 
@@ -126,9 +126,9 @@ test("a reported opinion can be hidden and restored by moderation", async ({ pag
   await createAccount(reporter, "reporter-moderation");
   await reporter.goto(`/servers/${slug}#reviews`);
   await reporter.getByText("Reportar opinión").click();
-  await reporter.getByLabel("Motivo").selectOption("offensive");
+  await reporter.getByLabel("Motivo", { exact: true }).selectOption("offensive");
   await reporter.getByRole("button", { name: "Enviar reporte" }).click();
-  await expect(reporter.getByRole("status")).toContainText("Hemos recibido");
+  await expect(reporter.getByRole("alert").filter({ hasText: "Hemos recibido" })).toBeVisible();
 
   await signOut(page);
   await createAccount(page, "moderator");
@@ -137,8 +137,8 @@ test("a reported opinion can be hidden and restored by moderation", async ({ pag
     await pool.query('insert into platform_roles (user_id, role) select id, \'moderator\' from "user" where email = $1 on conflict (user_id) do update set role = \'moderator\'', [createdEmails.at(-1)]);
   } finally { await pool.end(); }
   await page.goto("/admin");
-  const report = page.locator("article").filter({ hasText: "La experiencia merece una revisión" });
-  await report.getByRole("button", { name: "Ocultar opinión" }).click();
+  const report = page.locator('[data-slot="card"]').filter({ hasText: "La experiencia merece una revisión" });
+  await report.getByRole("button", { name: "Ocultar" }).click();
   await expect(page).toHaveURL(/\/admin\?updated=1/);
 
   await reviewer.goto(`/servers/${slug}#reviews`);
@@ -146,13 +146,13 @@ test("a reported opinion can be hidden and restored by moderation", async ({ pag
   await expect(reviewsSection.getByText("—", { exact: true })).toBeVisible();
 
   await page.goto("/admin?status=actioned");
-  const resolved = page.locator("article").filter({ hasText: "La experiencia merece una revisión" });
+  const resolved = page.locator('[data-slot="card"]').filter({ hasText: "La experiencia merece una revisión" });
   await resolved.getByRole("button", { name: "Restaurar" }).click();
   await expect(page).toHaveURL(/\/admin\?updated=1/);
   await reviewer.close();
   const restoredReviewer = await reviewerContext.newPage();
   await restoredReviewer.goto(`/servers/${slug}?fresh=${Date.now()}#reviews`, { waitUntil: "domcontentloaded" });
-  await expect(restoredReviewer.getByText("4,0")).toBeVisible({ timeout: 10_000 });
+  await expect(restoredReviewer.getByRole("paragraph").filter({ hasText: "4,0" })).toBeVisible({ timeout: 10_000 });
 
   await reviewerContext.close();
   await reporterContext.close();

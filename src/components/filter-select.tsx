@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef } from "react";
-import type { FocusEvent, MouseEvent, PointerEvent, ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 
 import { Field, FieldLabel } from "@/components/ui/field";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -25,29 +24,9 @@ export function FilterSelect({
   submitOnChange = false,
   children,
 }: FilterSelectProps) {
-  const pendingSubmitRef = useRef(false);
-
-  function handleChange() {
-    if (submitOnChange) pendingSubmitRef.current = true;
-  }
-
-  function submitPending(form: HTMLFormElement | null) {
-    if (!pendingSubmitRef.current) return;
-    pendingSubmitRef.current = false;
-    form?.requestSubmit();
-  }
-
-  function handleBlur(event: FocusEvent<HTMLSelectElement>) {
-    submitPending(event.currentTarget.form);
-  }
-
-  function handlePointerUp(event: PointerEvent<HTMLSelectElement>) {
+  function handleChange(event: ChangeEvent<HTMLSelectElement>) {
     const form = event.currentTarget.form;
-    queueMicrotask(() => submitPending(form));
-  }
-
-  function handleClick(event: MouseEvent<HTMLSelectElement>) {
-    submitPending(event.currentTarget.form);
+    queueMicrotask(() => form?.requestSubmit());
   }
 
   return (
@@ -62,9 +41,6 @@ export function FilterSelect({
         aria-label={accessibleLabel && accessibleLabel !== label ? accessibleLabel : undefined}
         defaultValue={defaultValue}
         onChange={submitOnChange ? handleChange : undefined}
-        onBlur={submitOnChange ? handleBlur : undefined}
-        onPointerUp={submitOnChange ? handlePointerUp : undefined}
-        onClick={submitOnChange ? handleClick : undefined}
         className="w-full"
       >
         {children}
