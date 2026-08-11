@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { safeCallbackUrl } from "../src/lib/callback-url.ts";
+import { databaseConstraint, databaseErrorCode } from "../src/lib/db-errors.ts";
+import { isPublicAddress } from "../src/lib/minecraft/address.ts";
+import {
+  formatEndpoint,
+  latencyClass,
+  playersLabel,
+  primaryEndpoint,
+  statusClass,
+  statusDot,
+  statusLabel,
+} from "../src/lib/servers/format.ts";
 import {
   createServerInputSchema,
   defaultPortForEdition,
@@ -9,6 +21,66 @@ import {
   normalizeHttpUrl,
   slugifyServerName,
 } from "../src/lib/servers/validation.ts";
+
+test("rejects callback paths that browsers normalize to an external host", () => {
+  assert.equal(safeCallbackUrl("/\t/evil.example", "/dashboard/servers"), "/dashboard/servers");
+  assert.equal(safeCallbackUrl("/\r/evil.example", "/dashboard/servers"), "/dashboard/servers");
+  assert.equal(safeCallbackUrl("/\n/evil.example", "/dashboard/servers"), "/dashboard/servers");
+});
+
+test("keeps callback navigation on a local absolute path", () => {
+  assert.equal(safeCallbackUrl("/servers?sort=rating#results", "/"), "/servers?sort=rating#results");
+  for (const value of [undefined, null, "", "servers", "//evil.example", "/\\evil.example"]) {
+    assert.equal(safeCallbackUrl(value, "/dashboard/servers"), "/dashboard/servers");
+  }
+});
+
+test("reads PostgreSQL metadata from direct and wrapped errors", () => {
+  assert.equal(databaseErrorCode({ code: "23505" }), "23505");
+  assert.equal(databaseErrorCode({ cause: { code: "23503" } }), "23503");
+  assert.equal(databaseConstraint({ constraint: "servers_slug_unique" }), "servers_slug_unique");
+  assert.equal(databaseConstraint({ cause: { constraint: "server_owner_unique" } }), "server_owner_unique");
+  assert.equal(databaseErrorCode({ code: 23505, cause: { code: "23503" } }), "23503");
+  assert.equal(databaseConstraint(new Error("database unavailable")), undefined);
+});
+
+test("accepts globally routable IPs and rejects local or provider metadata addresses", () => {
+  for (const address of ["8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"]) {
+    assert.equal(isPublicAddress(address), true, address);
+  }
+  for (const address of ["127.0.0.1", "10.0.0.1", "::1", "::ffff:127.0.0.1", "169.254.169.254", "168.63.129.16", "100.100.100.200", "not-an-ip"]) {
+    assert.equal(isPublicAddress(address), false, address);
+  }
+});
+
+test("formats the preferred endpoint and partial player counts", () => {
+  const server = {
+    aggregateStatus: "online" as const,
+    endpoints: [
+      { edition: "bedrock" as const, playersCurrent: 12, playersMax: 50 },
+      { edition: "java" as const, playersCurrent: 24, playersMax: null },
+    ],
+  };
+  assert.equal(primaryEndpoint(server), server.endpoints[1]);
+  assert.equal(playersLabel(server), "24 / \u2014");
+  assert.equal(playersLabel({ aggregateStatus: "unknown", endpoints: [] }, "Sin datos"), "Sin datos");
+  assert.equal(formatEndpoint({ edition: "java", host: "play.example.com", port: 25565 }), "play.example.com");
+  assert.equal(formatEndpoint({ edition: "bedrock", host: "2001:db8::1", port: 19133 }), "[2001:db8::1]:19133");
+});
+
+test("maps health states and latency thresholds to their visible presentation", () => {
+  assert.deepEqual(
+    (["online", "offline", "unknown"] as const).map((status) => [statusLabel(status), statusClass(status), statusDot(status)]),
+    [
+      ["En l\u00ednea", "text-success", "bg-success"],
+      ["Fuera de l\u00ednea", "text-destructive", "bg-destructive"],
+      ["Estado desconocido", "text-muted-foreground", "bg-muted-foreground/40"],
+    ],
+  );
+  assert.equal(latencyClass(null), "text-muted-foreground");
+  assert.equal(latencyClass(60), "text-success");
+  assert.equal(latencyClass(61), "text-warning");
+});
 
 test("normalizes domain hosts and removes the trailing dot", () => {
   assert.equal(normalizeHost(" PLAY.Example.COM. "), "play.example.com");

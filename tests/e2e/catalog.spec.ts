@@ -44,9 +44,9 @@ test("public catalog searches and filters by text, tags, edition and health", as
   await expect(page.getByRole("heading", { name: alphaName })).toBeVisible();
   await expect(page.getByRole("heading", { name: betaName })).toBeVisible();
 
-  await page.getByLabel("Buscar").fill("Alpha");
+  await page.getByLabel("Buscar", { exact: true }).fill("Alpha");
+  await page.getByLabel("Buscar", { exact: true }).press("Enter");
   await page.getByLabel("Edición").selectOption("bedrock");
-  await page.getByRole("button", { name: "Filtrar" }).click();
   await expect(page).toHaveURL(/q=Alpha/);
   await expect(page).toHaveURL(/edition=bedrock/);
   await expect(page.getByRole("heading", { name: alphaName })).toBeVisible();
@@ -63,5 +63,5 @@ test("public catalog searches and filters by text, tags, edition and health", as
 
 test("a public server page exposes a controlled not-found state", async ({ page }) => {
   await page.goto(`/servers/does-not-exist-${Date.now()}`);
-  await expect(page.getByRole("heading", { name: /not found|no encontrado/i })).toBeVisible();
+  await expect(page.getByText("Servidor no encontrado", { exact: true })).toBeVisible();
 });
