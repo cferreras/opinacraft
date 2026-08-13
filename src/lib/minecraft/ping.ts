@@ -38,7 +38,15 @@ type PingClient = {
   setSocket: (socket: net.Socket) => void;
 };
 
-export function createMinecraftPingOptions(target: MinecraftTarget, socket: net.Socket) {
+type MinecraftPingHooks = {
+  beforeConnect?: () => void;
+};
+
+export function createMinecraftPingOptions(
+  target: MinecraftTarget,
+  socket: net.Socket,
+  hooks: MinecraftPingHooks = {},
+) {
   return {
     host: target.handshakeHost,
     port: target.port,
@@ -46,17 +54,33 @@ export function createMinecraftPingOptions(target: MinecraftTarget, socket: net.
     noPongTimeout: CONNECT_TIMEOUT_MS,
     connect: (client: PingClient) => {
       client.setSocket(socket);
+      hooks.beforeConnect?.();
       socket.connect({ host: target.connectHost, port: target.port });
     },
   };
 }
 
-export async function pingJavaServer(target: MinecraftTarget): Promise<NewPingResult> {
+export type JavaPingResult = NewPingResult & {
+  latencyMs: number;
+};
+
+function elapsedMilliseconds(startedAt: bigint) {
+  return Math.max(0, Math.round(Number(process.hrtime.bigint() - startedAt) / 1_000_000));
+}
+
+export async function pingJavaServer(target: MinecraftTarget): Promise<JavaPingResult> {
   const socket = new net.Socket();
   let bytes = 0;
   let tooLarge = false;
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  let tcpConnectStartedAt: bigint | undefined;
+  let tcpConnectLatencyMs: number | undefined;
   socket.on("error", () => undefined);
+  socket.once("connect", () => {
+    if (tcpConnectStartedAt !== undefined) {
+      tcpConnectLatencyMs = elapsedMilliseconds(tcpConnectStartedAt);
+    }
+  });
   socket.on("data", (chunk) => {
     bytes += chunk.length;
     if (bytes > MAX_RESPONSE_BYTES) {
@@ -66,7 +90,11 @@ export async function pingJavaServer(target: MinecraftTarget): Promise<NewPingRe
   });
 
   const ping = await getMinecraftPing();
-  const promise = (ping(createMinecraftPingOptions(target, socket) as never) as Promise<NewPingResult>)
+  const promise = (ping(createMinecraftPingOptions(target, socket, {
+    beforeConnect: () => {
+      tcpConnectStartedAt = process.hrtime.bigint();
+    },
+  }) as never) as Promise<NewPingResult>)
     .catch((error: unknown) => {
       if (error instanceof SyntaxError) throw new MinecraftResponseError();
       throw error;
@@ -81,7 +109,8 @@ export async function pingJavaServer(target: MinecraftTarget): Promise<NewPingRe
     });
     const result = await Promise.race([promise, timeout]);
     if (tooLarge) throw new MinecraftResponseError();
-    return result;
+    if (tcpConnectLatencyMs === undefined) throw new MinecraftOfflineError();
+    return { ...result, latencyMs: tcpConnectLatencyMs };
   } catch (error) {
     if (tooLarge) throw new MinecraftResponseError();
     if (error instanceof MinecraftResponseError || error instanceof MinecraftOfflineError || error instanceof MinecraftTimeoutError) throw error;
