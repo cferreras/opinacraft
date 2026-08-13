@@ -19,7 +19,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
         <aside className="hidden flex-col justify-between bg-primary p-8 text-primary-foreground md:flex lg:p-10">
           <Link href="/" className="relative z-10 inline-flex items-center gap-2.5 text-sm font-bold tracking-tight">
             <Image
-              src="/brand/opinacraft-mark-v2-faceted.svg"
+              src="/brand/opinacraft-server-mark.webp"
               alt=""
               aria-hidden="true"
               width={28}
@@ -46,7 +46,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
           <CardHeader className="space-y-3 p-6 sm:p-8">
             <Link href="/" className="inline-flex items-center gap-2 text-xs font-bold tracking-tight md:hidden">
               <Image
-                src="/brand/opinacraft-mark-v2-faceted.svg"
+                src="/brand/opinacraft-server-mark.webp"
                 alt=""
                 aria-hidden="true"
                 width={22}
