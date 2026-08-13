@@ -43,13 +43,13 @@ function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2 font-semibold tracking-tight">
       <Image
-        src="/brand/opinacraft-mark-v2-faceted.svg"
+        src="/brand/opinacraft-server-mark.webp"
         alt=""
         aria-hidden="true"
-        width={compact ? 25 : 30}
-        height={compact ? 25 : 30}
+        width={compact ? 28 : 32}
+        height={compact ? 28 : 32}
         priority
-        className="rounded-md"
+        className="object-contain"
       />
       {!compact && <span>OpinaCraft</span>}
     </span>

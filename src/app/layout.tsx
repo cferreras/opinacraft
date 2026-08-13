@@ -11,8 +11,9 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: "/brand/opinacraft-mark-v2-faceted.svg",
-        type: "image/svg+xml",
+        url: "/brand/opinacraft-server-mark.webp",
+        type: "image/webp",
+        sizes: "256x256",
       },
     ],
   },
