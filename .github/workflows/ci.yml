@@ -44,12 +44,6 @@ jobs:
           version: 11.9.0
           run_install: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
