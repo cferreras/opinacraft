@@ -18,7 +18,12 @@ export type BedrockPingResult = {
   description: string;
   version: { name: string; protocol: number };
   players: { online: number; max: number };
+  latencyMs: number | null;
 };
+
+function elapsedMilliseconds(startedAt: bigint) {
+  return Math.max(0, Math.round(Number(process.hrtime.bigint() - startedAt) / 1_000_000));
+}
 
 export async function pingBedrockServer(target: MinecraftTarget): Promise<BedrockPingResult> {
   const socket = dgram.createSocket(target.connectHost.includes(":") ? "udp6" : "udp4");
@@ -56,9 +61,11 @@ export async function pingBedrockServer(target: MinecraftTarget): Promise<Bedroc
       const protocol = Number.parseInt(fields[2] ?? "0", 10);
       const description = fields[1]?.trim() || "Servidor Bedrock";
       if (!Number.isFinite(online) || !Number.isFinite(max)) return finish(new BedrockOfflineError("Jugadores Bedrock inválidos."));
-      finish(undefined, { description, version: { name: fields[3] ?? "Bedrock", protocol: Number.isFinite(protocol) ? protocol : 0 }, players: { online, max } });
+      const latencyMs = pingStartedAt === undefined ? null : elapsedMilliseconds(pingStartedAt);
+      finish(undefined, { description, version: { name: fields[3] ?? "Bedrock", protocol: Number.isFinite(protocol) ? protocol : 0 }, players: { online, max }, latencyMs });
     });
     const timer = setTimeout(() => finish(new BedrockOfflineError()), TIMEOUT_MS);
+    const pingStartedAt = process.hrtime.bigint();
     socket.send(packet, target.port, target.connectHost, (error) => {
       if (error) finish(new BedrockOfflineError());
     });

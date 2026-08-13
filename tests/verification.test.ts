@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import dgram from "node:dgram";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import type { Server as NetServer } from "node:net";
+import type { AddressInfo, Server as NetServer } from "node:net";
 
 import { flattenMotd, normalizeMotd, motdContainsCode } from "../src/lib/minecraft/motd.ts";
 import { isPublicHost } from "../src/lib/servers/validation.ts";
+import { pingBedrockServer } from "../src/lib/minecraft/bedrock-ping.ts";
 import { createMinecraftPingOptions, pingJavaServer } from "../src/lib/minecraft/ping.ts";
 import { BlockedMinecraftTargetError, resolveMinecraftTarget } from "../src/lib/minecraft/network.ts";
 
@@ -84,17 +86,7 @@ test("Minecraft connector uses the fixed IP and original handshake host", () => 
   assert.deepEqual(emitted, ["connect"]);
 });
 
-test("monitor persists Java TCP latency instead of the status operation duration", async () => {
-  process.env.DATABASE_URL ??= "postgres://localhost/opinacraft";
-  process.env.BETTER_AUTH_SECRET ??= "test-secret-that-is-at-least-32-characters";
-  process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
-  const { getProbeLatencyMs } = await import("../src/lib/servers/monitor.ts");
-
-  assert.equal(getProbeLatencyMs("java", 37, 1_000, 2_000), 37);
-  assert.equal(getProbeLatencyMs("bedrock", null, 1_000, 2_000), 1_000);
-});
-
-test("Java ping reports TCP connection latency separately from delayed status processing", async () => {
+test("Java ping reports the Minecraft server-list ping separately from delayed status processing", async () => {
   const protocolModule = await import("minecraft-protocol");
   const minecraftProtocol = protocolModule.default ?? protocolModule;
   const server = minecraftProtocol.createServer({
@@ -106,6 +98,26 @@ test("Java ping reports TCP connection latency separately from delayed status pr
     beforePing: (response, _client, callback) => {
       setTimeout(() => callback?.(null, response), 100);
     },
+  });
+  server.on("connection", (client) => {
+    let delayedPing = false;
+    const write = client.write.bind(client);
+    const end = client.end.bind(client);
+    client.write = (name, params) => {
+      if (name === "ping") {
+        delayedPing = true;
+        setTimeout(() => {
+          delayedPing = false;
+          write(name, params);
+          end();
+        }, 60);
+        return;
+      }
+      write(name, params);
+    };
+    client.end = (reason) => {
+      if (!delayedPing) end(reason);
+    };
   });
   const socketServer = (server as unknown as { socketServer: NetServer }).socketServer;
 
@@ -128,7 +140,8 @@ test("Java ping reports TCP connection latency separately from delayed status pr
     assert.deepEqual(result.description, { text: "delayed status" });
     assert.equal(result.players.online, 0);
     assert.equal(typeof result.latencyMs, "number");
-    assert.ok(result.latencyMs >= 0);
+    assert.equal(result.latencyMs, result.latency);
+    assert.ok(result.latencyMs >= 40);
     assert.ok(elapsedMs >= 80);
     assert.ok(result.latencyMs < elapsedMs - 50);
   } finally {
@@ -151,5 +164,49 @@ test("Java ping reports TCP connection latency separately from delayed status pr
       socketServer.close();
     });
     await Promise.all([clientsClosed, serverClosed]);
+  }
+});
+
+test("Bedrock ping reports the RakNet unconnected ping round-trip", async () => {
+  const magic = Buffer.from("00ffff00fefefefefdfdfdfd12345678", "hex");
+  const socket = dgram.createSocket("udp4");
+  socket.on("message", (request, remote) => {
+    const payload = Buffer.from("MCPE;Delayed Bedrock;685;1.21.8;3;20;0;test", "utf8");
+    const response = Buffer.alloc(35 + payload.length);
+    response[0] = 0x1c;
+    request.copy(response, 1, 1, 9);
+    magic.copy(response, 17);
+    response.writeUInt16BE(payload.length, 33);
+    payload.copy(response, 35);
+    setTimeout(() => socket.send(response, remote.port, remote.address), 60);
+  });
+  await new Promise<void>((resolve, reject) => {
+    socket.once("listening", resolve);
+    socket.once("error", reject);
+    socket.bind(0, "127.0.0.1");
+  });
+
+  try {
+    const address = socket.address() as AddressInfo;
+    const startedAt = process.hrtime.bigint();
+    const result = await pingBedrockServer({
+      connectHost: "127.0.0.1",
+      handshakeHost: "bedrock.example.com",
+      port: address.port,
+    });
+    const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+
+    assert.equal(result.description, "Delayed Bedrock");
+    assert.deepEqual(result.players, { online: 3, max: 20 });
+    assert.equal(result.version.name, "1.21.8");
+    const latencyMs = result.latencyMs;
+    assert.equal(typeof latencyMs, "number");
+    if (typeof latencyMs !== "number") {
+      throw new Error("Expected Bedrock latency to be measured");
+    }
+    assert.ok(latencyMs >= 40);
+    assert.ok(latencyMs <= elapsedMs);
+  } finally {
+    await new Promise<void>((resolve) => socket.close(() => resolve()));
   }
 });
