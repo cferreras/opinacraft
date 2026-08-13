@@ -5,7 +5,8 @@ import { Activity, CheckCircle2, Info, RefreshCcw } from "lucide-react";
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 
 import { aggregateHistorySeries } from "@/lib/servers/player-history-aggregate";
-import type { HistoryEditionFilter, HistoryPoint, HistoryPointStatus, HistorySeries, PlayerHistoryResponse } from "@/lib/servers/player-history";
+import { mergeHistoryChartData } from "@/lib/servers/player-history-chart";
+import type { HistoryEditionFilter, HistoryPointStatus, HistorySeries, PlayerHistoryResponse } from "@/lib/servers/player-history";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,12 +19,10 @@ type Props = { serverId: string; initialData: PlayerHistoryResponse; mode?: "pub
 const periodLabels = { "24h": "24 h", "7d": "7 días", "30d": "30 días", "90d": "90 días" } as const;
 const editionLabels = { all: "Servidor", java: "Java", bedrock: "Bedrock" } as const;
 const chartConfig = {
-  serverAverage: { label: "Servidor", color: "var(--history-java)" },
-  javaAverage: { label: "Java", color: "var(--history-java)" },
-  bedrockAverage: { label: "Bedrock", color: "var(--history-bedrock)" },
+  serverPeak: { label: "Máximo observado", color: "var(--history-java)" },
+  javaPeak: { label: "Máximo Java", color: "var(--history-java)" },
+  bedrockPeak: { label: "Máximo Bedrock", color: "var(--history-bedrock)" },
 } satisfies ChartConfig;
-
-type ChartPoint = HistoryPoint & { serverAverage?: number | null; javaAverage?: number | null; bedrockAverage?: number | null };
 
 function formatDate(value: string | null, withYear = false) {
   if (!value) return "Sin datos";
@@ -47,23 +46,6 @@ function statusClass(status: HistoryPointStatus) {
 
 function seriesLabel(edition: HistorySeries["edition"] | HistoryEditionFilter) {
   return edition === "server" || edition === "all" ? "Servidor" : edition === "java" ? "Java" : "Bedrock";
-}
-
-function mergeChartData(seriesList: HistorySeries[]): ChartPoint[] {
-  const byAt = new Map<string, ChartPoint>();
-  for (const series of seriesList) {
-    for (const point of series.points) {
-      const existing = byAt.get(point.at) ?? { ...point };
-      if (series.edition === "server") existing.serverAverage = point.averagePlayers;
-      else if (series.edition === "java") existing.javaAverage = point.averagePlayers;
-      else existing.bedrockAverage = point.averagePlayers;
-      existing.status = existing.status === "online" || point.status === "online" ? "online" : existing.status === "offline" || point.status === "offline" ? "offline" : point.status;
-      existing.sampleCount = Math.max(existing.sampleCount ?? 0, point.sampleCount);
-      existing.sourceChanged = existing.sourceChanged || point.sourceChanged;
-      byAt.set(point.at, existing);
-    }
-  }
-  return [...byAt.values()].sort((a, b) => a.at.localeCompare(b.at));
 }
 
 function AvailabilityRail({ data }: { data: PlayerHistoryResponse }) {
@@ -134,7 +116,7 @@ export function PlayerHistoryCard({ serverId, initialData, mode = "public" }: Pr
     return aggregate ? [aggregate] : [];
   }, [data]);
   const displayData = useMemo(() => ({ ...data, series: displaySeries }), [data, displaySeries]);
-  const chartData = useMemo(() => mergeChartData(displaySeries), [displaySeries]);
+  const chartData = useMemo(() => mergeHistoryChartData(displaySeries), [displaySeries]);
   const isServerView = data.edition === "all";
   const hasData = displaySeries.some((series) => series.summary.sampleCount > 0);
   const hasSourceChange = displaySeries.some((series) => series.points.some((point) => point.sourceChanged));
@@ -158,7 +140,7 @@ export function PlayerHistoryCard({ serverId, initialData, mode = "public" }: Pr
             Jugadores conectados
           </CardTitle>
           <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">
-            {isServerView ? "Actividad observada del servidor. No se suman endpoints que podrían compartir jugadores." : "Promedio de jugadores por intervalo en " + seriesLabel(data.edition) + "."}
+            {isServerView ? "Máximo de jugadores observado por intervalo. No se suman endpoints que podrían compartir jugadores." : "Máximo de jugadores observado por intervalo en " + seriesLabel(data.edition) + "."}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2" aria-label="Filtros de histórico">
@@ -185,12 +167,12 @@ export function PlayerHistoryCard({ serverId, initialData, mode = "public" }: Pr
               config={chartConfig}
               className="h-[276px] w-full aspect-auto"
             >
-              <LineChart data={chartData} margin={{ top: 10, right: 12, left: 2, bottom: 0 }} accessibilityLayer desc={"Histórico de jugadores conectados: " + seriesLabel(data.edition)}>
+              <LineChart data={chartData} margin={{ top: 10, right: 12, left: 2, bottom: 0 }} accessibilityLayer desc={"Máximo de jugadores conectados observado: " + seriesLabel(data.edition)}>
                 <CartesianGrid stroke="var(--history-grid)" vertical={false} />
                 <XAxis dataKey="at" tickFormatter={(value) => formatDate(value)} tick={{ fill: "var(--history-muted)", fontSize: "0.625rem" }} tickLine={false} axisLine={false} tickMargin={10} minTickGap={28} />
                 <YAxis allowDecimals={false} tick={{ fill: "var(--history-muted)", fontSize: "0.625rem" }} tickLine={false} axisLine={false} tickMargin={8} width={42} />
                 <Tooltip cursor={{ stroke: "var(--history-grid)", strokeDasharray: "4 4" }} content={<ChartTooltipContent labelFormatter={(value) => formatDate(String(value), true)} />} />
-                {isServerView ? <Line type="monotone" dataKey="serverAverage" name="Servidor" connectNulls={false} stroke="var(--color-serverAverage)" strokeWidth={2.75} strokeLinecap="round" dot={false} activeDot={{ r: 4, strokeWidth: 2 }} isAnimationActive={false} /> : displaySeries.map((series) => <Line key={series.edition} type="monotone" dataKey={series.edition + "Average"} name={seriesLabel(series.edition)} connectNulls={false} stroke={series.edition === "bedrock" ? "var(--color-bedrockAverage)" : "var(--color-javaAverage)"} strokeWidth={2.5} strokeDasharray={series.edition === "bedrock" ? "5 4" : undefined} strokeLinecap="round" dot={false} activeDot={{ r: 4, strokeWidth: 2 }} isAnimationActive={false} />)}
+                {isServerView ? <Line type="monotone" dataKey="serverPeak" name="Máximo observado" connectNulls={false} stroke="var(--color-serverPeak)" strokeWidth={2.75} strokeLinecap="round" dot={false} activeDot={{ r: 4, strokeWidth: 2 }} isAnimationActive={false} /> : displaySeries.map((series) => <Line key={series.edition} type="monotone" dataKey={series.edition + "Peak"} name={"Máximo " + seriesLabel(series.edition)} connectNulls={false} stroke={series.edition === "bedrock" ? "var(--color-bedrockPeak)" : "var(--color-javaPeak)"} strokeWidth={2.5} strokeDasharray={series.edition === "bedrock" ? "5 4" : undefined} strokeLinecap="round" dot={false} activeDot={{ r: 4, strokeWidth: 2 }} isAnimationActive={false} />)}
               </LineChart>
             </ChartContainer>
             <AvailabilityRail data={displayData} />
