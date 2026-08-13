@@ -40,18 +40,32 @@ type ProbeResult = EndpointObservation & {
   probeStatus: "online" | "offline" | "unknown";
 };
 
+export function getProbeLatencyMs(
+  edition: MonitorEdition,
+  statusLatencyMs: number | null,
+  operationStartedAt: number,
+  now = Date.now(),
+) {
+  return edition === "java" ? statusLatencyMs : now - operationStartedAt;
+}
+
 function pingData(value: unknown) {
-  const result = value as { players?: { online?: number; max?: number }; version?: { name?: string } };
+  const result = value as {
+    latencyMs?: number;
+    players?: { online?: number; max?: number };
+    version?: { name?: string };
+  };
   return {
     playersCurrent: Number.isInteger(result.players?.online) && (result.players?.online ?? 0) >= 0 ? result.players?.online ?? null : null,
     playersMax: Number.isInteger(result.players?.max) && (result.players?.max ?? 0) >= 0 ? result.players?.max ?? null : null,
     version: typeof result.version?.name === "string" ? result.version.name.slice(0, 100) : null,
+    latencyMs: Number.isInteger(result.latencyMs) && (result.latencyMs ?? 0) >= 0 ? result.latencyMs ?? null : null,
   };
 }
 
 async function probeEndpoint(endpoint: Endpoint, runId: string, sampledAt: Date): Promise<ProbeResult> {
   const observedAt = new Date();
-  const startedAt = observedAt.getTime();
+  const operationStartedAt = observedAt.getTime();
   try {
     const result = endpoint.edition === "bedrock"
       ? await resolveMinecraftBedrockTarget(endpoint.host, endpoint.port).then((target) => pingBedrockServer(target))
@@ -70,7 +84,7 @@ async function probeEndpoint(endpoint: Endpoint, runId: string, sampledAt: Date)
       playersCurrent: data.playersCurrent,
       playersMax: data.playersMax,
       version: data.version,
-      latencyMs: Date.now() - startedAt,
+      latencyMs: getProbeLatencyMs(endpoint.edition, data.latencyMs, operationStartedAt),
     };
   } catch (error) {
     const failureCode = classifyProbeError(error);
