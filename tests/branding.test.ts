@@ -49,7 +49,12 @@ test("the favicon contains matching 16, 32 and 48 pixel brand marks", async () =
   assert.ok(existsSync(brandMarkPath), "the optimized brand mark must exist");
 
   const entries = readIcoEntries(readFileSync(faviconPath));
-  assert.deepEqual(entries.map(({ width }) => width).sort((a, b) => a - b), [16, 32, 48]);
+  assert.deepEqual(
+    entries
+      .map(({ width, height }) => [width, height])
+      .sort(([aWidth, aHeight], [bWidth, bHeight]) => aWidth - bWidth || aHeight - bHeight),
+    [[16, 16], [32, 32], [48, 48]],
+  );
 
   for (const entry of entries) {
     const [actual, expected] = await Promise.all([
