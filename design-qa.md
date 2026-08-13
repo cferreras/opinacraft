@@ -44,7 +44,7 @@
 - TypeScript: passed with `tsc --noEmit`.
 - Unit tests: 18 passed.
 - `pnpm build`: passed; all 23 pages generated.
-- Environment note: the repository requests Node 22; validation ran on Node 24.14.0.
+- Environment note: validation ran on Node 24.14.0.
 
 ## Findings
 

@@ -4,7 +4,7 @@ OpinaCraft is a Next.js directory and management application for Minecraft commu
 
 ## Requirements
 
-- Node.js 22 (`.node-version` is the source of truth).
+- Node.js installed in the development environment.
 - pnpm 11.9.0.
 - A PostgreSQL database. Neon is the supported hosted provider.
 
@@ -91,7 +91,7 @@ Local E2E requires `TEST_DATABASE_URL`. To test an already deployed environment,
 
 ## CI
 
-GitHub Actions runs for pull requests targeting `main` and pushes to `main`. The workflow pins Node 22, uses pnpm caching, installs with `--frozen-lockfile`, and runs lint, tests, and build with safe fictional build-time environment variables.
+GitHub Actions runs for pull requests targeting `main` and pushes to `main`. The workflows use the Node.js runtime available on the runner, install with `--frozen-lockfile`, and run lint, tests, and build with safe fictional build-time environment variables.
 
 Integration and E2E database credentials are not embedded in CI. If those suites are enabled in a separate workflow, provide a dedicated test database through GitHub Secrets.
 

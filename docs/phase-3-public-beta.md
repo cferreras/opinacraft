@@ -176,7 +176,7 @@ límites publicados por Vercel.
   etiquetado, verificación, publicación, búsqueda, reporte y resolución.
 - Accesibilidad: autocompletado operable con teclado y lector de pantalla, foco
   visible, mensajes anunciados y reflow móvil.
-- Regresión obligatoria con Node 22: `pnpm lint`, `pnpm test`,
+- Regresión obligatoria con el runtime de Node disponible: `pnpm lint`, `pnpm test`,
   `pnpm test:integration`, `pnpm test:e2e`, `pnpm build` y
   `git diff --check`.
 
