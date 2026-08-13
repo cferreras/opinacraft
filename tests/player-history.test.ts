@@ -71,6 +71,33 @@ test("server view avoids summing potentially duplicated Java and Bedrock counts"
   assert.equal(aggregate?.summary.lastSampleAt, "2026-08-03T12:15:30.000Z");
 });
 
+test("player history keeps averages separate from whole-player peaks", async () => {
+  const { aggregateHistorySeries } = await import("../src/lib/servers/player-history-aggregate.ts");
+  const aggregate = aggregateHistorySeries([
+    {
+      edition: "java",
+      points: [{ at: "2026-08-03T12:00:00.000Z", averagePlayers: 1.2, peakPlayers: 2, capacity: 100, averageOccupancyPct: 1.2, responseRatePct: 100, monitorCoveragePct: 100, sampleCount: 4, status: "online", sourceChanged: false }],
+      summary: { currentPlayers: 1.2, currentCapacity: 100, currentStatus: "online", averagePlayers: 1.2, peakPlayers: 2, averageOccupancyPct: 1.2, responseRatePct: 100, monitorCoveragePct: 100, sampleCount: 4, lastSampleAt: "2026-08-03T12:00:00.000Z", sourceChanges: 0 },
+    },
+  ]);
+  assert.equal(aggregate?.points[0]?.averagePlayers, 1.2);
+  assert.equal(aggregate?.points[0]?.peakPlayers, 2);
+  assert.equal(aggregate?.summary.currentPlayers, 1.2);
+  assert.equal(aggregate?.summary.averagePlayers, 1.2);
+});
+
+test("player history chart preserves the observed peak across wider intervals", async () => {
+  const { mergeHistoryChartData } = await import("../src/lib/servers/player-history-chart.ts");
+  const chart = mergeHistoryChartData([
+    {
+      edition: "server",
+      points: [{ at: "2026-08-03T12:00:00.000Z", averagePlayers: 6, peakPlayers: 10, capacity: 100, averageOccupancyPct: 6, responseRatePct: 100, monitorCoveragePct: 100, sampleCount: 16, status: "online", sourceChanged: false }],
+      summary: { currentPlayers: 6, currentCapacity: 100, currentStatus: "online", averagePlayers: 6, peakPlayers: 10, averageOccupancyPct: 6, responseRatePct: 100, monitorCoveragePct: 100, sampleCount: 16, lastSampleAt: "2026-08-03T12:00:00.000Z", sourceChanges: 0 },
+    },
+  ]);
+  assert.equal(chart[0]?.serverPeak, 10);
+});
+
 test("server history keeps gaps and derives weighted response statistics", async () => {
   const { aggregateHistorySeries } = await import("../src/lib/servers/player-history-aggregate.ts");
   const at = "2026-08-03T12:00:00.000Z";
