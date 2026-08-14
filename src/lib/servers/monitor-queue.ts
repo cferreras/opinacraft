@@ -26,11 +26,15 @@ function verifiedEndpointExists() {
   )`;
 }
 
+export function getMonitorCadenceSql() {
+  return sql`case when ${servers.publicationStatus} = 'published'
+    and ${servers.moderationStatus} = 'active'
+    and ${servers.availabilityHiddenAt} is null then ${PUBLIC_MONITOR_CADENCE_MINUTES}::smallint else ${LOW_PRIORITY_MONITOR_CADENCE_MINUTES}::smallint end`;
+}
+
 export async function enqueueDueMonitorJobs(now = new Date(), limit = 100): Promise<MonitorDispatchResult> {
   return db.transaction(async (tx) => {
-    const cadenceSql = sql`case when ${servers.publicationStatus} = 'published'
-      and ${servers.moderationStatus} = 'active'
-      and ${servers.availabilityHiddenAt} is null then ${PUBLIC_MONITOR_CADENCE_MINUTES} else ${LOW_PRIORITY_MONITOR_CADENCE_MINUTES} end`;
+    const cadenceSql = getMonitorCadenceSql();
     const candidates = await tx.select({
       id: servers.id,
       publicationStatus: servers.publicationStatus,
