@@ -8,6 +8,7 @@ import { runCanonicalMonitorJob } from "@/lib/servers/monitor-worker-core";
 import { claimMonitorJobs, enqueueDueMonitorJobs, failMonitorJob, type ClaimedMonitorJob } from "@/lib/servers/monitor-queue";
 import { createMonitorHealthHandler, type MonitorHealthSnapshot } from "./monitor-worker-health";
 import { numberEnv } from "./monitor-worker-config";
+import { describeMonitorError } from "./monitor-worker-errors";
 import { probeCanonicalEndpoint } from "./monitor-worker-probe";
 
 type WorkerConfig = {
@@ -117,21 +118,31 @@ export async function startMonitorWorker() {
   const tick = async () => {
     if (stopping || activeTick) return;
     activeTick = (async () => {
+      let phase = "enqueue";
       try {
         const dispatch = await enqueueDueMonitorJobs(new Date(), config.batchSize);
         queueAgeSeconds = dispatch.oldestDueAt ? Math.max(0, Math.round((Date.now() - new Date(dispatch.oldestDueAt).getTime()) / 1000)) : null;
+        phase = "claim";
         const jobs = await claimMonitorJobs(config.workerId, config.batchSize);
+        phase = "process";
         await runPool(jobs, config.probeConcurrency, (job) => processJob(job, config.workerId));
         const now = Date.now();
         if (now - lastMaintenanceAt >= 15 * 60_000) {
+          phase = "availability";
           await db.transaction((tx) => updateCanonicalAvailability(tx, new Date()));
+          phase = "prune";
           await db.transaction((tx) => pruneCanonicalPlayerHistory(tx));
+          phase = "maintenance";
           await runOptionalMaintenance();
           lastMaintenanceAt = now;
         }
         lastHeartbeatAt = Date.now();
       } catch (error) {
-        console.error("[monitor-worker] tick failed", error instanceof Error ? error.name : "unknown");
+        console.error("[monitor-worker] tick failed", {
+          workerId: config.workerId,
+          phase,
+          ...describeMonitorError(error),
+        });
       } finally {
         activeTick = null;
       }
