@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/branding.test.ts tests/validation.test.ts tests/verification.test.ts tests/reviews.test.ts tests/player-history.test.ts tests/monitor-route.test.ts",
+    "test": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/branding.test.ts tests/validation.test.ts tests/verification.test.ts tests/reviews.test.ts tests/player-history.test.ts tests/monitor-route.test.ts tests/monitor-rearchitecture.test.ts tests/monitor-worker-core.test.ts tests/monitor-history.test.ts tests/monitor-jobs.test.ts tests/monitor-worker-engine.test.ts tests/monitor-health.test.ts tests/monitor-legacy-compat.test.ts tests/monitor-availability.test.ts",
+    "test:monitor": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/monitor-route.test.ts tests/monitor-rearchitecture.test.ts tests/monitor-worker-core.test.ts tests/monitor-history.test.ts tests/monitor-jobs.test.ts tests/monitor-worker-engine.test.ts tests/monitor-health.test.ts tests/monitor-legacy-compat.test.ts tests/monitor-availability.test.ts",
     "test:integration": "node scripts/bootstrap-test-database.mjs && node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/integration.test.ts",
     "test:e2e": "playwright test",
     "db:inspect": "node scripts/inspect-database.mjs",
@@ -18,7 +19,8 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "admin:grant": "node scripts/grant-admin.mjs"
+    "admin:grant": "node scripts/grant-admin.mjs",
+    "monitor:worker": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs src/workers/monitor-worker.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.0-beta.10",

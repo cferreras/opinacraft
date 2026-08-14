@@ -14,7 +14,6 @@ import {
 import {
   ServerInputError,
   type CreateServerInput,
-  minecraftEditions,
 } from "@/lib/servers/validation";
 import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
@@ -40,19 +39,8 @@ function optionalPort(value: string | undefined) {
 }
 
 function getInput(formData: FormData): CreateServerInput {
-  const endpoints: CreateServerInput["endpoints"] = [];
-
-  for (const edition of minecraftEditions) {
-    if (formData.get(`${edition}Enabled`) !== "on") {
-      continue;
-    }
-
-    endpoints.push({
-      edition,
-      host: formValue(formData, `${edition}Host`) ?? "",
-      port: optionalPort(formValue(formData, `${edition}Port`)),
-    });
-  }
+  const javaEnabled = formData.get("javaEnabled") === "on";
+  const bedrockEnabled = formData.get("bedrockEnabled") === "on";
 
   return {
     name: formValue(formData, "name") ?? "",
@@ -61,7 +49,9 @@ function getInput(formData: FormData): CreateServerInput {
     storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
-    endpoints,
+    host: formValue(formData, "host"),
+    javaPort: javaEnabled ? optionalPort(formValue(formData, "javaPort")) : undefined,
+    bedrockPort: bedrockEnabled ? optionalPort(formValue(formData, "bedrockPort")) : undefined,
   };
 }
 
@@ -80,6 +70,8 @@ function zodFieldErrors(error: z.ZodError) {
       field === "endpoints"
     ) {
       fieldErrors[field] ??= issue.message;
+    } else if (field === "host" || field === "javaPort" || field === "bedrockPort") {
+      fieldErrors.endpoints ??= issue.message;
     }
   }
 

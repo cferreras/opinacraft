@@ -35,6 +35,12 @@ The development server runs at `http://localhost:3000`.
 
 `DIRECT_DATABASE_URL` is the direct, non-pooled Neon connection used only by Drizzle Kit. The migration configuration refuses to run when this variable is missing, so a pooled connection cannot be used accidentally for schema changes.
 
+Development, test, preview and production databases are separate environments.
+The local `.env.local` database is never an implicit migration target for
+production. Always select the target environment explicitly before applying a
+migration; production migrations use the protected GitHub workflow described
+below.
+
 Inspect the database without changing it:
 
 ```bash
@@ -59,7 +65,7 @@ Production migrations can be applied with the manual `Production database migrat
 
 The workflow serializes migration runs, rejects Neon pooler URLs, applies all pending migrations, and inspects the resulting schema. The Vercel `DATABASE_URL` remains the pooled runtime connection and is not needed by this workflow.
 
-The repository currently contains migrations for Better Auth, server management, Java/Bedrock MOTD verification, verified endpoint claims, tags/media, pg_trgm search, endpoint health, availability hiding, Blob quota counters, notification outbox and moderation/reporting. Review every generated migration before applying it to a database.
+The repository currently contains migrations for Better Auth, server management, Java/Bedrock MOTD verification, verified endpoint claims, tags/media, pg_trgm search, endpoint health, availability hiding, Blob quota counters, notification outbox, moderation/reporting and the canonical server monitor worker. Review every generated migration before applying it to a database.
 
 ## Tests
 
@@ -120,11 +126,21 @@ vercel deploy --prebuilt
 
 For Production, use the Production environment values, run reviewed migrations through the manual GitHub Actions workflow, and then deploy the same build without adding migration commands to the build step.
 
+## Dokploy monitor worker
+
+The persistent monitor runs outside Vercel and is deployed as a separate
+Dokploy Application using [`Dockerfile.monitor-worker`](Dockerfile.monitor-worker).
+Configure `DATABASE_URL`, a unique `MONITOR_WORKER_ID`, the health port and the
+batch/concurrency variables in Dokploy. Do not expose the worker with a public
+domain and do not run migrations from its container. The complete cutover and
+production database procedure is in
+[`docs/cron-job-monitor.md`](docs/cron-job-monitor.md).
+
 ## Current phase notes
 
-The public-beta foundation now includes email verification, safe callback redirects, keyboard tag autocomplete, fuzzy search, Vercel Blob WebP media uploads with quota guards and cleanup retries, Java/Bedrock endpoint verification and in-app monitoring, availability hiding, reporting/moderation, server deletion, account export and Spanish legal pages.
+The public-beta foundation now includes email verification, safe callback redirects, keyboard tag autocomplete, fuzzy search, Vercel Blob WebP media uploads with quota guards and cleanup retries, Java/Bedrock endpoint verification, canonical server monitoring with a Dokploy worker, availability hiding, reporting/moderation, server deletion, account export and Spanish legal pages.
 
-Vercel Blob is optional in local development. Preview/Production media uploads require `BLOB_READ_WRITE_TOKEN`; the deployed monitor requires `CRON_MONITOR_SECRET`, configured in Vercel and in the cron-job.org request. The GitHub workflow is manual-only for emergencies. Hobby quota counters default to 1 GB and 2,000 advanced operations and are conservative estimates; Vercel Observability remains the exact source for transfer, cache and monthly usage.
+Vercel Blob is optional in local development. Preview/Production media uploads require `BLOB_READ_WRITE_TOKEN`; the manual monitor reconciliation route requires `CRON_MONITOR_SECRET`. The GitHub workflow is manual-only for emergencies. Hobby quota counters default to 1 GB and 2,000 advanced operations and are conservative estimates; Vercel Observability remains the exact source for transfer, cache and monthly usage.
 
 To trigger the monitor locally, add a development-only `CRON_MONITOR_SECRET` (at least 32 characters), start the app, and call the internal route:
 
@@ -133,7 +149,11 @@ $headers = @{ Authorization = "Bearer $env:CRON_MONITOR_SECRET" }
 Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/internal/monitor/run -Headers $headers
 ```
 
-Only verified endpoints are checked. A successful check marks an endpoint online immediately; an unreachable endpoint needs three monitor runs before it becomes offline. Without this request, health remains `unknown`. For production scheduling, see [`docs/cron-job-monitor.md`](docs/cron-job-monitor.md).
+The request only enqueues due jobs; it does not contact Minecraft servers. The
+Dokploy worker performs the checks, so local manual testing requires the worker
+process to be running with the same explicitly selected development database.
+For production deployment and scheduling, see
+[`docs/cron-job-monitor.md`](docs/cron-job-monitor.md).
 
 The local seed leaves endpoint latency empty on purpose. The `latency_ms` value is written only by a successful Java/Bedrock monitor observation, so seeded servers show no ping until the worker has measured them.
 

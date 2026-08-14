@@ -1,10 +1,22 @@
 import { timingSafeEqual } from "node:crypto";
 
-import type { MonitorRunResult } from "./monitor";
-
 type MonitorLogger = Pick<Console, "info" | "error">;
 
+export type MonitorRunResult = {
+  processed: number;
+  online: number;
+  offline: number;
+  unknown: number;
+  persistenceFailures: number;
+};
+
 export type MonitorRunner = () => Promise<MonitorRunResult | null>;
+export type MonitorDispatchResult = {
+  enqueued: number;
+  due: number;
+  oldestDueAt: string | null;
+};
+export type MonitorDispatcher = () => Promise<MonitorDispatchResult>;
 
 function constantTimeEqual(actual: string, expected: string) {
   const actualBytes = Buffer.from(actual);
@@ -21,10 +33,12 @@ export function isValidMonitorAuthorization(authorization: string | null, expect
 export function createMonitorPostHandler({
   expectedSecret,
   runMonitor,
+  enqueueMonitor,
   logger = console,
 }: {
   expectedSecret: string | undefined;
-  runMonitor: MonitorRunner;
+  runMonitor?: MonitorRunner;
+  enqueueMonitor?: MonitorDispatcher;
   logger?: MonitorLogger;
 }) {
   return async function monitorPostHandler(request: Request) {
@@ -34,6 +48,18 @@ export function createMonitorPostHandler({
     }
 
     try {
+      if (enqueueMonitor) {
+        const result = await enqueueMonitor();
+        logger.info("[monitor] reconciliation enqueued", {
+          result: "success",
+          enqueued: result.enqueued,
+          due: result.due,
+        });
+        return Response.json({ ok: true, ...result }, { status: 202 });
+      }
+      if (!runMonitor) {
+        return Response.json({ error: "Monitor is not configured." }, { status: 503 });
+      }
       const result = await runMonitor();
       const durationMs = Date.now() - startedAt;
 

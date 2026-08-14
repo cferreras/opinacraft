@@ -130,6 +130,15 @@ export const servers = pgTable(
       .default("unverified")
       .notNull(),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    monitorHealthStatus: serverEndpointHealth("monitor_health_status").default("unknown").notNull(),
+    monitorPlayersCurrent: integer("monitor_players_current"),
+    monitorPlayersMax: integer("monitor_players_max"),
+    monitorVersion: varchar("monitor_version", { length: 100 }),
+    monitorLatencyMs: integer("monitor_latency_ms"),
+    monitorLastCheckedAt: timestamp("monitor_last_checked_at", { withTimezone: true }),
+    monitorLastOnlineAt: timestamp("monitor_last_online_at", { withTimezone: true }),
+    monitorConsecutiveFailures: smallint("monitor_consecutive_failures").default(0).notNull(),
+    monitorProbeEdition: minecraftEdition("monitor_probe_edition"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -148,6 +157,23 @@ export const servers = pgTable(
       table.verificationStatus,
     ),
   ],
+);
+
+export const serverNetworkTargets = pgTable(
+  "server_network_targets",
+  {
+    serverId: uuid("server_id")
+      .primaryKey()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    host: varchar("host", { length: 253 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
 );
 
 export const serverEndpoints = pgTable(
@@ -564,6 +590,139 @@ export const monitorRuns = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex("monitor_runs_sampled_at_key").on(table.sampledAt)],
+);
+
+export const monitorJobStatus = pgEnum("monitor_job_status", [
+  "pending",
+  "processing",
+  "done",
+  "failed",
+]);
+
+export const serverMonitorSchedules = pgTable(
+  "server_monitor_schedules",
+  {
+    serverId: uuid("server_id")
+      .primaryKey()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    cadenceMinutes: smallint("cadence_minutes").notNull(),
+    nextDueAt: timestamp("next_due_at", { withTimezone: true }).notNull(),
+    lastScheduledAt: timestamp("last_scheduled_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("server_monitor_schedules_due_idx").on(table.nextDueAt, table.serverId),
+    check("server_monitor_schedules_cadence_check", sql`${table.cadenceMinutes} in (15, 60)`),
+  ],
+);
+
+export const serverMonitorScheduleHistory = pgTable(
+  "server_monitor_schedule_history",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    cadenceMinutes: smallint("cadence_minutes").notNull(),
+    effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull(),
+    effectiveTo: timestamp("effective_to", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("server_monitor_schedule_history_lookup_idx").on(table.serverId, table.effectiveFrom),
+    check("server_monitor_schedule_history_cadence_check", sql`${table.cadenceMinutes} in (15, 60)`),
+  ],
+);
+
+export const serverMonitorJobs = pgTable(
+  "server_monitor_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    status: monitorJobStatus("status").default("pending").notNull(),
+    attempts: smallint("attempts").default(0).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
+    leaseOwner: varchar("lease_owner", { length: 120 }),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    lastError: text("last_error"),
+    processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    observedAt: timestamp("observed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("server_monitor_jobs_server_scheduled_key").on(table.serverId, table.scheduledAt),
+    index("server_monitor_jobs_queue_idx").on(table.status, table.nextAttemptAt, table.scheduledAt),
+    index("server_monitor_jobs_lease_idx").on(table.leaseUntil),
+  ],
+);
+
+export const serverPlayerSnapshots = pgTable(
+  "server_player_snapshots",
+  {
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+    probeEdition: minecraftEdition("probe_edition"),
+    status: serverEndpointHealth("status").notNull(),
+    failureCode: serverEndpointSampleFailure("failure_code"),
+    playersCurrent: integer("players_current"),
+    playersMax: integer("players_max"),
+    version: varchar("version", { length: 100 }),
+    latencyMs: integer("latency_ms"),
+    jobId: uuid("job_id").references(() => serverMonitorJobs.id, { onDelete: "set null" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.serverId, table.scheduledAt] }),
+    index("server_player_snapshots_server_observed_idx").on(table.serverId, table.observedAt),
+    check("server_player_snapshots_current_check", sql`${table.playersCurrent} is null or ${table.playersCurrent} >= 0`),
+    check("server_player_snapshots_max_check", sql`${table.playersMax} is null or ${table.playersMax} >= 0`),
+    check("server_player_snapshots_status_check", sql`(${table.status} = 'online' and ${table.failureCode} is null) or (${table.status} <> 'online')`),
+    check("server_player_snapshots_online_players_check", sql`(${table.status} = 'online') or (${table.playersCurrent} is null and ${table.playersMax} is null)`),
+  ],
+);
+
+export const serverPlayerHourly = pgTable(
+  "server_player_hourly",
+  {
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    bucketStart: timestamp("bucket_start", { withTimezone: true }).notNull(),
+    lastProbeEdition: minecraftEdition("last_probe_edition"),
+    sourceChanged: integer("source_changed").default(0).notNull(),
+    sampleCount: integer("sample_count").default(0).notNull(),
+    onlineCount: integer("online_count").default(0).notNull(),
+    unknownCount: integer("unknown_count").default(0).notNull(),
+    playerDataCount: integer("player_data_count").default(0).notNull(),
+    playersTotal: bigint("players_total", { mode: "number" }).default(0).notNull(),
+    playersPeak: integer("players_peak"),
+    capacityDataCount: integer("capacity_data_count").default(0).notNull(),
+    capacityTotal: bigint("capacity_total", { mode: "number" }).default(0).notNull(),
+    capacityLatest: integer("capacity_latest"),
+    occupancyDataCount: integer("occupancy_data_count").default(0).notNull(),
+    occupancyBasisPointsTotal: bigint("occupancy_basis_points_total", { mode: "number" }).default(0).notNull(),
+    lastObservedAt: timestamp("last_observed_at", { withTimezone: true }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.serverId, table.bucketStart] }),
+    index("server_player_hourly_server_bucket_idx").on(table.serverId, table.bucketStart),
+    check("server_player_hourly_source_changed_check", sql`${table.sourceChanged} between 0 and 1`),
+    check("server_player_hourly_counts_check", sql`${table.sampleCount} >= 0 and ${table.onlineCount} >= 0 and ${table.unknownCount} >= 0`),
+  ],
 );
 
 export const serverEndpointPlayerSnapshots = pgTable(

@@ -1,4 +1,4 @@
-name: Emergency endpoint monitor
+name: Manual monitor reconciliation
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ jobs:
       MONITOR_URL: ${{ secrets.OPINACRAFT_MONITOR_URL }}
       CRON_MONITOR_SECRET: ${{ secrets.OPINACRAFT_CRON_MONITOR_SECRET }}
     steps:
-      - name: Run monitor over HTTP
+      - name: Enqueue due monitor jobs over HTTP
         shell: bash
         run: |
           test -n "$MONITOR_URL"

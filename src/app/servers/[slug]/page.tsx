@@ -175,9 +175,9 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
               {server.tags.length > 0 ? <div className="mt-4 flex flex-wrap justify-center gap-2 lg:justify-start">{server.tags.map((tag) => <Badge key={tag.slug} variant="outline">{tag.label}</Badge>)}</div> : null}
               <div className="mt-5 grid grid-cols-2 gap-y-1 text-left sm:flex sm:flex-wrap sm:items-center sm:justify-center lg:justify-start">
                 <Metric icon={<span aria-hidden="true" className={`inline-block size-2.5 rounded-full ${statusDot(server.aggregateStatus)}`} />} label="Estado" value={statusLabel(server.aggregateStatus)} tone={statusClass(server.aggregateStatus)} />
-                <Metric icon={<Users aria-hidden="true" className="size-4" />} label="Jugadores" value={endpoint?.playersCurrent !== null && endpoint?.playersMax !== null && endpoint ? `${endpoint.playersCurrent} / ${endpoint.playersMax}` : "— / —"} />
-                <Metric icon={<Code2 aria-hidden="true" className="size-4" />} label="Versión" value={endpoint?.version ?? "—"} />
-                <Metric icon={<BarChart3 aria-hidden="true" className="size-4" />} label="Ping" value={endpoint?.latencyMs !== null && endpoint?.latencyMs !== undefined ? `${endpoint.latencyMs} ms` : "—"} tone={latencyClass(endpoint?.latencyMs ?? null)} />
+                  <Metric icon={<Users aria-hidden="true" className="size-4" />} label="Jugadores" value={server.monitor.playersCurrent !== null && server.monitor.playersMax !== null ? `${server.monitor.playersCurrent} / ${server.monitor.playersMax}` : "— / —"} />
+                  <Metric icon={<Code2 aria-hidden="true" className="size-4" />} label="Versión" value={server.monitor.version ?? "—"} />
+                  <Metric icon={<BarChart3 aria-hidden="true" className="size-4" />} label="Ping" value={server.monitor.latencyMs !== null ? `${server.monitor.latencyMs} ms` : "—"} tone={latencyClass(server.monitor.latencyMs)} />
                 <Metric icon={<Star aria-hidden="true" className="size-4 fill-current text-warning" />} label={`${reviewSummary.total} opiniones`} value={rating} />
               </div>
             </div>
@@ -210,8 +210,9 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                   <div className="grid gap-3 text-sm">
                     <p className="text-xs font-semibold">Estado del servidor</p>
                     <div className="flex items-center gap-2.5"><span aria-hidden="true" className={`size-2.5 rounded-full ${statusDot(server.aggregateStatus)}`} /><span className={statusClass(server.aggregateStatus)}>{statusLabel(server.aggregateStatus)}</span></div>
-                    <div className="flex items-center gap-2.5 text-muted-foreground"><BarChart3 aria-hidden="true" className="size-4" /><span>{endpoint?.latencyMs !== null && endpoint?.latencyMs !== undefined ? `${endpoint.latencyMs} ms` : "Sin latencia"}</span></div>
-                    <div className="flex items-center gap-2.5 text-muted-foreground"><Clock3 aria-hidden="true" className="size-4" /><span>Última comprobación: {dateLabel(endpoint?.lastCheckedAt ?? null)}</span></div>
+                      <div className="flex items-center gap-2.5 text-muted-foreground"><BarChart3 aria-hidden="true" className="size-4" /><span>{server.monitor.latencyMs !== null ? `${server.monitor.latencyMs} ms` : "Sin latencia"}</span></div>
+                    <div className="flex items-center gap-2.5 text-muted-foreground"><Clock3 aria-hidden="true" className="size-4" /><span>Última actualización: {dateLabel(server.monitor.lastUpdatedAt)}</span></div>
+                    <div className="text-xs text-muted-foreground">Objetivo: {server.monitor.cadenceMinutes ? `cada ${server.monitor.cadenceMinutes} min` : "pendiente de monitorización"}{server.monitor.freshness === "stale" ? " · retrasada" : ""}</div>
                   </div>
                   <div className="grid gap-2.5">
                     <ConnectionLink href={server.websiteUrl} icon={<Globe aria-hidden="true" className="size-4" />} label="Web del servidor" />

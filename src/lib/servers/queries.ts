@@ -11,6 +11,7 @@ import {
   servers,
   tags,
 } from "@/schema";
+import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } from "./monitor-scheduling";
 
 type ServerBase = {
   id: string;
@@ -25,6 +26,34 @@ type ServerBase = {
   createdAt: Date;
   updatedAt: Date;
   availabilityHiddenAt: Date | null;
+  moderationStatus: "active" | "blocked";
+  monitor: ServerMonitor;
+};
+
+export type ServerMonitor = {
+  healthStatus: "unknown" | "online" | "offline";
+  playersCurrent: number | null;
+  playersMax: number | null;
+  version: string | null;
+  latencyMs: number | null;
+  lastUpdatedAt: Date | null;
+  lastOnlineAt: Date | null;
+  consecutiveFailures: number;
+  probeEdition: "java" | "bedrock" | null;
+  cadenceMinutes: number | null;
+  freshness: MonitorFreshness;
+};
+
+type RawServerBase = Omit<ServerBase, "monitor"> & {
+  monitorHealthStatus: ServerMonitor["healthStatus"];
+  monitorPlayersCurrent: number | null;
+  monitorPlayersMax: number | null;
+  monitorVersion: string | null;
+  monitorLatencyMs: number | null;
+  monitorLastCheckedAt: Date | null;
+  monitorLastOnlineAt: Date | null;
+  monitorConsecutiveFailures: number;
+  monitorProbeEdition: ServerMonitor["probeEdition"];
 };
 
 export type ServerTag = { label: string; slug: string };
@@ -62,6 +91,18 @@ export type PublicServer = Omit<ManagedServer, "role">;
 export type AggregateHealthStatus = "online" | "offline" | "unknown";
 export type PublicServerSort = "rating" | "players" | "recent";
 
+const monitorColumns = {
+  monitorHealthStatus: servers.monitorHealthStatus,
+  monitorPlayersCurrent: servers.monitorPlayersCurrent,
+  monitorPlayersMax: servers.monitorPlayersMax,
+  monitorVersion: servers.monitorVersion,
+  monitorLatencyMs: servers.monitorLatencyMs,
+  monitorLastCheckedAt: servers.monitorLastCheckedAt,
+  monitorLastOnlineAt: servers.monitorLastOnlineAt,
+  monitorConsecutiveFailures: servers.monitorConsecutiveFailures,
+  monitorProbeEdition: servers.monitorProbeEdition,
+};
+
 type ReviewSummaryLite = {
   reviewAverage: number | null;
   reviewCount: number;
@@ -70,7 +111,7 @@ type ReviewSummaryLite = {
 export type CatalogServer = PublicServer & ReviewSummaryLite;
 
 type ServerRow = {
-  server: ServerBase;
+  server: RawServerBase;
   role?: ManagedServer["role"] | null;
   endpoint: {
     edition: ManagedServer["endpoints"][number]["edition"];
@@ -95,10 +136,7 @@ function groupServerRows(rows: PublicServerRow[]): PublicServer[];
 function groupServerRows(rows: ServerRow[]): Array<ManagedServer | PublicServer> {
   const grouped = new Map<string, ManagedServer | PublicServer>();
 
-  const endpointWithFreshHealth = (endpoint: NonNullable<ServerRow["endpoint"]>) => ({
-    ...endpoint,
-    healthStatus: endpoint.lastCheckedAt && Date.now() - endpoint.lastCheckedAt.getTime() > 30 * 60 * 1000 ? "unknown" as const : endpoint.healthStatus,
-  });
+  const endpointWithFreshHealth = (endpoint: NonNullable<ServerRow["endpoint"]>) => endpoint;
 
   for (const row of rows) {
     const existing = grouped.get(row.server.id);
@@ -113,10 +151,25 @@ function groupServerRows(rows: ServerRow[]): Array<ManagedServer | PublicServer>
 
     const server = {
       ...row.server,
+      monitor: buildMonitorSummary({
+        publicationStatus: row.server.publicationStatus,
+        moderationStatus: row.server.moderationStatus,
+        availabilityHiddenAt: row.server.availabilityHiddenAt,
+         monitorHealthStatus: row.server.monitorHealthStatus,
+         monitorPlayersCurrent: row.server.monitorPlayersCurrent,
+         monitorPlayersMax: row.server.monitorPlayersMax,
+         monitorVersion: row.server.monitorVersion,
+         monitorLatencyMs: row.server.monitorLatencyMs,
+         monitorLastCheckedAt: row.server.monitorLastCheckedAt,
+         monitorLastOnlineAt: row.server.monitorLastOnlineAt,
+         monitorConsecutiveFailures: row.server.monitorConsecutiveFailures,
+         monitorProbeEdition: row.server.monitorProbeEdition,
+         hasVerifiedEndpoint: Boolean(endpoint?.verificationStatus === "verified"),
+       }),
       endpoints: endpoint ? [endpoint] : [],
       tags: [],
       media: [],
-      aggregateStatus: "unknown" as AggregateHealthStatus,
+       aggregateStatus: row.server.monitorHealthStatus as AggregateHealthStatus,
     };
     grouped.set(
       row.server.id,
@@ -125,14 +178,58 @@ function groupServerRows(rows: ServerRow[]): Array<ManagedServer | PublicServer>
   }
 
   return [...grouped.values()].map((server) => {
-    const fresh = server.endpoints.filter((endpoint) => endpoint.lastCheckedAt && Date.now() - endpoint.lastCheckedAt.getTime() <= 30 * 60 * 1000);
-    const aggregateStatus: AggregateHealthStatus = fresh.some((endpoint) => endpoint.healthStatus === "online")
-      ? "online"
-      : fresh.length === server.endpoints.length && fresh.length > 0 && fresh.every((endpoint) => endpoint.healthStatus === "offline")
-        ? "offline"
-        : "unknown";
-    return { ...server, aggregateStatus };
+    const cadenceMinutes = getMonitorCadenceMinutes({
+      publicationStatus: server.publicationStatus,
+      moderationStatus: server.moderationStatus,
+      availabilityHiddenAt: server.availabilityHiddenAt,
+      hasVerifiedEndpoint: server.endpoints.some((endpoint) => endpoint.verificationStatus === "verified"),
+    });
+    const monitor = cadenceMinutes === null
+      ? { ...server.monitor, cadenceMinutes: null, freshness: "never" as const }
+      : {
+          ...server.monitor,
+          cadenceMinutes,
+          freshness: getMonitorFreshness(server.monitor.lastUpdatedAt, cadenceMinutes),
+        };
+    return { ...server, monitor, aggregateStatus: monitor.freshness === "fresh" ? monitor.healthStatus : "unknown" };
   });
+}
+
+function buildMonitorSummary(row: {
+  publicationStatus: "draft" | "published" | "hidden";
+  moderationStatus: "active" | "blocked";
+  availabilityHiddenAt: Date | null;
+  monitorHealthStatus: "unknown" | "online" | "offline";
+  monitorPlayersCurrent: number | null;
+  monitorPlayersMax: number | null;
+  monitorVersion: string | null;
+  monitorLatencyMs: number | null;
+  monitorLastCheckedAt: Date | null;
+  monitorLastOnlineAt: Date | null;
+  monitorConsecutiveFailures: number;
+  monitorProbeEdition: "java" | "bedrock" | null;
+  cadenceMinutes?: number | null;
+  hasVerifiedEndpoint?: boolean;
+}): ServerMonitor {
+  const cadenceMinutes = row.cadenceMinutes ?? getMonitorCadenceMinutes({
+    publicationStatus: row.publicationStatus,
+    moderationStatus: row.moderationStatus,
+    availabilityHiddenAt: row.availabilityHiddenAt,
+    hasVerifiedEndpoint: row.hasVerifiedEndpoint ?? (row.monitorProbeEdition !== null || row.monitorLastCheckedAt !== null),
+  });
+  return {
+    healthStatus: row.monitorHealthStatus,
+    playersCurrent: row.monitorPlayersCurrent,
+    playersMax: row.monitorPlayersMax,
+    version: row.monitorVersion,
+    latencyMs: row.monitorLatencyMs,
+    lastUpdatedAt: row.monitorLastCheckedAt,
+    lastOnlineAt: row.monitorLastOnlineAt,
+    consecutiveFailures: row.monitorConsecutiveFailures,
+    probeEdition: row.monitorProbeEdition,
+    cadenceMinutes,
+    freshness: cadenceMinutes ? getMonitorFreshness(row.monitorLastCheckedAt, cadenceMinutes) : "never",
+  };
 }
 
 async function attachCatalogData<T extends { id: string; tags: ServerTag[]; media: ServerMedia[] }>(items: T[]) {
@@ -204,6 +301,8 @@ export async function listManagedServers(userId: string) {
         createdAt: servers.createdAt,
         updatedAt: servers.updatedAt,
         availabilityHiddenAt: servers.availabilityHiddenAt,
+        moderationStatus: servers.moderationStatus,
+         ...monitorColumns,
       },
       role: serverMembers.role,
       endpoint: {
@@ -246,13 +345,13 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
       edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition} and se.verification_status = 'verified')` : undefined,
       sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
       ...tagSlugs.slice(0, 8).map((slug) => sql`exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.slug = ${slug} and t.status = 'active')`),
-      status ? sql`case when exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified' and se.health_status = 'online' and se.last_checked_at > now() - interval '30 minutes') then 'online' when not exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified' and (se.last_checked_at is null or se.last_checked_at <= now() - interval '30 minutes' or se.health_status <> 'offline')) then 'offline' else 'unknown' end = ${status}` : undefined,
+      status ? sql`case when ${servers.monitorLastCheckedAt} is null then 'unknown' when ${servers.monitorLastCheckedAt} <= now() - (case when ${servers.publicationStatus} = 'published' and ${servers.moderationStatus} = 'active' and ${servers.availabilityHiddenAt} is null then interval '30 minutes' else interval '120 minutes' end) then 'unknown' else ${servers.monitorHealthStatus} end = ${status}` : undefined,
     ))
     .orderBy(
       ...(queryText
         ? [desc(sql`greatest(similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) * 3, coalesce((select max(similarity(lower(t.slug), lower(${queryText.slice(0, 80)}))) * 2 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})))`)]
         : sort === "players"
-          ? [desc(sql`coalesce((select max(se.players_current) from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified'), 0)`)]
+          ? [desc(sql`coalesce(${servers.monitorPlayersCurrent}, 0)`)]
           : sort === "recent"
             ? [desc(servers.createdAt)]
             : [desc(sql`coalesce((select avg(sr.rating) from server_reviews sr where sr.server_id = ${servers.id} and sr.status = 'published'), 0)`)]),
@@ -282,6 +381,8 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
         createdAt: servers.createdAt,
         updatedAt: servers.updatedAt,
         availabilityHiddenAt: servers.availabilityHiddenAt,
+        moderationStatus: servers.moderationStatus,
+         ...monitorColumns,
       },
       endpoint: {
         edition: serverEndpoints.edition,
@@ -331,6 +432,8 @@ export async function getPublishedServerBySlug(slug: string) {
         createdAt: servers.createdAt,
         updatedAt: servers.updatedAt,
         availabilityHiddenAt: servers.availabilityHiddenAt,
+        moderationStatus: servers.moderationStatus,
+         ...monitorColumns,
       },
       endpoint: {
         edition: serverEndpoints.edition,
@@ -376,6 +479,16 @@ export async function getManagedServerBySlug(slug: string, userId: string) {
       createdAt: servers.createdAt,
       updatedAt: servers.updatedAt,
       availabilityHiddenAt: servers.availabilityHiddenAt,
+      moderationStatus: servers.moderationStatus,
+      monitorHealthStatus: servers.monitorHealthStatus,
+      monitorPlayersCurrent: servers.monitorPlayersCurrent,
+      monitorPlayersMax: servers.monitorPlayersMax,
+      monitorVersion: servers.monitorVersion,
+      monitorLatencyMs: servers.monitorLatencyMs,
+      monitorLastCheckedAt: servers.monitorLastCheckedAt,
+      monitorLastOnlineAt: servers.monitorLastOnlineAt,
+      monitorConsecutiveFailures: servers.monitorConsecutiveFailures,
+      monitorProbeEdition: servers.monitorProbeEdition,
       role: serverMembers.role,
     })
     .from(servers)
@@ -426,6 +539,21 @@ export async function getManagedServerBySlug(slug: string, userId: string) {
   }]);
   return {
     ...server,
+    monitor: buildMonitorSummary({
+      publicationStatus: server.publicationStatus,
+      moderationStatus: server.moderationStatus,
+      availabilityHiddenAt: server.availabilityHiddenAt,
+      monitorHealthStatus: server.monitorHealthStatus,
+      monitorPlayersCurrent: server.monitorPlayersCurrent,
+      monitorPlayersMax: server.monitorPlayersMax,
+      monitorVersion: server.monitorVersion,
+      monitorLatencyMs: server.monitorLatencyMs,
+      monitorLastCheckedAt: server.monitorLastCheckedAt,
+      monitorLastOnlineAt: server.monitorLastOnlineAt,
+      monitorConsecutiveFailures: server.monitorConsecutiveFailures,
+      monitorProbeEdition: server.monitorProbeEdition,
+      hasVerifiedEndpoint: endpoints.some((endpoint) => endpoint.verificationStatus === "verified"),
+    }),
     endpoints,
     tags: catalog?.tags ?? [],
     media: catalog?.media ?? [],

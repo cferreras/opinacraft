@@ -35,7 +35,6 @@ import {
 import { ServerPermissionError } from "@/lib/servers/permissions";
 import { databaseConstraint, databaseErrorCode } from "@/lib/db-errors";
 import {
-  minecraftEditions,
   ServerInputError,
   type UpdateServerInput,
 } from "@/lib/servers/validation";
@@ -59,15 +58,8 @@ function optionalPort(value: string | undefined) {
 }
 
 function getServerInput(formData: FormData): UpdateServerInput {
-  const endpoints: UpdateServerInput["endpoints"] = [];
-  for (const edition of minecraftEditions) {
-    if (formData.get(`${edition}Enabled`) !== "on") continue;
-    endpoints.push({
-      edition,
-      host: formValue(formData, `${edition}Host`) ?? "",
-      port: optionalPort(formValue(formData, `${edition}Port`)),
-    });
-  }
+  const javaEnabled = formData.get("javaEnabled") === "on";
+  const bedrockEnabled = formData.get("bedrockEnabled") === "on";
 
   return {
     name: formValue(formData, "name") ?? "",
@@ -76,7 +68,9 @@ function getServerInput(formData: FormData): UpdateServerInput {
     storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
-    endpoints,
+    host: formValue(formData, "host"),
+    javaPort: javaEnabled ? optionalPort(formValue(formData, "javaPort")) : undefined,
+    bedrockPort: bedrockEnabled ? optionalPort(formValue(formData, "bedrockPort")) : undefined,
   };
 }
 

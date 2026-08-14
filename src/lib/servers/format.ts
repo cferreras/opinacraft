@@ -9,6 +9,10 @@ type ServerEndpoint = {
 type ServerWithEndpoints = {
   aggregateStatus: ServerStatus;
   endpoints: ReadonlyArray<ServerEndpoint>;
+  monitor?: {
+    playersCurrent: number | null;
+    playersMax: number | null;
+  };
 };
 
 export function primaryEndpoint<T extends ServerWithEndpoints>(server: T): T["endpoints"][number] | undefined {
@@ -34,6 +38,9 @@ export function statusDot(status: ServerStatus) {
 }
 
 export function playersLabel(server: ServerWithEndpoints, empty = "—") {
+  if (server.monitor) {
+    return `${server.monitor.playersCurrent ?? "—"} / ${server.monitor.playersMax ?? "—"}`;
+  }
   const endpoint = primaryEndpoint(server);
   if (!endpoint || (endpoint.playersCurrent === null && endpoint.playersMax === null)) return empty;
   return `${endpoint.playersCurrent ?? "—"} / ${endpoint.playersMax ?? "—"}`;

@@ -111,6 +111,19 @@ test("uses the edition-specific default ports", () => {
   ]);
 });
 
+test("server player labels prefer the canonical monitor value when available", () => {
+  assert.equal(playersLabel({
+    aggregateStatus: "online",
+    endpoints: [{ edition: "java", playersCurrent: 12, playersMax: 50 }],
+    monitor: { playersCurrent: 42, playersMax: 100 },
+  }), "42 / 100");
+  assert.equal(playersLabel({
+    aggregateStatus: "offline",
+    endpoints: [{ edition: "java", playersCurrent: 12, playersMax: 50 }],
+    monitor: { playersCurrent: null, playersMax: null },
+  }), "— / —");
+});
+
 test("rejects hosts containing a protocol", () => {
   assert.throws(() => normalizeHost("https://play.example.com"));
 });

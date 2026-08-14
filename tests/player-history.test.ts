@@ -30,7 +30,7 @@ test("probe failures are classified without exposing target details", async () =
 test("history parameters default to the short public view", async () => {
   const { parseHistoryParams } = await import("../src/lib/servers/player-history.ts");
   assert.deepEqual(parseHistoryParams(), { period: "24h", edition: "all" });
-  assert.deepEqual(parseHistoryParams("90d", "bedrock"), { period: "90d", edition: "bedrock" });
+  assert.deepEqual(parseHistoryParams("90d", "bedrock"), { period: "90d", edition: "all" });
   assert.deepEqual(parseHistoryParams("not-a-period", "not-an-edition"), { period: "24h", edition: "all" });
 });
 

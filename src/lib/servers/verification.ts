@@ -237,20 +237,27 @@ export async function startServerVerification(serverId: string, userId: string, 
 
 export async function getVerificationDisplay(serverId: string, userId: string, edition: "java" | "bedrock" = "java") {
   await requireServerCapability(serverId, userId, "verification:manage");
-  const [verification] = await db
-    .select({
-      id: serverVerifications.id,
-      status: serverVerifications.status,
-      attemptCount: serverVerifications.attemptCount,
-      lastFailureCode: serverVerifications.lastFailureCode,
-      lastAttemptAt: serverVerifications.lastAttemptAt,
-      expiresAt: serverVerifications.expiresAt,
-      tokenCiphertext: serverVerifications.tokenCiphertext,
-    })
-    .from(serverVerifications)
-    .where(and(eq(serverVerifications.serverId, serverId), eq(serverVerifications.edition, edition)))
-    .orderBy(sql`${serverVerifications.createdAt} desc`)
-    .limit(1);
+  const [[verification], [endpoint]] = await Promise.all([
+    db
+      .select({
+        id: serverVerifications.id,
+        status: serverVerifications.status,
+        attemptCount: serverVerifications.attemptCount,
+        lastFailureCode: serverVerifications.lastFailureCode,
+        lastAttemptAt: serverVerifications.lastAttemptAt,
+        expiresAt: serverVerifications.expiresAt,
+        tokenCiphertext: serverVerifications.tokenCiphertext,
+      })
+      .from(serverVerifications)
+      .where(and(eq(serverVerifications.serverId, serverId), eq(serverVerifications.edition, edition)))
+      .orderBy(sql`${serverVerifications.createdAt} desc`)
+      .limit(1),
+    db
+      .select({ verificationStatus: serverEndpoints.verificationStatus })
+      .from(serverEndpoints)
+      .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.edition, edition)))
+      .limit(1),
+  ]);
 
   if (!verification) return null;
   const isActive = verification.status === "pending" && verification.expiresAt > new Date();
@@ -275,7 +282,9 @@ export async function getVerificationDisplay(serverId: string, userId: string, e
         ? verification.status
         : verification.status === "pending"
           ? "expired"
-          : verification.status,
+          : verification.status === "verified" && endpoint?.verificationStatus !== "verified"
+            ? "superseded"
+            : verification.status,
     attemptCount: verification.attemptCount,
     lastFailureCode: verification.lastFailureCode,
     lastAttemptAt: verification.lastAttemptAt,
