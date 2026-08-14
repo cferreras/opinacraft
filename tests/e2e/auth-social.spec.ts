@@ -10,8 +10,12 @@ for (const route of ["/sign-in", "/sign-up"] as const) {
     await expect(discordButton.locator("svg")).toHaveAttribute("aria-hidden", "true");
 
     const backgroundAlpha = await discordButton.evaluate((element) => {
-      const match = getComputedStyle(element).backgroundColor.match(/\/\s*([\d.]+)\)$/);
-      return match ? Number(match[1]) : 1;
+      const backgroundColor = getComputedStyle(element).backgroundColor;
+      const slashAlpha = backgroundColor.match(/\/\s*([\d.]+)\s*\)$/);
+      if (slashAlpha) return Number(slashAlpha[1]);
+
+      const rgbaAlpha = backgroundColor.match(/^rgba\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*([\d.]+)\s*\)$/);
+      return rgbaAlpha ? Number(rgbaAlpha[1]) : Number.NaN;
     });
     expect(backgroundAlpha).toBeGreaterThanOrEqual(0.1);
   });
@@ -40,7 +44,7 @@ for (const route of ["/sign-in", "/sign-up"] as const) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(route);
 
-    const controlHeights = await page.locator("form input, form button").evaluateAll((elements) =>
+    const controlHeights = await page.locator("form input, form [data-slot=button]").evaluateAll((elements) =>
       elements.map((element) => element.getBoundingClientRect().height),
     );
 
