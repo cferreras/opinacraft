@@ -47,10 +47,10 @@ export function ReviewReportForm({ serverId, reviewId }: { serverId: string; rev
       <DialogContent>
         <DialogHeader><DialogTitle>Reportar opinión</DialogTitle><DialogDescription>Ayúdanos a mantener las reseñas fiables y útiles.</DialogDescription></DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
-          <Field><FieldLabel htmlFor={`review-report-reason-${reviewId}`}>Motivo</FieldLabel><NativeSelect id={`review-report-reason-${reviewId}`} value={reason} onChange={(event) => setReason(event.target.value)} className="w-full">{reasons.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</NativeSelect></Field>
+          <Field><FieldLabel htmlFor={`review-report-reason-${reviewId}`}>Motivo</FieldLabel><NativeSelect id={`review-report-reason-${reviewId}`} size="lg" value={reason} onChange={(event) => setReason(event.target.value)} className="w-full">{reasons.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</NativeSelect></Field>
           <Field><FieldLabel htmlFor={`review-report-details-${reviewId}`}>Detalle opcional</FieldLabel><Textarea id={`review-report-details-${reviewId}`} value={details} onChange={(event) => setDetails(event.target.value)} maxLength={1_000} rows={4} /><p className="text-right text-xs tabular-nums text-muted-foreground">{details.length} / 1.000</p></Field>
           {message ? <Alert variant={message.startsWith("Gracias") ? "default" : "destructive"}><AlertDescription>{message}</AlertDescription></Alert> : null}
-          <DialogFooter><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit" disabled={pending}>{pending ? "Enviando…" : "Enviar reporte"}</Button></DialogFooter>
+          <DialogFooter><Button type="button" size="lg" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button><Button type="submit" size="lg" disabled={pending}>{pending ? "Enviando…" : "Enviar reporte"}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

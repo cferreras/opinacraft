@@ -4,6 +4,7 @@ import * as React from "react"
 import * as RechartsPrimitive from "recharts"
 import type { TooltipValueType } from "recharts"
 
+import { chartTooltipValueRowClassName } from "@/lib/charts/tooltip"
 import { cn } from "@/lib/utils"
 
 // Format: { THEME_NAME: CSS_SELECTOR }
@@ -242,7 +243,7 @@ function ChartTooltipContent({
                     )}
                     <div
                       className={cn(
-                        "flex flex-1 justify-between leading-none",
+                        chartTooltipValueRowClassName,
                         nestLabel ? "items-end" : "items-center"
                       )}
                     >
