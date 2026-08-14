@@ -36,9 +36,9 @@ export function ReportForm({ serverId }: { serverId: string }) {
       <CardContent>
         <p className="mb-4 text-sm text-muted-foreground">Ayúdanos a mantener el directorio fiable y útil.</p>
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[15rem_minmax(0,1fr)_auto] sm:items-end">
-          <Field><FieldLabel htmlFor="report-reason">Motivo del reporte</FieldLabel><NativeSelect id="report-reason" value={reason} onChange={(event) => setReason(event.target.value)} className="w-full"><option value="inappropriate">Contenido inapropiado</option><option value="misleading">Información engañosa</option><option value="offline">Servidor fuera de línea</option><option value="copyright">Derechos de autor</option><option value="other">Otro</option></NativeSelect></Field>
-          <Field><FieldLabel htmlFor="report-details">Detalles opcionales</FieldLabel><Input id="report-details" value={details} onChange={(event) => setDetails(event.target.value)} maxLength={2_000} placeholder="Cuéntanos qué debemos revisar" /></Field>
-          <Button type="submit" variant="outline" disabled={pending}>{pending ? "Enviando…" : "Enviar reporte"}</Button>
+          <Field><FieldLabel htmlFor="report-reason">Motivo del reporte</FieldLabel><NativeSelect id="report-reason" size="lg" value={reason} onChange={(event) => setReason(event.target.value)} className="w-full"><option value="inappropriate">Contenido inapropiado</option><option value="misleading">Información engañosa</option><option value="offline">Servidor fuera de línea</option><option value="copyright">Derechos de autor</option><option value="other">Otro</option></NativeSelect></Field>
+          <Field><FieldLabel htmlFor="report-details">Detalles opcionales</FieldLabel><Input id="report-details" value={details} onChange={(event) => setDetails(event.target.value)} maxLength={2_000} placeholder="Cuéntanos qué debemos revisar" className="h-10" /></Field>
+          <Button type="submit" size="lg" variant="outline" disabled={pending}>{pending ? "Enviando…" : "Enviar reporte"}</Button>
         </form>
         {message ? <Alert className="mt-3"><AlertDescription>{message}</AlertDescription></Alert> : null}
       </CardContent>

@@ -46,7 +46,7 @@ function Summary({ summary }: { summary: ReviewSummary }) {
 
 function Composer({ serverId, slug, viewer }: { serverId: string; slug: string; viewer: ViewerState | null }) {
   if (!viewer) {
-    return <Card><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium">Comparte tu opinión sobre este servidor</p><p className="mt-1 text-xs text-muted-foreground">Necesitas iniciar sesión para publicar.</p></div><Button asChild size="sm"><Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`}>Iniciar sesión</Link></Button></CardContent></Card>;
+    return <Card><CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium">Comparte tu opinión sobre este servidor</p><p className="mt-1 text-xs text-muted-foreground">Necesitas iniciar sesión para publicar.</p></div><Button asChild size="lg"><Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`}>Iniciar sesión</Link></Button></CardContent></Card>;
   }
   if (!viewer.emailVerified) return <Alert><AlertDescription><strong>Verifica tu email para opinar.</strong> Puedes reenviar el enlace desde tu perfil. <Button asChild variant="link" size="sm" className="h-auto p-0"><Link href="/profile">Ir al perfil</Link></Button></AlertDescription></Alert>;
   if (viewer.membershipRole) return <Alert><AlertDescription><strong>Formas parte del equipo.</strong> Los miembros no pueden puntuar su propio servidor.</AlertDescription></Alert>;

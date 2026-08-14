@@ -44,6 +44,7 @@ export default defineConfig({
           // E2E captures verification/reset flows without contacting Resend.
           E2E_DISABLE_EMAIL: "true",
           E2E_MEDIA_STORAGE: "memory",
+          NEXT_PUBLIC_DISCORD_ENABLED: "true",
           RESEND_API_KEY: "",
           EMAIL_FROM: "",
           BLOB_READ_WRITE_TOKEN: "",

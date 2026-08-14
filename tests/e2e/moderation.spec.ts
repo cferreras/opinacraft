@@ -28,6 +28,24 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   await markServerVerified(slug);
   await publishServer(page, slug);
 
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  await guest.goto(`/servers/${slug}`);
+  const reviewSignIn = guest
+    .locator('[data-slot="card"]')
+    .filter({ hasText: "Comparte tu opinión sobre este servidor" })
+    .getByRole("link", { name: "Iniciar sesión", exact: true });
+  await expect(reviewSignIn).toBeVisible();
+  const reviewHeight = await reviewSignIn.evaluate((element) => element.getBoundingClientRect().height);
+  expect(reviewHeight).toBeGreaterThanOrEqual(40);
+  const guestReportForm = guest.locator("form").filter({ hasText: "Motivo del reporte" });
+  const guestReportControlHeights = await guestReportForm.locator("input, select, button").evaluateAll((elements) =>
+    elements.map((element) => element.getBoundingClientRect().height),
+  );
+  expect(guestReportControlHeights).toHaveLength(3);
+  expect(guestReportControlHeights.every((height) => height >= 40)).toBe(true);
+  await guestContext.close();
+
   const reporterContext = await browser.newContext();
   const reporter = await reporterContext.newPage();
   const reporterAccount = await createAccount(reporter, "reporter");

@@ -98,6 +98,11 @@ test("player history chart preserves the observed peak across wider intervals", 
   assert.equal(chart[0]?.serverPeak, 10);
 });
 
+test("player history tooltip separates the metric label from its numeric value", async () => {
+  const { chartTooltipValueRowClassName } = await import("../src/lib/charts/tooltip.ts");
+  assert.match(chartTooltipValueRowClassName, /(?:^|\s)gap-2(?:\s|$)/);
+});
+
 test("server history keeps gaps and derives weighted response statistics", async () => {
   const { aggregateHistorySeries } = await import("../src/lib/servers/player-history-aggregate.ts");
   const at = "2026-08-03T12:00:00.000Z";
