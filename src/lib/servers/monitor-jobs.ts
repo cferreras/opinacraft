@@ -5,7 +5,7 @@ export type MonitorJobRetry = {
   nextAttemptAt: Date | null;
 };
 
-export function getMonitorScheduleSlot(date = new Date(), cadenceMinutes: number) {
+export function getMonitorScheduleSlot(cadenceMinutes: number, date = new Date()) {
   const cadenceMs = cadenceMinutes * 60_000;
   return new Date(Math.floor(date.getTime() / cadenceMs) * cadenceMs);
 }

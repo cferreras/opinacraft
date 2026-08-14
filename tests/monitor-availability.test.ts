@@ -13,6 +13,7 @@ test("fresh visible servers hide after seven days without an online observation"
     healthStatus: "offline",
     lastCheckedAt: new Date("2026-08-14T11:45:00.000Z"),
     lastOnlineAt: new Date("2026-08-07T11:59:00.000Z"),
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
   }, now), "hidden");
 });
 
@@ -24,6 +25,7 @@ test("hidden servers restore only after a fresh online observation", () => {
     healthStatus: "online",
     lastCheckedAt: new Date("2026-08-14T11:00:00.000Z"),
     lastOnlineAt: new Date("2026-08-14T11:00:00.000Z"),
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
   }, now), "restored");
 
   assert.equal(getAvailabilityTransition({
@@ -33,5 +35,6 @@ test("hidden servers restore only after a fresh online observation", () => {
     healthStatus: "online",
     lastCheckedAt: new Date("2026-08-14T09:00:00.000Z"),
     lastOnlineAt: new Date("2026-08-14T09:00:00.000Z"),
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
   }, now), null);
 });

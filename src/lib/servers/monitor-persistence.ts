@@ -10,9 +10,9 @@ import {
   serverEndpoints,
   serverMembers,
 } from "@/schema";
-import { MinecraftOfflineError, MinecraftResponseError, MinecraftTimeoutError } from "@/lib/minecraft/ping";
-import { BedrockOfflineError } from "@/lib/minecraft/bedrock-ping";
-import { BlockedMinecraftTargetError, MinecraftDnsError } from "@/lib/minecraft/network";
+import type { MonitorFailureCode } from "@/lib/servers/monitor-errors";
+import { PUBLIC_MONITOR_CADENCE_MINUTES } from "@/lib/servers/monitor-scheduling";
+export { classifyProbeError } from "@/lib/servers/monitor-errors";
 
 const FAILURE_THRESHOLD = 3;
 const RAW_RETENTION_MS = 8 * 24 * 60 * 60 * 1000;
@@ -21,14 +21,6 @@ const PRUNE_BATCH_SIZE = 5_000;
 
 export type MonitorEdition = "java" | "bedrock";
 export type MonitorSampleStatus = "unknown" | "online" | "offline";
-export type MonitorFailureCode =
-  | "unreachable"
-  | "timeout"
-  | "invalid_response"
-  | "dns_error"
-  | "blocked_target"
-  | "monitor_error";
-
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type EndpointObservation = {
@@ -56,7 +48,7 @@ export type ObservationResult = {
 
 export function getMonitorSampleSlot(date = new Date()) {
   const value = new Date(date);
-  value.setUTCMinutes(Math.floor(value.getUTCMinutes() / 15) * 15, 0, 0);
+  value.setUTCMinutes(Math.floor(value.getUTCMinutes() / PUBLIC_MONITOR_CADENCE_MINUTES) * PUBLIC_MONITOR_CADENCE_MINUTES, 0, 0);
   return value;
 }
 
@@ -64,15 +56,6 @@ export function getHourlyBucket(date: Date) {
   const value = new Date(date);
   value.setUTCMinutes(0, 0, 0);
   return value;
-}
-
-export function classifyProbeError(error: unknown): MonitorFailureCode {
-  if (error instanceof BlockedMinecraftTargetError) return "blocked_target";
-  if (error instanceof MinecraftDnsError) return "dns_error";
-  if (error instanceof MinecraftTimeoutError) return "timeout";
-  if (error instanceof MinecraftResponseError) return "invalid_response";
-  if (error instanceof MinecraftOfflineError || error instanceof BedrockOfflineError) return "unreachable";
-  return "monitor_error";
 }
 
 function hasPlayerValue(observation: EndpointObservation) {

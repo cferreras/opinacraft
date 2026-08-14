@@ -17,6 +17,13 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { SectionHeading } from "@/components/section-heading";
 import { TagCombobox } from "@/components/tag-combobox";
+import {
+  defaultMinecraftPort,
+  MINECRAFT_EDITION_DESCRIPTIONS,
+  MINECRAFT_EDITION_LABELS,
+  MINECRAFT_PORT_MAX,
+  MINECRAFT_PORT_MIN,
+} from "@/lib/servers/endpoint-fields";
 
 const logoMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
@@ -34,9 +41,9 @@ function SubmitButton({ disabled = false, busy = false }: { disabled?: boolean; 
 
 function EditionPortFields({ edition, enabled, onEnabledChange }: { edition: "java" | "bedrock"; enabled: boolean; onEnabledChange: (enabled: boolean) => void }) {
   const java = edition === "java";
-  const label = java ? "Java" : "Bedrock";
-  const description = java ? "Para Minecraft Java Edition" : "Para Minecraft Bedrock Edition";
-  const defaultPort = java ? 25565 : 19132;
+  const label = MINECRAFT_EDITION_LABELS[edition];
+  const description = MINECRAFT_EDITION_DESCRIPTIONS[edition];
+  const defaultPort = defaultMinecraftPort(edition);
   return (
     <fieldset className={`rounded-lg border p-4 transition-colors ${enabled ? "border-primary/30 bg-primary/5" : "bg-muted/20"}`}>
       <legend className="sr-only">{label}</legend>
@@ -47,7 +54,7 @@ function EditionPortFields({ edition, enabled, onEnabledChange }: { edition: "ja
             <div><p className="text-sm font-semibold">{label}</p><p className="mt-0.5 text-xs text-muted-foreground">{description}</p></div>
             <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 self-start rounded-md border bg-background px-2.5 text-xs font-medium"><Checkbox name={`${edition}Enabled`} checked={enabled} onCheckedChange={(value) => onEnabledChange(value === true)} />Activar {label}</label>
           </div>
-          {enabled ? <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_8.75rem]"><Field><FieldLabel htmlFor={`${edition}-port`}>Puerto {label}</FieldLabel><Input id={`${edition}-port`} name={`${edition}Port`} type="number" min={1_024} max={65_535} defaultValue={defaultPort} required /></Field></div> : <p className="mt-3 rounded-md bg-muted px-3 py-2 text-xs leading-4 text-muted-foreground">Activa esta edición para añadir su puerto de conexión.</p>}
+          {enabled ? <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_8.75rem]"><Field><FieldLabel htmlFor={`${edition}-port`}>Puerto {label}</FieldLabel><Input id={`${edition}-port`} name={`${edition}Port`} type="number" min={MINECRAFT_PORT_MIN} max={MINECRAFT_PORT_MAX} defaultValue={defaultPort} required /></Field></div> : <p className="mt-3 rounded-md bg-muted px-3 py-2 text-xs leading-4 text-muted-foreground">Activa esta edición para añadir su puerto de conexión.</p>}
         </div>
       </div>
     </fieldset>

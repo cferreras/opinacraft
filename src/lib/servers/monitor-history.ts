@@ -13,7 +13,9 @@ export function mergeLegacySnapshotsBySlot(rows: readonly LegacyHistorySnapshot[
   const grouped = new Map<string, LegacyHistorySnapshot[]>();
   for (const row of rows) {
     const key = `${row.serverId}:${row.sampledAt.toISOString()}`;
-    grouped.set(key, [...(grouped.get(key) ?? []), row]);
+    const bucket = grouped.get(key);
+    if (bucket) bucket.push(row);
+    else grouped.set(key, [row]);
   }
 
   return [...grouped.values()]

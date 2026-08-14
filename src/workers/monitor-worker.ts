@@ -3,14 +3,12 @@ import "dotenv/config";
 import { createServer } from "node:http";
 
 import { closeDatabase, db } from "@/db";
-import { classifyProbeError } from "@/lib/servers/monitor-persistence";
 import { applyCanonicalObservation, markMonitorJobDone, pruneCanonicalPlayerHistory, updateCanonicalAvailability } from "@/lib/servers/monitor-canonical-persistence";
-import { runCanonicalMonitorJob, type CanonicalMonitorEndpoint, type CanonicalProbeResponse } from "@/lib/servers/monitor-worker-core";
+import { runCanonicalMonitorJob } from "@/lib/servers/monitor-worker-core";
 import { claimMonitorJobs, enqueueDueMonitorJobs, failMonitorJob, type ClaimedMonitorJob } from "@/lib/servers/monitor-queue";
 import { createMonitorHealthHandler, type MonitorHealthSnapshot } from "./monitor-worker-health";
-import { resolveMinecraftBedrockTarget, resolveMinecraftTarget } from "@/lib/minecraft/network";
-import { pingBedrockServer } from "@/lib/minecraft/bedrock-ping";
-import { pingJavaServer } from "@/lib/minecraft/ping";
+import { numberEnv } from "./monitor-worker-config";
+import { probeCanonicalEndpoint } from "./monitor-worker-probe";
 
 type WorkerConfig = {
   workerId: string;
@@ -19,12 +17,6 @@ type WorkerConfig = {
   probeConcurrency: number;
   healthPort: number;
 };
-
-function numberEnv(name: string, fallback: number, minimum: number) {
-  const value = Number(process.env[name] ?? fallback);
-  if (!Number.isInteger(value) || value < minimum) throw new Error(`${name} must be an integer >= ${minimum}.`);
-  return value;
-}
 
 function getConfig(): WorkerConfig {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for the monitor worker.");
@@ -50,37 +42,6 @@ async function runOptionalMaintenance() {
   await runMediaCleanup().catch((error) => console.error("[monitor-worker] media cleanup failed", error instanceof Error ? error.name : "unknown"));
 }
 
-function pingData(value: unknown) {
-  const result = value as { latencyMs?: number | null; players?: { online?: number; max?: number }; version?: { name?: string } };
-  return {
-    playersCurrent: Number.isInteger(result.players?.online) && (result.players?.online ?? 0) >= 0 ? result.players?.online ?? null : null,
-    playersMax: Number.isInteger(result.players?.max) && (result.players?.max ?? 0) >= 0 ? result.players?.max ?? null : null,
-    version: typeof result.version?.name === "string" ? result.version.name.slice(0, 100) : null,
-    latencyMs: Number.isInteger(result.latencyMs) && (result.latencyMs ?? 0) >= 0 ? result.latencyMs ?? null : null,
-  };
-}
-
-async function probeEndpoint(endpoint: CanonicalMonitorEndpoint): Promise<CanonicalProbeResponse> {
-  try {
-    const result = endpoint.edition === "bedrock"
-      ? await resolveMinecraftBedrockTarget(endpoint.host, endpoint.port).then((target) => pingBedrockServer(target))
-      : await resolveMinecraftTarget(endpoint.host, endpoint.port).then((target) => pingJavaServer(target));
-    const data = pingData(result);
-    return { status: "online", failureCode: null, ...data };
-  } catch (error) {
-    const failureCode = classifyProbeError(error);
-    if (failureCode === "monitor_error") throw error;
-    return {
-      status: "offline",
-      failureCode,
-      playersCurrent: null,
-      playersMax: null,
-      version: null,
-      latencyMs: null,
-    };
-  }
-}
-
 async function runPool<T>(items: T[], concurrency: number, task: (item: T) => Promise<void>) {
   let cursor = 0;
   async function worker() {
@@ -99,7 +60,7 @@ async function processJob(job: ClaimedMonitorJob, workerId: string) {
       serverId: job.serverId,
       scheduledAt: job.scheduledAt,
       endpoints: job.endpoints,
-      probe: probeEndpoint,
+      probe: probeCanonicalEndpoint,
       persist: async (nextObservation) => {
         await db.transaction((tx) => applyCanonicalObservation(tx, nextObservation, job.id));
       },

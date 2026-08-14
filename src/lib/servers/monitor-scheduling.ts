@@ -7,6 +7,9 @@ export type MonitorPublicationState = {
 
 export type MonitorFreshness = "fresh" | "stale" | "never";
 
+export const PUBLIC_MONITOR_CADENCE_MINUTES = 15;
+export const LOW_PRIORITY_MONITOR_CADENCE_MINUTES = 60;
+
 export function getMonitorCadenceMinutes(state: MonitorPublicationState) {
   if (!state.hasVerifiedEndpoint) return null;
   if (
@@ -14,9 +17,9 @@ export function getMonitorCadenceMinutes(state: MonitorPublicationState) {
     state.moderationStatus === "active" &&
     state.availabilityHiddenAt === null
   ) {
-    return 15;
+    return PUBLIC_MONITOR_CADENCE_MINUTES;
   }
-  return 60;
+  return LOW_PRIORITY_MONITOR_CADENCE_MINUTES;
 }
 
 export function selectCanonicalEndpoint<T extends {

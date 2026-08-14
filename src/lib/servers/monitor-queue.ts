@@ -9,7 +9,7 @@ import {
   serverNetworkTargets,
   servers,
 } from "@/schema";
-import { getMonitorCadenceMinutes } from "./monitor-scheduling";
+import { getMonitorCadenceMinutes, LOW_PRIORITY_MONITOR_CADENCE_MINUTES, PUBLIC_MONITOR_CADENCE_MINUTES } from "./monitor-scheduling";
 import { getMonitorJobRetry, getMonitorScheduleSlot } from "./monitor-jobs";
 
 export type MonitorDispatchResult = {
@@ -28,101 +28,130 @@ function verifiedEndpointExists() {
 
 export async function enqueueDueMonitorJobs(now = new Date(), limit = 100): Promise<MonitorDispatchResult> {
   return db.transaction(async (tx) => {
+    const cadenceSql = sql`case when ${servers.publicationStatus} = 'published'
+      and ${servers.moderationStatus} = 'active'
+      and ${servers.availabilityHiddenAt} is null then ${PUBLIC_MONITOR_CADENCE_MINUTES} else ${LOW_PRIORITY_MONITOR_CADENCE_MINUTES} end`;
     const candidates = await tx.select({
       id: servers.id,
       publicationStatus: servers.publicationStatus,
       moderationStatus: servers.moderationStatus,
       availabilityHiddenAt: servers.availabilityHiddenAt,
-      scheduleCadence: serverMonitorSchedules.cadenceMinutes,
-      nextDueAt: serverMonitorSchedules.nextDueAt,
+      scheduleServerId: serverMonitorSchedules.serverId,
     }).from(servers)
       .leftJoin(serverMonitorSchedules, eq(serverMonitorSchedules.serverId, servers.id))
-      .where(verifiedEndpointExists())
-      .orderBy(asc(serverMonitorSchedules.nextDueAt), asc(servers.id))
-      .limit(limit);
+      .where(and(
+        verifiedEndpointExists(),
+        or(
+          isNull(serverMonitorSchedules.serverId),
+          lte(serverMonitorSchedules.nextDueAt, now),
+          sql`${serverMonitorSchedules.cadenceMinutes} <> ${cadenceSql}`,
+        ),
+      ))
+      .orderBy(
+        asc(sql`${serverMonitorSchedules.nextDueAt} is not null`),
+        asc(serverMonitorSchedules.nextDueAt),
+        asc(servers.id),
+      )
+      .limit(limit)
+      .for("update", { skipLocked: true });
 
-    let enqueued = 0;
-    let due = 0;
-    let oldestDueAt: Date | null = null;
-    for (const candidate of candidates) {
+    if (candidates.length === 0) return { enqueued: 0, due: 0, oldestDueAt: null };
+
+    const missingSchedules = candidates.filter((candidate) => !candidate.scheduleServerId);
+    const createdSchedules = missingSchedules.length
+      ? await tx.insert(serverMonitorSchedules).values(missingSchedules.map((candidate) => ({
+        serverId: candidate.id,
+        cadenceMinutes: getMonitorCadenceMinutes({
+          publicationStatus: candidate.publicationStatus,
+          moderationStatus: candidate.moderationStatus,
+          availabilityHiddenAt: candidate.availabilityHiddenAt,
+          hasVerifiedEndpoint: true,
+        }) ?? LOW_PRIORITY_MONITOR_CADENCE_MINUTES,
+        nextDueAt: now,
+      }))).onConflictDoNothing().returning({ serverId: serverMonitorSchedules.serverId })
+      : [];
+
+    if (createdSchedules.length) {
+      const createdCadenceByServer = new Map(missingSchedules.map((candidate) => [candidate.id, getMonitorCadenceMinutes({
+        publicationStatus: candidate.publicationStatus,
+        moderationStatus: candidate.moderationStatus,
+        availabilityHiddenAt: candidate.availabilityHiddenAt,
+        hasVerifiedEndpoint: true,
+      }) ?? LOW_PRIORITY_MONITOR_CADENCE_MINUTES]));
+      await tx.insert(serverMonitorScheduleHistory).values(createdSchedules.map((schedule) => ({
+        serverId: schedule.serverId,
+        cadenceMinutes: createdCadenceByServer.get(schedule.serverId) ?? LOW_PRIORITY_MONITOR_CADENCE_MINUTES,
+        effectiveFrom: now,
+      })));
+    }
+
+    const schedules = await tx.select({
+      serverId: serverMonitorSchedules.serverId,
+      cadenceMinutes: serverMonitorSchedules.cadenceMinutes,
+      nextDueAt: serverMonitorSchedules.nextDueAt,
+    }).from(serverMonitorSchedules).where(inArray(
+      serverMonitorSchedules.serverId,
+      candidates.map((candidate) => candidate.id),
+    ));
+    const scheduleByServer = new Map(schedules.map((schedule) => [schedule.serverId, schedule]));
+    const dueServers = candidates.flatMap((candidate) => {
+      const schedule = scheduleByServer.get(candidate.id);
       const cadenceMinutes = getMonitorCadenceMinutes({
         publicationStatus: candidate.publicationStatus,
         moderationStatus: candidate.moderationStatus,
         availabilityHiddenAt: candidate.availabilityHiddenAt,
         hasVerifiedEndpoint: true,
       });
-      if (!cadenceMinutes) continue;
-
-      const [lockedSchedule] = await tx.select({
-        cadenceMinutes: serverMonitorSchedules.cadenceMinutes,
-        nextDueAt: serverMonitorSchedules.nextDueAt,
-      }).from(serverMonitorSchedules)
-        .where(eq(serverMonitorSchedules.serverId, candidate.id))
-        .for("update")
-        .limit(1);
-
-      let scheduleCadence = lockedSchedule?.cadenceMinutes ?? candidate.scheduleCadence;
-      let nextDueAt = lockedSchedule?.nextDueAt ?? candidate.nextDueAt;
-      if (!scheduleCadence || !nextDueAt) {
-        const [createdSchedule] = await tx.insert(serverMonitorSchedules).values({
-          serverId: candidate.id,
-          cadenceMinutes,
-          nextDueAt: now,
-        }).onConflictDoNothing().returning({ serverId: serverMonitorSchedules.serverId });
-
-        if (createdSchedule) {
-          await tx.insert(serverMonitorScheduleHistory).values({
-            serverId: candidate.id,
-            cadenceMinutes,
-            effectiveFrom: now,
-          });
-          scheduleCadence = cadenceMinutes;
-          nextDueAt = now;
-        } else {
-          const [existingSchedule] = await tx.select({
-            cadenceMinutes: serverMonitorSchedules.cadenceMinutes,
-            nextDueAt: serverMonitorSchedules.nextDueAt,
-          }).from(serverMonitorSchedules)
-            .where(eq(serverMonitorSchedules.serverId, candidate.id))
-            .for("update")
-            .limit(1);
-          scheduleCadence = existingSchedule?.cadenceMinutes ?? cadenceMinutes;
-          nextDueAt = existingSchedule?.nextDueAt ?? now;
-        }
-      }
-
-      if (scheduleCadence !== cadenceMinutes) {
-        await tx.update(serverMonitorScheduleHistory).set({ effectiveTo: now }).where(and(
-          eq(serverMonitorScheduleHistory.serverId, candidate.id),
-          isNull(serverMonitorScheduleHistory.effectiveTo),
-        ));
-        await tx.insert(serverMonitorScheduleHistory).values({
-          serverId: candidate.id,
-          cadenceMinutes,
-          effectiveFrom: now,
-        });
-        await tx.update(serverMonitorSchedules).set({ cadenceMinutes, nextDueAt: now }).where(eq(serverMonitorSchedules.serverId, candidate.id));
-        scheduleCadence = cadenceMinutes;
-        nextDueAt = now;
-      }
-
-      if (nextDueAt > now) continue;
-      due += 1;
-      const scheduledAt = getMonitorScheduleSlot(now, cadenceMinutes);
-      const [job] = await tx.insert(serverMonitorJobs).values({
+      if (!schedule || !cadenceMinutes) return [];
+      if (schedule.cadenceMinutes === cadenceMinutes && schedule.nextDueAt > now) return [];
+      const scheduledAt = getMonitorScheduleSlot(cadenceMinutes, now);
+      return [{
         serverId: candidate.id,
+        cadenceMinutes,
         scheduledAt,
-        nextAttemptAt: now,
-      }).onConflictDoNothing({ target: [serverMonitorJobs.serverId, serverMonitorJobs.scheduledAt] }).returning({ id: serverMonitorJobs.id });
-      if (job) enqueued += 1;
-      if (!oldestDueAt || nextDueAt < oldestDueAt) oldestDueAt = nextDueAt;
-      await tx.update(serverMonitorSchedules).set({
-        lastScheduledAt: scheduledAt,
         nextDueAt: new Date(scheduledAt.getTime() + cadenceMinutes * 60_000),
-      }).where(eq(serverMonitorSchedules.serverId, candidate.id));
+        oldestDueAt: schedule.cadenceMinutes === cadenceMinutes && schedule.nextDueAt <= now ? schedule.nextDueAt : now,
+      }];
+    });
+
+    if (dueServers.length === 0) return { enqueued: 0, due: 0, oldestDueAt: null };
+
+    const cadenceChanges = dueServers.filter((entry) => scheduleByServer.get(entry.serverId)?.cadenceMinutes !== entry.cadenceMinutes);
+    if (cadenceChanges.length) {
+      await tx.update(serverMonitorScheduleHistory).set({ effectiveTo: now }).where(and(
+        inArray(serverMonitorScheduleHistory.serverId, cadenceChanges.map((entry) => entry.serverId)),
+        isNull(serverMonitorScheduleHistory.effectiveTo),
+      ));
+      await tx.insert(serverMonitorScheduleHistory).values(cadenceChanges.map((entry) => ({
+        serverId: entry.serverId,
+        cadenceMinutes: entry.cadenceMinutes,
+        effectiveFrom: now,
+      })));
     }
 
-    return { enqueued, due, oldestDueAt: oldestDueAt?.toISOString() ?? null };
+    const jobs = await tx.insert(serverMonitorJobs).values(dueServers.map((entry) => ({
+      serverId: entry.serverId,
+      scheduledAt: entry.scheduledAt,
+      nextAttemptAt: now,
+    }))).onConflictDoNothing({
+      target: [serverMonitorJobs.serverId, serverMonitorJobs.scheduledAt],
+    }).returning({ id: serverMonitorJobs.id });
+
+    const serverIds = dueServers.map((entry) => entry.serverId);
+    const cadenceCase = sql`case ${sql.join(dueServers.map((entry) => sql`when ${serverMonitorSchedules.serverId} = ${entry.serverId} then ${entry.cadenceMinutes}`), sql` `)} else ${serverMonitorSchedules.cadenceMinutes} end`;
+    const scheduledCase = sql`case ${sql.join(dueServers.map((entry) => sql`when ${serverMonitorSchedules.serverId} = ${entry.serverId} then ${entry.scheduledAt}`), sql` `)} else ${serverMonitorSchedules.lastScheduledAt} end`;
+    const nextDueCase = sql`case ${sql.join(dueServers.map((entry) => sql`when ${serverMonitorSchedules.serverId} = ${entry.serverId} then ${entry.nextDueAt}`), sql` `)} else ${serverMonitorSchedules.nextDueAt} end`;
+    await tx.update(serverMonitorSchedules).set({
+      cadenceMinutes: cadenceCase,
+      lastScheduledAt: scheduledCase,
+      nextDueAt: nextDueCase,
+    }).where(inArray(serverMonitorSchedules.serverId, serverIds));
+
+    const oldestDueAt = dueServers.reduce<Date | null>((oldest, entry) => {
+      if (!oldest || entry.oldestDueAt < oldest) return entry.oldestDueAt;
+      return oldest;
+    }, null);
+    return { enqueued: jobs.length, due: dueServers.length, oldestDueAt: oldestDueAt?.toISOString() ?? null };
   });
 }
 
@@ -200,6 +229,9 @@ export async function claimMonitorJobs(workerId: string, limit: number, now = ne
         attempts: row.attempts + 1,
         endpoints,
       };
+      claimedJobs.push(job);
+    }
+    if (claimedJobs.length) {
       await tx.update(serverMonitorJobs).set({
         status: "processing",
         attempts: sql`${serverMonitorJobs.attempts} + 1`,
@@ -207,8 +239,7 @@ export async function claimMonitorJobs(workerId: string, limit: number, now = ne
         leaseUntil,
         processingStartedAt: now,
         lastError: null,
-      }).where(eq(serverMonitorJobs.id, job.id));
-      claimedJobs.push(job);
+      }).where(inArray(serverMonitorJobs.id, claimedJobs.map((job) => job.id)));
     }
     return claimedJobs;
   });

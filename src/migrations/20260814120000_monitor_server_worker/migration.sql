@@ -212,25 +212,53 @@ SELECT
 FROM "server_endpoint_player_snapshots" s
 GROUP BY s."server_id", s."sampled_at";--> statement-breakpoint
 
-INSERT INTO "server_player_hourly" ("server_id", "bucket_start", "source_changed", "sample_count", "online_count", "unknown_count", "player_data_count", "players_total", "players_peak", "capacity_data_count", "capacity_total", "capacity_latest", "occupancy_data_count", "occupancy_basis_points_total", "last_observed_at")
+INSERT INTO "server_player_hourly" ("server_id", "bucket_start", "last_probe_edition", "source_changed", "sample_count", "online_count", "unknown_count", "player_data_count", "players_total", "players_peak", "capacity_data_count", "capacity_total", "capacity_latest", "occupancy_data_count", "occupancy_basis_points_total", "last_observed_at")
+WITH ranked AS (
+  SELECT
+    h.*,
+    row_number() OVER (
+      PARTITION BY h."server_id", h."bucket_start"
+      ORDER BY CASE WHEN h."edition" = 'java' THEN 0 ELSE 1 END,
+               h."last_sample_at" DESC NULLS LAST,
+               h."edition"
+    ) AS row_number
+  FROM "server_endpoint_player_hourly" h
+), canonical AS (
+  SELECT * FROM ranked WHERE row_number = 1
+), interval_maxima AS (
+  SELECT
+    h."server_id",
+    h."bucket_start",
+    max(h."players_peak") AS "players_peak",
+    max(h."capacity_latest") AS "capacity_latest"
+  FROM "server_endpoint_player_hourly" h
+  GROUP BY h."server_id", h."bucket_start"
+)
 SELECT
-  h."server_id",
-  h."bucket_start",
-  max(h."source_changed"),
-  max(h."sample_count"),
-  max(h."online_count"),
-  max(h."unknown_count"),
-  max(h."player_data_count"),
-  max(h."players_total"),
-  max(h."players_peak"),
-  max(h."capacity_data_count"),
-  max(h."capacity_total"),
-  max(h."capacity_latest"),
-  max(h."occupancy_data_count"),
-  max(h."occupancy_basis_points_total"),
-  max(h."last_sample_at")
-FROM "server_endpoint_player_hourly" h
-GROUP BY h."server_id", h."bucket_start";--> statement-breakpoint
+  c."server_id",
+  c."bucket_start",
+  c."edition",
+  c."source_changed",
+  c."sample_count",
+  c."online_count",
+  c."unknown_count",
+  c."player_data_count",
+  c."players_total",
+  CASE WHEN c."players_peak" IS NULL THEN m."players_peak"
+       WHEN m."players_peak" IS NULL THEN c."players_peak"
+       ELSE greatest(c."players_peak", m."players_peak") END,
+  c."capacity_data_count",
+  c."capacity_total",
+  CASE WHEN c."capacity_latest" IS NULL THEN m."capacity_latest"
+       WHEN m."capacity_latest" IS NULL THEN c."capacity_latest"
+       ELSE greatest(c."capacity_latest", m."capacity_latest") END,
+  c."occupancy_data_count",
+  c."occupancy_basis_points_total",
+  c."last_sample_at"
+FROM canonical c
+INNER JOIN interval_maxima m
+  ON m."server_id" = c."server_id"
+ AND m."bucket_start" = c."bucket_start";--> statement-breakpoint
 
 INSERT INTO "server_player_hourly" ("server_id", "bucket_start", "source_changed", "sample_count", "online_count", "unknown_count", "player_data_count", "players_total", "players_peak", "capacity_data_count", "capacity_total", "capacity_latest", "occupancy_data_count", "occupancy_basis_points_total", "last_observed_at")
 SELECT

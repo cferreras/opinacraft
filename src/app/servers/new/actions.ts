@@ -15,6 +15,8 @@ import {
   ServerInputError,
   type CreateServerInput,
 } from "@/lib/servers/validation";
+import { parseEnabledPort } from "@/lib/servers/endpoint-fields";
+import { serverValidationField } from "@/lib/servers/form-validation";
 import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type CreateServerState = {
@@ -26,16 +28,6 @@ export type CreateServerState = {
 function formValue(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value : undefined;
-}
-
-function optionalPort(value: string | undefined) {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  const port = Number(trimmed);
-  return Number.isInteger(port) ? port : Number.NaN;
 }
 
 function getInput(formData: FormData): CreateServerInput {
@@ -50,8 +42,8 @@ function getInput(formData: FormData): CreateServerInput {
     discordUrl: formValue(formData, "discordUrl"),
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
     host: formValue(formData, "host"),
-    javaPort: javaEnabled ? optionalPort(formValue(formData, "javaPort")) : undefined,
-    bedrockPort: bedrockEnabled ? optionalPort(formValue(formData, "bedrockPort")) : undefined,
+    javaPort: parseEnabledPort(formValue(formData, "javaPort"), javaEnabled),
+    bedrockPort: parseEnabledPort(formValue(formData, "bedrockPort"), bedrockEnabled),
   };
 }
 
@@ -59,20 +51,8 @@ function zodFieldErrors(error: z.ZodError) {
   const fieldErrors: CreateServerState["fieldErrors"] = {};
 
   for (const issue of error.issues) {
-    const field = issue.path[0];
-    if (
-      field === "name" ||
-      field === "description" ||
-      field === "websiteUrl" ||
-      field === "storeUrl" ||
-      field === "discordUrl" ||
-      field === "tags" ||
-      field === "endpoints"
-    ) {
-      fieldErrors[field] ??= issue.message;
-    } else if (field === "host" || field === "javaPort" || field === "bedrockPort") {
-      fieldErrors.endpoints ??= issue.message;
-    }
+    const field = serverValidationField(issue.path);
+    if (field && field !== "publicationStatus") fieldErrors[field] ??= issue.message;
   }
 
   return fieldErrors;

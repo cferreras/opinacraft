@@ -4,6 +4,11 @@ import { domainToASCII } from "node:url";
 import * as z from "zod";
 
 import { isPublicAddress } from "../minecraft/address.ts";
+import {
+  defaultMinecraftPort,
+  MINECRAFT_PORT_MAX,
+  MINECRAFT_PORT_MIN,
+} from "./endpoint-fields.ts";
 
 export const minecraftEditions = ["java", "bedrock"] as const;
 export type MinecraftEdition = (typeof minecraftEditions)[number];
@@ -53,7 +58,7 @@ const endpointSchema = z
   .object({
     edition: z.enum(minecraftEditions),
     host: z.string().trim().min(1).max(253),
-    port: z.number().int().min(1_024, "Use a public port between 1024 and 65535.").max(65_535).optional(),
+    port: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
   })
   .strict();
 
@@ -66,8 +71,8 @@ export const createServerInputSchema = z
     discordUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     tags: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
     host: z.string().trim().min(1).max(253).optional(),
-    javaPort: z.number().int().min(1_024, "Use a public port between 1024 and 65535.").max(65_535).optional(),
-    bedrockPort: z.number().int().min(1_024, "Use a public port between 1024 and 65535.").max(65_535).optional(),
+    javaPort: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
+    bedrockPort: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
     endpoints: z.array(endpointSchema).min(1).max(2).optional(),
   })
   .strict()
@@ -237,7 +242,7 @@ export function normalizeHttpUrl(value: string, field: ServerUrlField) {
 }
 
 export function defaultPortForEdition(edition: MinecraftEdition) {
-  return edition === "java" ? 25_565 : 19_132;
+  return defaultMinecraftPort(edition);
 }
 
 export function slugifyServerName(name: string) {

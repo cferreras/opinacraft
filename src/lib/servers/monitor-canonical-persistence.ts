@@ -12,11 +12,13 @@ import {
 } from "@/schema";
 import type { CanonicalMonitorObservation } from "./monitor-worker-core";
 import { getAvailabilityTransition, type AvailabilityTransition } from "./monitor-availability";
+import { getMonitorNotificationDedupeKey } from "./monitor-persistence-helpers";
 
 const FAILURE_THRESHOLD = 3;
 const RAW_RETENTION_MS = 8 * 24 * 60 * 60 * 1000;
 const HOURLY_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 const PRUNE_BATCH_SIZE = 5_000;
+const PRUNE_MAX_ROWS_PER_RUN = 20_000;
 
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -66,6 +68,7 @@ async function upsertCanonicalHourly(tx: DatabaseTransaction, observation: Canon
     target: [serverPlayerHourly.serverId, serverPlayerHourly.bucketStart],
     set: {
       lastProbeEdition: observation.probeEdition,
+      sourceChanged: sql`case when ${serverPlayerHourly.sourceChanged} = 1 then 1 when ${serverPlayerHourly.lastProbeEdition} is not null and ${serverPlayerHourly.lastProbeEdition} <> ${observation.probeEdition} then 1 else ${serverPlayerHourly.sourceChanged} end`,
       sampleCount: sql`${serverPlayerHourly.sampleCount} + 1`,
       onlineCount: observation.status === "online" ? sql`${serverPlayerHourly.onlineCount} + 1` : serverPlayerHourly.onlineCount,
       unknownCount: observation.status === "unknown" ? sql`${serverPlayerHourly.unknownCount} + 1` : serverPlayerHourly.unknownCount,
@@ -156,11 +159,11 @@ export async function applyCanonicalObservation(
     }).where(eq(servers.id, observation.serverId));
   }
 
-  if (transition) await enqueueServerNotification(tx, observation.serverId, transition, observation.probeEdition);
+  if (transition) await enqueueServerNotification(tx, observation.serverId, transition, observation.probeEdition, observation.observedAt);
   return { persisted: true, duplicate: false, transition };
 }
 
-async function enqueueServerNotification(tx: DatabaseTransaction, serverId: string, transition: "down" | "recovered", edition: "java" | "bedrock") {
+async function enqueueServerNotification(tx: DatabaseTransaction, serverId: string, transition: "down" | "recovered", edition: "java" | "bedrock", observedAt: Date) {
   const [owner] = await tx.select({ userId: serverMembers.userId, email: user.email })
     .from(serverMembers)
     .innerJoin(user, eq(serverMembers.userId, user.id))
@@ -168,7 +171,7 @@ async function enqueueServerNotification(tx: DatabaseTransaction, serverId: stri
     .limit(1);
   if (!owner?.email) return;
   await tx.insert(notificationJobs).values({
-    dedupeKey: `server-monitor:${serverId}:${transition}:${new Date().toISOString().slice(0, 10)}`,
+    dedupeKey: getMonitorNotificationDedupeKey(serverId, transition, observedAt),
     recipientUserId: owner.userId,
     recipientEmail: owner.email,
     template: transition === "down" ? "endpoint_down" : "endpoint_recovered",
@@ -197,12 +200,14 @@ export async function updateCanonicalAvailability(tx: DatabaseTransaction, now =
     publicationStatus: servers.publicationStatus,
     moderationStatus: servers.moderationStatus,
     availabilityHiddenAt: servers.availabilityHiddenAt,
+    createdAt: servers.createdAt,
     healthStatus: servers.monitorHealthStatus,
     lastCheckedAt: servers.monitorLastCheckedAt,
     lastOnlineAt: servers.monitorLastOnlineAt,
   }).from(servers).where(and(
     eq(servers.publicationStatus, "published"),
     eq(servers.moderationStatus, "active"),
+    sql`${servers.monitorLastCheckedAt} is not null and ${servers.monitorLastCheckedAt} >= now() - (case when ${servers.availabilityHiddenAt} is null then interval '30 minutes' else interval '120 minutes' end)`,
   ));
 
   const transitions = new Map<string, AvailabilityTransition>();
@@ -252,26 +257,41 @@ export async function updateCanonicalAvailability(tx: DatabaseTransaction, now =
 export async function pruneCanonicalPlayerHistory(tx: DatabaseTransaction, now = new Date()) {
   const rawCutoff = new Date(now.getTime() - RAW_RETENTION_MS);
   const hourlyCutoff = new Date(now.getTime() - HOURLY_RETENTION_MS);
-  await tx.execute(sql`
-    with doomed as (
-      select ctid
-      from server_player_snapshots
-      where scheduled_at < ${rawCutoff}
-      limit ${PRUNE_BATCH_SIZE}
-    )
-    delete from server_player_snapshots s
-    using doomed
-    where s.ctid = doomed.ctid
-  `);
-  await tx.execute(sql`
-    with doomed as (
-      select ctid
-      from server_player_hourly
-      where bucket_start < ${hourlyCutoff}
-      limit ${PRUNE_BATCH_SIZE}
-    )
-    delete from server_player_hourly h
-    using doomed
-    where h.ctid = doomed.ctid
-  `);
+  let remaining = PRUNE_MAX_ROWS_PER_RUN;
+
+  for (const [table, cutoff] of [
+    ["server_player_snapshots", rawCutoff],
+    ["server_player_hourly", hourlyCutoff],
+  ] as const) {
+    while (remaining > 0) {
+      const batchSize = Math.min(PRUNE_BATCH_SIZE, remaining);
+      const result = table === "server_player_snapshots"
+        ? await tx.execute(sql`
+            with doomed as (
+              select ctid
+              from server_player_snapshots
+              where scheduled_at < ${cutoff}
+              limit ${batchSize}
+            )
+            delete from server_player_snapshots s
+            using doomed
+            where s.ctid = doomed.ctid
+          `)
+        : await tx.execute(sql`
+            with doomed as (
+              select ctid
+              from server_player_hourly
+              where bucket_start < ${cutoff}
+              limit ${batchSize}
+            )
+            delete from server_player_hourly h
+            using doomed
+            where h.ctid = doomed.ctid
+          `);
+      const deleted = Number((result as { rowCount?: number }).rowCount ?? 0);
+      remaining -= deleted;
+      if (deleted < batchSize) break;
+    }
+    if (remaining === 0) break;
+  }
 }

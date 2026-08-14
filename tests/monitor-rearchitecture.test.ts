@@ -105,7 +105,7 @@ test("manual monitor reconciliation enqueues work without running network probes
       due: 3,
       oldestDueAt: "2026-08-14T10:00:00.000Z",
     }),
-  } as never);
+  });
 
   const response = await handler(new Request("http://localhost/api/internal/monitor/run", {
     method: "POST",

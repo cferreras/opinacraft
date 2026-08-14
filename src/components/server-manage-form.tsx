@@ -14,6 +14,12 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { SectionHeading } from "@/components/section-heading";
 import { TagCombobox } from "@/components/tag-combobox";
+import {
+  defaultMinecraftPort,
+  MINECRAFT_EDITION_LABELS,
+  MINECRAFT_PORT_MAX,
+  MINECRAFT_PORT_MIN,
+} from "@/lib/servers/endpoint-fields";
 
 type Endpoint = { edition: "java" | "bedrock"; host: string; port: number };
 
@@ -31,9 +37,9 @@ export function ServerManageForm({ server }: { server: { id: string; slug: strin
 
 function EditionPortFields({ edition, endpoint, disabled }: { edition: "java" | "bedrock"; endpoint?: Endpoint; disabled: boolean }) {
   const java = edition === "java";
-  const label = java ? "Java" : "Bedrock";
-  const defaultPort = java ? 25_565 : 19_132;
-  return <fieldset className={`rounded-lg border p-4 transition-colors ${endpoint ? "border-primary/30 bg-primary/5" : "bg-muted/20"}`}><legend className="sr-only">{label}</legend><div className="flex items-start gap-3"><span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">{java ? <Monitor className="size-4" /> : <Smartphone className="size-4" />}</span><div className="min-w-0 flex-1"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-semibold">{label}</p><p className="mt-0.5 text-xs text-muted-foreground">Minecraft {label} Edition</p></div><label className="inline-flex min-h-9 cursor-pointer items-center gap-2 self-start rounded-md border bg-background px-2.5 text-xs font-medium">{disabled ? <input type="hidden" name={`${edition}Enabled`} value={endpoint ? "on" : ""} /> : null}<Checkbox name={`${edition}Enabled`} defaultChecked={Boolean(endpoint)} disabled={disabled} /> Activar</label></div><div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_7.5rem]"><Field><FieldLabel htmlFor={`${edition}-manage-port`}>Puerto {label}</FieldLabel>{disabled ? <input type="hidden" name={`${edition}Port`} value={endpoint?.port ?? ""} /> : null}<Input id={`${edition}-manage-port`} name={`${edition}Port`} type="number" min={1_024} max={65_535} defaultValue={endpoint?.port ?? defaultPort} disabled={disabled} required={Boolean(endpoint)} /></Field></div></div></div></fieldset>;
+  const label = MINECRAFT_EDITION_LABELS[edition];
+  const defaultPort = defaultMinecraftPort(edition);
+  return <fieldset className={`rounded-lg border p-4 transition-colors ${endpoint ? "border-primary/30 bg-primary/5" : "bg-muted/20"}`}><legend className="sr-only">{label}</legend><div className="flex items-start gap-3"><span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">{java ? <Monitor className="size-4" /> : <Smartphone className="size-4" />}</span><div className="min-w-0 flex-1"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-semibold">{label}</p><p className="mt-0.5 text-xs text-muted-foreground">Minecraft {label} Edition</p></div><label className="inline-flex min-h-9 cursor-pointer items-center gap-2 self-start rounded-md border bg-background px-2.5 text-xs font-medium">{disabled ? <input type="hidden" name={`${edition}Enabled`} value={endpoint ? "on" : ""} /> : null}<Checkbox name={`${edition}Enabled`} defaultChecked={Boolean(endpoint)} disabled={disabled} /> Activar</label></div><div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_7.5rem]"><Field><FieldLabel htmlFor={`${edition}-manage-port`}>Puerto {label}</FieldLabel>{disabled ? <input type="hidden" name={`${edition}Port`} value={endpoint?.port ?? ""} /> : null}<Input id={`${edition}-manage-port`} name={`${edition}Port`} type="number" min={MINECRAFT_PORT_MIN} max={MINECRAFT_PORT_MAX} defaultValue={endpoint?.port ?? defaultPort} disabled={disabled} required={Boolean(endpoint)} /></Field></div></div></div></fieldset>;
 }
 
 function ErrorText({ children }: { children: string }) { return <p role="alert" className="text-sm text-destructive">{children}</p>; }

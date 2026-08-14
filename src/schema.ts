@@ -2,6 +2,7 @@ import {
   check,
   bytea,
   bigint,
+  foreignKey,
   integer,
   index,
   pgEnum,
@@ -671,8 +672,7 @@ export const serverPlayerSnapshots = pgTable(
   "server_player_snapshots",
   {
     serverId: uuid("server_id")
-      .notNull()
-      .references(() => servers.id, { onDelete: "cascade" }),
+      .notNull(),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
     observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
     recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
@@ -683,10 +683,20 @@ export const serverPlayerSnapshots = pgTable(
     playersMax: integer("players_max"),
     version: varchar("version", { length: 100 }),
     latencyMs: integer("latency_ms"),
-    jobId: uuid("job_id").references(() => serverMonitorJobs.id, { onDelete: "set null" }),
+    jobId: uuid("job_id"),
   },
   (table) => [
-    primaryKey({ columns: [table.serverId, table.scheduledAt] }),
+    primaryKey({ name: "server_player_snapshots_pkey", columns: [table.serverId, table.scheduledAt] }),
+    foreignKey({
+      name: "server_player_snapshots_server_id_servers_id_fkey",
+      columns: [table.serverId],
+      foreignColumns: [servers.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "server_player_snapshots_job_id_server_monitor_jobs_id_fkey",
+      columns: [table.jobId],
+      foreignColumns: [serverMonitorJobs.id],
+    }).onDelete("set null"),
     index("server_player_snapshots_server_observed_idx").on(table.serverId, table.observedAt),
     check("server_player_snapshots_current_check", sql`${table.playersCurrent} is null or ${table.playersCurrent} >= 0`),
     check("server_player_snapshots_max_check", sql`${table.playersMax} is null or ${table.playersMax} >= 0`),

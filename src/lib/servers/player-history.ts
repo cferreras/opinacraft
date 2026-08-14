@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -9,7 +9,7 @@ import {
   serverPlayerSnapshots,
   servers,
 } from "@/schema";
-import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } from "./monitor-scheduling";
+import { getMonitorCadenceMinutes, getMonitorFreshness, PUBLIC_MONITOR_CADENCE_MINUTES, type MonitorFreshness } from "./monitor-scheduling";
 
 export const historyPeriods = ["24h", "7d", "30d", "90d"] as const;
 export const historyEditionFilters = ["all", "java", "bedrock"] as const;
@@ -74,9 +74,7 @@ const windows: Record<HistoryPeriod, HistoryWindow> = {
   "90d": { durationMs: 90 * 24 * 60 * 60 * 1000, resolutionMinutes: 720, raw: false },
 };
 
-const MONITOR_SAMPLE_INTERVAL_MINUTES = 15;
-
-export function getExpectedSamplesPerPoint(resolutionMinutes: number, cadenceMinutes = MONITOR_SAMPLE_INTERVAL_MINUTES) {
+export function getExpectedSamplesPerPoint(resolutionMinutes: number, cadenceMinutes = PUBLIC_MONITOR_CADENCE_MINUTES) {
   return Math.max(1, Math.round(resolutionMinutes / cadenceMinutes));
 }
 
@@ -90,7 +88,7 @@ export function getExpectedSamplesForSlot(
   slot: Date,
   resolutionMinutes: number,
   cadenceHistory: readonly MonitorCadencePeriod[],
-  fallbackCadenceMinutes = MONITOR_SAMPLE_INTERVAL_MINUTES,
+  fallbackCadenceMinutes = PUBLIC_MONITOR_CADENCE_MINUTES,
 ) {
   if (cadenceHistory.length === 0) return getExpectedSamplesPerPoint(resolutionMinutes, fallbackCadenceMinutes);
 
@@ -136,6 +134,7 @@ function normalizeEdition(value: string | null | undefined): HistoryEditionFilte
 
 export function parseHistoryParams(periodValue?: string | null, editionValue?: string | null) {
   const period = normalizePeriod(periodValue) ?? "24h";
+  // Java and Bedrock remain accepted for old links, but the public history is canonical per server.
   normalizeEdition(editionValue);
   return { period, edition: "all" as const };
 }
@@ -251,7 +250,7 @@ function buildSlots(durationMs: number, resolutionMinutes: number, now: Date) {
   return Array.from({ length: count }, (_, index) => new Date(start.getTime() + index * resolutionMs));
 }
 
-async function getMonitorMeta(serverId: string, now: Date) {
+async function getMonitorMeta(serverId: string, now: Date, historyStart: Date, historyEnd: Date) {
   const [[server], verifiedRows, cadenceHistory] = await Promise.all([
     db.select({
       publicationStatus: servers.publicationStatus,
@@ -265,7 +264,11 @@ async function getMonitorMeta(serverId: string, now: Date) {
       cadenceMinutes: serverMonitorScheduleHistory.cadenceMinutes,
       effectiveFrom: serverMonitorScheduleHistory.effectiveFrom,
       effectiveTo: serverMonitorScheduleHistory.effectiveTo,
-    }).from(serverMonitorScheduleHistory).where(eq(serverMonitorScheduleHistory.serverId, serverId)).orderBy(asc(serverMonitorScheduleHistory.effectiveFrom)),
+    }).from(serverMonitorScheduleHistory).where(and(
+      eq(serverMonitorScheduleHistory.serverId, serverId),
+      lte(serverMonitorScheduleHistory.effectiveFrom, historyEnd),
+      or(isNull(serverMonitorScheduleHistory.effectiveTo), gte(serverMonitorScheduleHistory.effectiveTo, historyStart)),
+    )).orderBy(asc(serverMonitorScheduleHistory.effectiveFrom)),
   ]);
   const [verified] = verifiedRows;
   const cadenceMinutes = server ? getMonitorCadenceMinutes({
@@ -286,7 +289,7 @@ async function getMonitorMeta(serverId: string, now: Date) {
 export async function queryPlayerHistory(serverId: string, period: HistoryPeriod, editionFilter: HistoryEditionFilter = "all", now = new Date()): Promise<PlayerHistoryResponse> {
   void editionFilter;
   const baseWindow = windows[period];
-  const meta = await getMonitorMeta(serverId, now);
+  const meta = await getMonitorMeta(serverId, now, new Date(now.getTime() - baseWindow.durationMs), now);
   const resolutionMinutes = Math.max(baseWindow.resolutionMinutes, meta.cadenceMinutes ?? baseWindow.resolutionMinutes);
   const raw = baseWindow.raw && resolutionMinutes === 15;
   const slots = buildSlots(baseWindow.durationMs, resolutionMinutes, now);
@@ -296,6 +299,7 @@ export async function queryPlayerHistory(serverId: string, period: HistoryPeriod
   const buckets = slots.map(() => [] as Array<BucketRow>);
 
   if (raw) {
+    // Query by scheduledAt because it is the canonical idempotency slot; observedAt is used for labels and statistics.
     const rows = await db.select({
       status: serverPlayerSnapshots.status,
       playersCurrent: serverPlayerSnapshots.playersCurrent,
@@ -310,6 +314,7 @@ export async function queryPlayerHistory(serverId: string, period: HistoryPeriod
       buckets[index]!.push({ status: row.status, playersCurrent: row.playersCurrent, playersMax: row.playersMax, sampledAt: row.observedAt, historySourceId: row.probeEdition ?? "server", playersPeak: row.playersCurrent });
     }
   } else {
+    // Keep the lower bound at the first visible bucket; older compatibility padding is not part of this response.
     const rows = await db.select({
       bucketStart: serverPlayerHourly.bucketStart,
       sampleCount: serverPlayerHourly.sampleCount,
@@ -326,7 +331,7 @@ export async function queryPlayerHistory(serverId: string, period: HistoryPeriod
       lastObservedAt: serverPlayerHourly.lastObservedAt,
       lastProbeEdition: serverPlayerHourly.lastProbeEdition,
       sourceChanged: serverPlayerHourly.sourceChanged,
-    }).from(serverPlayerHourly).where(and(eq(serverPlayerHourly.serverId, serverId), gte(serverPlayerHourly.bucketStart, new Date(first.getTime() - resolutionMs)), lte(serverPlayerHourly.bucketStart, last))).orderBy(asc(serverPlayerHourly.bucketStart));
+    }).from(serverPlayerHourly).where(and(eq(serverPlayerHourly.serverId, serverId), gte(serverPlayerHourly.bucketStart, first), lte(serverPlayerHourly.bucketStart, last))).orderBy(asc(serverPlayerHourly.bucketStart));
     for (const row of rows) {
       const index = Math.floor((row.bucketStart.getTime() - first.getTime()) / resolutionMs);
       if (index < 0 || index >= buckets.length) continue;
@@ -357,7 +362,7 @@ export async function queryPlayerHistory(serverId: string, period: HistoryPeriod
     "server",
     slots,
     buckets,
-    (slot) => getExpectedSamplesForSlot(slot, resolutionMinutes, meta.cadenceHistory, meta.cadenceMinutes ?? MONITOR_SAMPLE_INTERVAL_MINUTES),
+    (slot) => getExpectedSamplesForSlot(slot, resolutionMinutes, meta.cadenceHistory, meta.cadenceMinutes ?? PUBLIC_MONITOR_CADENCE_MINUTES),
   );
   return { period, edition: "all", resolutionMinutes, cadenceMinutes: meta.cadenceMinutes, lastUpdatedAt: meta.lastUpdatedAt?.toISOString() ?? null, freshness: meta.freshness, probeEdition: meta.probeEdition, generatedAt: now.toISOString(), series: [series] };
 }

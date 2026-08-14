@@ -38,6 +38,8 @@ import {
   ServerInputError,
   type UpdateServerInput,
 } from "@/lib/servers/validation";
+import { parseEnabledPort } from "@/lib/servers/endpoint-fields";
+import { serverValidationField } from "@/lib/servers/form-validation";
 import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type ManageState = {
@@ -48,13 +50,6 @@ export type ManageState = {
 function formValue(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value : undefined;
-}
-
-function optionalPort(value: string | undefined) {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  const port = Number(trimmed);
-  return Number.isInteger(port) ? port : Number.NaN;
 }
 
 function getServerInput(formData: FormData): UpdateServerInput {
@@ -69,8 +64,8 @@ function getServerInput(formData: FormData): UpdateServerInput {
     discordUrl: formValue(formData, "discordUrl"),
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
     host: formValue(formData, "host"),
-    javaPort: javaEnabled ? optionalPort(formValue(formData, "javaPort")) : undefined,
-    bedrockPort: bedrockEnabled ? optionalPort(formValue(formData, "bedrockPort")) : undefined,
+    javaPort: parseEnabledPort(formValue(formData, "javaPort"), javaEnabled),
+    bedrockPort: parseEnabledPort(formValue(formData, "bedrockPort"), bedrockEnabled),
   };
 }
 
@@ -101,7 +96,10 @@ export async function updateServerAction(
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { formError: error.issues[0]?.message ?? "Invalid server details." };
+      const field = serverValidationField(error.issues[0]?.path ?? []);
+      return field
+        ? { fieldErrors: { [field]: error.issues[0]?.message ?? "Invalid server details." } }
+        : { formError: error.issues[0]?.message ?? "Invalid server details." };
     }
     if (error instanceof ServerInputError) {
       const field = error.field === "host" || error.field === "port" ? "endpoints" : error.field;

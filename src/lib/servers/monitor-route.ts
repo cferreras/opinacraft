@@ -1,5 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 
+import type { MonitorDispatchResult } from "./monitor-queue";
+
 type MonitorLogger = Pick<Console, "info" | "error">;
 
 export type MonitorRunResult = {
@@ -11,11 +13,6 @@ export type MonitorRunResult = {
 };
 
 export type MonitorRunner = () => Promise<MonitorRunResult | null>;
-export type MonitorDispatchResult = {
-  enqueued: number;
-  due: number;
-  oldestDueAt: string | null;
-};
 export type MonitorDispatcher = () => Promise<MonitorDispatchResult>;
 
 function constantTimeEqual(actual: string, expected: string) {

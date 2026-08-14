@@ -31,6 +31,7 @@ import { ServerUtilityActions } from "@/components/server-utility-actions";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getServerSession } from "@/lib/session";
+import { formatServerDateTime } from "@/lib/servers/display";
 import { formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
 import { getPublishedServerBySlug, type ManagedServer } from "@/lib/servers/queries";
 import { queryPlayerHistory } from "@/lib/servers/player-history";
@@ -210,8 +211,8 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                   <div className="grid gap-3 text-sm">
                     <p className="text-xs font-semibold">Estado del servidor</p>
                     <div className="flex items-center gap-2.5"><span aria-hidden="true" className={`size-2.5 rounded-full ${statusDot(server.aggregateStatus)}`} /><span className={statusClass(server.aggregateStatus)}>{statusLabel(server.aggregateStatus)}</span></div>
-                      <div className="flex items-center gap-2.5 text-muted-foreground"><BarChart3 aria-hidden="true" className="size-4" /><span>{server.monitor.latencyMs !== null ? `${server.monitor.latencyMs} ms` : "Sin latencia"}</span></div>
-                    <div className="flex items-center gap-2.5 text-muted-foreground"><Clock3 aria-hidden="true" className="size-4" /><span>Última actualización: {dateLabel(server.monitor.lastUpdatedAt)}</span></div>
+                    <div className="flex items-center gap-2.5 text-muted-foreground"><BarChart3 aria-hidden="true" className="size-4" /><span>{server.monitor.latencyMs !== null ? `${server.monitor.latencyMs} ms` : "Sin latencia"}</span></div>
+                    <div className="flex items-center gap-2.5 text-muted-foreground"><Clock3 aria-hidden="true" className="size-4" /><span>Última actualización: {formatServerDateTime(server.monitor.lastUpdatedAt)}</span></div>
                     <div className="text-xs text-muted-foreground">Objetivo: {server.monitor.cadenceMinutes ? `cada ${server.monitor.cadenceMinutes} min` : "pendiente de monitorización"}{server.monitor.freshness === "stale" ? " · retrasada" : ""}</div>
                   </div>
                   <div className="grid gap-2.5">

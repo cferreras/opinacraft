@@ -1,7 +1,7 @@
 import dgram from "node:dgram";
 import crypto from "node:crypto";
 
-import type { MinecraftTarget } from "@/lib/minecraft/network";
+import { MinecraftAbortError, type MinecraftTarget } from "@/lib/minecraft/network";
 
 const MAGIC = Buffer.from("00ffff00fefefefefdfdfdfd12345678", "hex");
 const TIMEOUT_MS = 5_000;
@@ -25,7 +25,8 @@ function elapsedMilliseconds(startedAt: bigint) {
   return Math.max(0, Math.round(Number(process.hrtime.bigint() - startedAt) / 1_000_000));
 }
 
-export async function pingBedrockServer(target: MinecraftTarget): Promise<BedrockPingResult> {
+export async function pingBedrockServer(target: MinecraftTarget, signal?: AbortSignal): Promise<BedrockPingResult> {
+  if (signal?.aborted) throw new MinecraftAbortError();
   const socket = dgram.createSocket(target.connectHost.includes(":") ? "udp6" : "udp4");
   const timestamp = BigInt(Date.now());
   const guid = crypto.randomBytes(8);
@@ -37,10 +38,12 @@ export async function pingBedrockServer(target: MinecraftTarget): Promise<Bedroc
 
   return await new Promise<BedrockPingResult>((resolve, reject) => {
     let settled = false;
+    let abortHandler: (() => void) | undefined;
     const finish = (error?: Error, value?: BedrockPingResult) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (signal && abortHandler) signal.removeEventListener("abort", abortHandler);
       socket.close();
       if (error) reject(error); else resolve(value!);
     };
@@ -65,6 +68,12 @@ export async function pingBedrockServer(target: MinecraftTarget): Promise<Bedroc
       finish(undefined, { description, version: { name: fields[3] ?? "Bedrock", protocol: Number.isFinite(protocol) ? protocol : 0 }, players: { online, max }, latencyMs });
     });
     const timer = setTimeout(() => finish(new BedrockOfflineError()), TIMEOUT_MS);
+    if (signal) {
+      abortHandler = () => finish(new MinecraftAbortError());
+      if (signal.aborted) abortHandler();
+      else signal.addEventListener("abort", abortHandler, { once: true });
+    }
+    if (settled) return;
     const pingStartedAt = process.hrtime.bigint();
     socket.send(packet, target.port, target.connectHost, (error) => {
       if (error) finish(new BedrockOfflineError());
