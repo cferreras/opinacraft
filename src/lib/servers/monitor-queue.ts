@@ -53,7 +53,7 @@ export async function enqueueDueMonitorJobs(now = new Date(), limit = 100): Prom
         asc(servers.id),
       )
       .limit(limit)
-      .for("update", { skipLocked: true });
+      .for("update", { of: servers, skipLocked: true });
 
     if (candidates.length === 0) return { enqueued: 0, due: 0, oldestDueAt: null };
 
