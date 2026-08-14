@@ -5,7 +5,13 @@ import { user } from "./auth-schema";
 
 export const relations = defineRelations({ ...schema, user }, (r) => ({
   servers: {
+    networkTarget: r.one.serverNetworkTargets(),
     endpoints: r.many.serverEndpoints(),
+    monitorSchedule: r.one.serverMonitorSchedules(),
+    monitorScheduleHistory: r.many.serverMonitorScheduleHistory(),
+    monitorJobs: r.many.serverMonitorJobs(),
+    playerSnapshots: r.many.serverPlayerSnapshots(),
+    playerHourly: r.many.serverPlayerHourly(),
     members: r.many.serverMembers(),
     verifications: r.many.serverVerifications(),
     tags: r.many.serverTags(),
@@ -16,6 +22,47 @@ export const relations = defineRelations({ ...schema, user }, (r) => ({
   serverEndpoints: {
     server: r.one.servers({
       from: r.serverEndpoints.serverId,
+      to: r.servers.id,
+    }),
+  },
+  serverNetworkTargets: {
+    server: r.one.servers({
+      from: r.serverNetworkTargets.serverId,
+      to: r.servers.id,
+    }),
+  },
+  serverMonitorSchedules: {
+    server: r.one.servers({
+      from: r.serverMonitorSchedules.serverId,
+      to: r.servers.id,
+    }),
+  },
+  serverMonitorScheduleHistory: {
+    server: r.one.servers({
+      from: r.serverMonitorScheduleHistory.serverId,
+      to: r.servers.id,
+    }),
+  },
+  serverMonitorJobs: {
+    server: r.one.servers({
+      from: r.serverMonitorJobs.serverId,
+      to: r.servers.id,
+    }),
+    playerSnapshots: r.many.serverPlayerSnapshots(),
+  },
+  serverPlayerSnapshots: {
+    server: r.one.servers({
+      from: r.serverPlayerSnapshots.serverId,
+      to: r.servers.id,
+    }),
+    job: r.one.serverMonitorJobs({
+      from: r.serverPlayerSnapshots.jobId,
+      to: r.serverMonitorJobs.id,
+    }),
+  },
+  serverPlayerHourly: {
+    server: r.one.servers({
+      from: r.serverPlayerHourly.serverId,
       to: r.servers.id,
     }),
   },

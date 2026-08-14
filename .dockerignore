@@ -1,0 +1,14 @@
+.git
+.next
+.next-e2e
+.vercel
+node_modules
+.pnpm-store
+test-results
+audit-evidence
+*.png
+*.jpg
+*.webp
+.env
+.env.*
+!.env.example

@@ -4,6 +4,11 @@ import { domainToASCII } from "node:url";
 import * as z from "zod";
 
 import { isPublicAddress } from "../minecraft/address.ts";
+import {
+  defaultMinecraftPort,
+  MINECRAFT_PORT_MAX,
+  MINECRAFT_PORT_MIN,
+} from "./endpoint-fields.ts";
 
 export const minecraftEditions = ["java", "bedrock"] as const;
 export type MinecraftEdition = (typeof minecraftEditions)[number];
@@ -24,7 +29,10 @@ export type CreateServerInput = {
   storeUrl?: string;
   discordUrl?: string;
   tags?: string[];
-  endpoints: RawServerEndpoint[];
+  host?: string;
+  javaPort?: number;
+  bedrockPort?: number;
+  endpoints?: RawServerEndpoint[];
 };
 
 export type UpdateServerInput = CreateServerInput;
@@ -42,6 +50,7 @@ export type NormalizedCreateServerInput = {
   storeUrl: string | null;
   discordUrl: string | null;
   tags: string[];
+  host: string;
   endpoints: NormalizedServerEndpoint[];
 };
 
@@ -49,7 +58,7 @@ const endpointSchema = z
   .object({
     edition: z.enum(minecraftEditions),
     host: z.string().trim().min(1).max(253),
-    port: z.number().int().min(1_024, "Use a public port between 1024 and 65535.").max(65_535).optional(),
+    port: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
   })
   .strict();
 
@@ -61,10 +70,33 @@ export const createServerInputSchema = z
     storeUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     discordUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     tags: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
-    endpoints: z.array(endpointSchema).min(1).max(2),
+    host: z.string().trim().min(1).max(253).optional(),
+    javaPort: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
+    bedrockPort: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
+    endpoints: z.array(endpointSchema).min(1).max(2).optional(),
   })
   .strict()
   .superRefine((input, ctx) => {
+    const usesSharedHost = input.host !== undefined;
+    const usesLegacyEndpoints = input.endpoints !== undefined;
+    if (usesSharedHost === usesLegacyEndpoints) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["host"],
+        message: "Provide one shared host and its ports.",
+      });
+      return;
+    }
+
+    if (usesSharedHost && input.javaPort === undefined && input.bedrockPort === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["host"],
+        message: "Enable at least one Minecraft edition.",
+      });
+    }
+
+    if (!input.endpoints) return;
     const editions = new Set(input.endpoints.map((endpoint) => endpoint.edition));
 
     if (editions.size !== input.endpoints.length) {
@@ -210,7 +242,7 @@ export function normalizeHttpUrl(value: string, field: ServerUrlField) {
 }
 
 export function defaultPortForEdition(edition: MinecraftEdition) {
-  return edition === "java" ? 25_565 : 19_132;
+  return defaultMinecraftPort(edition);
 }
 
 export function slugifyServerName(name: string) {
@@ -236,19 +268,28 @@ export function normalizeCreateServerInput(
     discordUrl: emptyToUndefined(input.discordUrl),
   });
 
-  const endpoints = parsed.endpoints.map((endpoint) => ({
-    edition: endpoint.edition,
-    host: normalizeHost(endpoint.host),
-    port: endpoint.port ?? defaultPortForEdition(endpoint.edition),
-  }));
+  const legacyHosts = parsed.endpoints?.map((endpoint) => normalizeHost(endpoint.host)) ?? [];
+  const host = normalizeHost(parsed.host ?? legacyHosts[0] ?? "");
+  if (legacyHosts.some((candidate) => candidate !== host)) {
+    throw new ServerInputError("Use the same host for Java and Bedrock.", "host");
+  }
 
-  for (const endpoint of endpoints) {
-    if (!isPublicHost(endpoint.host)) {
-      throw new ServerInputError(
-        "Use a public Minecraft hostname or IP address.",
-        "host",
-      );
-    }
+  const endpoints = parsed.endpoints
+    ? parsed.endpoints.map((endpoint) => ({
+      edition: endpoint.edition,
+      host,
+      port: endpoint.port ?? defaultPortForEdition(endpoint.edition),
+    }))
+    : [
+      ...(parsed.javaPort === undefined ? [] : [{ edition: "java" as const, host, port: parsed.javaPort }]),
+      ...(parsed.bedrockPort === undefined ? [] : [{ edition: "bedrock" as const, host, port: parsed.bedrockPort }]),
+    ];
+
+  if (!isPublicHost(host)) {
+    throw new ServerInputError(
+      "Use a public Minecraft hostname or IP address.",
+      "host",
+    );
   }
 
   return {
@@ -264,6 +305,7 @@ export function normalizeCreateServerInput(
       ? normalizeHttpUrl(parsed.discordUrl, "discordUrl")
       : null,
     tags: parsed.tags ?? [],
+    host,
     endpoints,
   };
 }

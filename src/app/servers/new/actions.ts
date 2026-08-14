@@ -14,8 +14,9 @@ import {
 import {
   ServerInputError,
   type CreateServerInput,
-  minecraftEditions,
 } from "@/lib/servers/validation";
+import { parseEnabledPort } from "@/lib/servers/endpoint-fields";
+import { serverValidationField } from "@/lib/servers/form-validation";
 import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type CreateServerState = {
@@ -29,30 +30,9 @@ function formValue(formData: FormData, key: string) {
   return typeof value === "string" ? value : undefined;
 }
 
-function optionalPort(value: string | undefined) {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  const port = Number(trimmed);
-  return Number.isInteger(port) ? port : Number.NaN;
-}
-
 function getInput(formData: FormData): CreateServerInput {
-  const endpoints: CreateServerInput["endpoints"] = [];
-
-  for (const edition of minecraftEditions) {
-    if (formData.get(`${edition}Enabled`) !== "on") {
-      continue;
-    }
-
-    endpoints.push({
-      edition,
-      host: formValue(formData, `${edition}Host`) ?? "",
-      port: optionalPort(formValue(formData, `${edition}Port`)),
-    });
-  }
+  const javaEnabled = formData.get("javaEnabled") === "on";
+  const bedrockEnabled = formData.get("bedrockEnabled") === "on";
 
   return {
     name: formValue(formData, "name") ?? "",
@@ -61,7 +41,9 @@ function getInput(formData: FormData): CreateServerInput {
     storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
-    endpoints,
+    host: formValue(formData, "host"),
+    javaPort: parseEnabledPort(formValue(formData, "javaPort"), javaEnabled),
+    bedrockPort: parseEnabledPort(formValue(formData, "bedrockPort"), bedrockEnabled),
   };
 }
 
@@ -69,18 +51,8 @@ function zodFieldErrors(error: z.ZodError) {
   const fieldErrors: CreateServerState["fieldErrors"] = {};
 
   for (const issue of error.issues) {
-    const field = issue.path[0];
-    if (
-      field === "name" ||
-      field === "description" ||
-      field === "websiteUrl" ||
-      field === "storeUrl" ||
-      field === "discordUrl" ||
-      field === "tags" ||
-      field === "endpoints"
-    ) {
-      fieldErrors[field] ??= issue.message;
-    }
+    const field = serverValidationField(issue.path);
+    if (field && field !== "publicationStatus") fieldErrors[field] ??= issue.message;
   }
 
   return fieldErrors;

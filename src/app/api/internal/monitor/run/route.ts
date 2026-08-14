@@ -1,13 +1,13 @@
 import { serverEnv } from "@/env/server";
-import { runEndpointMonitor } from "@/lib/servers/monitor";
+import { enqueueDueMonitorJobs } from "@/lib/servers/monitor-queue";
 import { createMonitorPostHandler, methodNotAllowed } from "@/lib/servers/monitor-route";
 
 export const runtime = "nodejs";
-export const maxDuration = 180;
+export const maxDuration = 15;
 
 export const POST = createMonitorPostHandler({
   expectedSecret: serverEnv.CRON_MONITOR_SECRET,
-  runMonitor: runEndpointMonitor,
+  enqueueMonitor: () => enqueueDueMonitorJobs(),
 });
 
 export function GET() {

@@ -35,10 +35,11 @@ import {
 import { ServerPermissionError } from "@/lib/servers/permissions";
 import { databaseConstraint, databaseErrorCode } from "@/lib/db-errors";
 import {
-  minecraftEditions,
   ServerInputError,
   type UpdateServerInput,
 } from "@/lib/servers/validation";
+import { parseEnabledPort } from "@/lib/servers/endpoint-fields";
+import { serverValidationField } from "@/lib/servers/form-validation";
 import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type ManageState = {
@@ -51,23 +52,9 @@ function formValue(formData: FormData, key: string) {
   return typeof value === "string" ? value : undefined;
 }
 
-function optionalPort(value: string | undefined) {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  const port = Number(trimmed);
-  return Number.isInteger(port) ? port : Number.NaN;
-}
-
 function getServerInput(formData: FormData): UpdateServerInput {
-  const endpoints: UpdateServerInput["endpoints"] = [];
-  for (const edition of minecraftEditions) {
-    if (formData.get(`${edition}Enabled`) !== "on") continue;
-    endpoints.push({
-      edition,
-      host: formValue(formData, `${edition}Host`) ?? "",
-      port: optionalPort(formValue(formData, `${edition}Port`)),
-    });
-  }
+  const javaEnabled = formData.get("javaEnabled") === "on";
+  const bedrockEnabled = formData.get("bedrockEnabled") === "on";
 
   return {
     name: formValue(formData, "name") ?? "",
@@ -76,7 +63,9 @@ function getServerInput(formData: FormData): UpdateServerInput {
     storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
-    endpoints,
+    host: formValue(formData, "host"),
+    javaPort: parseEnabledPort(formValue(formData, "javaPort"), javaEnabled),
+    bedrockPort: parseEnabledPort(formValue(formData, "bedrockPort"), bedrockEnabled),
   };
 }
 
@@ -107,7 +96,10 @@ export async function updateServerAction(
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { formError: error.issues[0]?.message ?? "Invalid server details." };
+      const field = serverValidationField(error.issues[0]?.path ?? []);
+      return field
+        ? { fieldErrors: { [field]: error.issues[0]?.message ?? "Invalid server details." } }
+        : { formError: error.issues[0]?.message ?? "Invalid server details." };
     }
     if (error instanceof ServerInputError) {
       const field = error.field === "host" || error.field === "port" ? "endpoints" : error.field;

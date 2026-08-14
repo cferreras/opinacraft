@@ -99,20 +99,19 @@ límites publicados por Vercel.
 - Cambiar una dirección invalidará únicamente ese endpoint.
 - Si un servidor se queda sin endpoints verificados, dejará de ser visible sin
   perder la intención de publicación de su propietario.
-- Guardar en cada endpoint:
-  - estado `unknown`, `online` u `offline`;
-  - jugadores actuales y máximos;
-  - versión, latencia y última comprobación;
-  - última disponibilidad y número de fallos consecutivos.
-- No almacenar un histórico completo de comprobaciones durante esta fase.
+- Mantener en cada endpoint sus puertos y estado de verificación, pero exponer
+  estado, jugadores, versión, latencia y disponibilidad desde el monitor
+  canónico del servidor.
+- Guardar snapshots por servidor y agregados horarios con la hora real de
+  observación; la cadencia y la frescura se mostrarán explícitamente.
 
 ### Ejecución del monitor
 
-- cron-job.org invocará cada 15 minutos el endpoint interno desplegado en Vercel Hobby.
+- Un worker persistente desplegado como Application de Dokploy reclamará jobs por servidor y ejecutará las consultas fuera de Vercel.
 - `POST /api/internal/monitor/run` exigirá
   `Authorization: Bearer <CRON_MONITOR_SECRET>`.
-- Cada ejecución procesará hasta 200 endpoints con concurrencia máxima 10,
-  timeout de cinco segundos y bloqueo para impedir trabajos solapados.
+- La ruta interna de Vercel solo reconciliará jobs y devolverá `202`; los leases
+  y la clave única `(serverId, scheduledAt)` impedirán trabajos solapados.
 - Las conexiones TCP y UDP reutilizarán las protecciones existentes contra
   SSRF, DNS rebinding y direcciones privadas.
 - Tres fallos consecutivos marcarán un endpoint como offline y enviarán un único
@@ -123,8 +122,8 @@ límites publicados por Vercel.
   ocultará automáticamente.
 - Al recuperarse un endpoint, la ficha volverá a mostrarse únicamente si el
   propietario sigue queriendo publicarla y no existe un bloqueo de moderación.
-- Preview deberá demostrar conectividad TCP Java y UDP Bedrock dentro de la misma
-  función, sin enviar credenciales ni resultados a un worker externo.
+- El worker usará Java verificado como probe canónico y Bedrock como fallback,
+  conservará el histórico a nivel de servidor y será independiente de Vercel.
 
 ## Hito 4: moderación, ciclo de vida y lanzamiento
 

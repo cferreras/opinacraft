@@ -3,7 +3,6 @@ import "dotenv/config";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { authRelations } from "./auth-schema";
-import { serverEnv } from "./env/server";
 import { relations } from "./relations";
 
 function secureConnectionString(connectionString: string) {
@@ -22,8 +21,12 @@ function secureConnectionString(connectionString: string) {
 }
 
 const globalForDb = globalThis as typeof globalThis & { opinacraftPool?: Pool; opinacraftLockPool?: Pool; opinacraftRateLimitPool?: Pool };
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required to connect to PostgreSQL.");
+}
 const pool = globalForDb.opinacraftPool ?? new Pool({
-  connectionString: secureConnectionString(serverEnv.DATABASE_URL),
+  connectionString: secureConnectionString(databaseUrl),
   max: 2,
   idleTimeoutMillis: 10_000,
   connectionTimeoutMillis: 5_000,
@@ -32,7 +35,7 @@ const pool = globalForDb.opinacraftPool ?? new Pool({
   keepAlive: true,
 });
 const lockPool = globalForDb.opinacraftLockPool ?? new Pool({
-  connectionString: secureConnectionString(serverEnv.DATABASE_URL),
+  connectionString: secureConnectionString(databaseUrl),
   max: 1,
   idleTimeoutMillis: 10_000,
   connectionTimeoutMillis: 5_000,
@@ -41,7 +44,7 @@ const lockPool = globalForDb.opinacraftLockPool ?? new Pool({
   keepAlive: true,
 });
 const rateLimitPool = globalForDb.opinacraftRateLimitPool ?? new Pool({
-  connectionString: secureConnectionString(serverEnv.DATABASE_URL),
+  connectionString: secureConnectionString(databaseUrl),
   max: 2,
   idleTimeoutMillis: 10_000,
   connectionTimeoutMillis: 5_000,
@@ -87,11 +90,10 @@ export async function withAdvisoryLock<T>(lockName: string, operation: () => Pro
 }
 
 export async function closeDatabase() {
-  if (!globalForDb.opinacraftPool && !globalForDb.opinacraftLockPool && !globalForDb.opinacraftRateLimitPool) return;
   await Promise.all([
-    globalForDb.opinacraftPool?.end(),
-    globalForDb.opinacraftLockPool?.end(),
-    globalForDb.opinacraftRateLimitPool?.end(),
+    pool.end(),
+    lockPool.end(),
+    rateLimitPool.end(),
   ]);
   globalForDb.opinacraftPool = undefined;
   globalForDb.opinacraftLockPool = undefined;

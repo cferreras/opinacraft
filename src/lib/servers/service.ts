@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { user } from "@/auth-schema";
 import {
   serverEndpoints,
+  serverNetworkTargets,
   serverMembers,
   serverVerifications,
   serverMedia,
@@ -140,6 +141,10 @@ async function insertServerBundle(
     discordUrl: input.discordUrl,
     publicationStatus: "draft",
   });
+  await tx.insert(serverNetworkTargets).values({
+    serverId,
+    host: input.host,
+  });
   for (const endpoint of input.endpoints) {
     await tx.insert(serverEndpoints).values({
       serverId,
@@ -244,21 +249,28 @@ export async function updateServer(
       })
       .from(serverEndpoints)
       .where(eq(serverEndpoints.serverId, serverId));
+    const [networkTarget] = await tx
+      .select({ host: serverNetworkTargets.host })
+      .from(serverNetworkTargets)
+      .where(eq(serverNetworkTargets.serverId, serverId))
+      .limit(1);
 
     const nextJava = input.endpoints.find((endpoint) => endpoint.edition === "java");
     const currentJava = currentEndpoints.find((endpoint) => endpoint.edition === "java");
-    const javaChanged =
-      currentJava?.host !== nextJava?.host || currentJava?.port !== nextJava?.port;
+    const hostChanged = currentEndpoints.some((endpoint) => endpoint.host !== input.host) || networkTarget?.host !== input.host;
+    const javaChanged = hostChanged || currentJava?.port !== nextJava?.port;
     const endpointsChanged =
+      !networkTarget ||
+      hostChanged ||
       currentEndpoints.length !== input.endpoints.length ||
       input.endpoints.some((next) => {
         const current = currentEndpoints.find((item) => item.edition === next.edition);
-        return !current || current.host !== next.host || current.port !== next.port;
+        return !current || current.port !== next.port;
       });
     const changedEditions = minecraftEditions.filter((edition) => {
       const next = input.endpoints.find((endpoint) => endpoint.edition === edition);
       const current = currentEndpoints.find((endpoint) => endpoint.edition === edition);
-      return current?.host !== next?.host || current?.port !== next?.port;
+      return hostChanged || current?.port !== next?.port;
     });
 
     if (input.name !== server.name) {
@@ -283,6 +295,19 @@ export async function updateServer(
         ...(javaChanged
           ? { verificationStatus: "unverified" as const, verifiedAt: null }
           : {}),
+        ...(endpointsChanged
+          ? {
+            monitorHealthStatus: "unknown" as const,
+            monitorPlayersCurrent: null,
+            monitorPlayersMax: null,
+            monitorVersion: null,
+            monitorLatencyMs: null,
+            monitorLastCheckedAt: null,
+            monitorLastOnlineAt: null,
+            monitorConsecutiveFailures: 0,
+            monitorProbeEdition: null,
+          }
+          : {}),
       })
       .where(eq(servers.id, serverId));
 
@@ -300,6 +325,14 @@ export async function updateServer(
     }
 
     if (endpointsChanged) {
+      if (networkTarget) {
+        await tx
+          .update(serverNetworkTargets)
+          .set({ host: input.host })
+          .where(eq(serverNetworkTargets.serverId, serverId));
+      } else {
+        await tx.insert(serverNetworkTargets).values({ serverId, host: input.host });
+      }
       const nextEditions = new Set(input.endpoints.map((endpoint) => endpoint.edition));
       for (const current of currentEndpoints) {
         if (!nextEditions.has(current.edition)) {
@@ -326,7 +359,7 @@ export async function updateServer(
           continue;
         }
 
-        const changed = current.host !== endpoint.host || current.port !== endpoint.port;
+        const changed = hostChanged || current.port !== endpoint.port;
         if (changed) {
           await tx
             .update(serverEndpoints)
