@@ -145,15 +145,15 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
   const server = await getPublishedServer(slug);
   if (!server) notFound();
 
-  const query = await searchParams;
+  const [query, session] = await Promise.all([searchParams, getServerSession()]);
   const requestedReviewPage = Number.parseInt(query.reviewPage ?? "1", 10);
-  const session = await getServerSession();
-  const [reviewSummary, reviewPage, history] = await Promise.all([
+  const viewerPromise = session ? getReviewViewerState(server.id, session.user.id) : Promise.resolve(null);
+  const [reviewSummary, reviewPage, history, viewer] = await Promise.all([
     getReviewSummary(server.id),
     listServerReviews(server.id, Number.isFinite(requestedReviewPage) ? requestedReviewPage : 1, session?.user.id),
     queryPlayerHistory(server.id, "24h", "all"),
+    viewerPromise,
   ]);
-  const viewer = session ? await getReviewViewerState(server.id, session.user.id) : null;
   const notice = (query.review ? reviewNotices[query.review] : undefined) ?? (query.reply ? replyNotices[query.reply] : undefined);
   const errorNotice = query.reviewError ? reviewErrors[query.reviewError] : query.replyError ? replyErrors[query.replyError] : undefined;
   const endpoint = primaryEndpoint(server);
