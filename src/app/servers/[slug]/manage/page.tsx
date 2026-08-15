@@ -18,6 +18,7 @@ import { SiteHeader } from "@/components/site-header";
 import { VerificationPanel } from "@/components/verification-panel";
 import { formatEndpoint } from "@/lib/servers/format";
 import { listServerMembers } from "@/lib/servers/members";
+import { toServerManageFormData } from "@/lib/servers/manage-form-data";
 import { getManagedServerBySlug } from "@/lib/servers/queries";
 import { queryPlayerHistory } from "@/lib/servers/player-history";
 import { getVerificationDisplay } from "@/lib/servers/verification";
@@ -42,6 +43,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
     server.role === "owner" ? getVerificationDisplay(server.id, session.user.id, "bedrock") : Promise.resolve(null),
     queryPlayerHistory(server.id, "24h", "all"),
   ]);
+  const serverFormData = toServerManageFormData(server);
 
   return (
     <div className="min-h-screen bg-background">
@@ -100,7 +102,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
             <div className="min-w-0 space-y-5">
-              <Card id="details" className="scroll-mt-5"><CardHeader><PanelHeading eyebrow="Ficha pública" title="Detalles del servidor" description="Mantén la ficha clara, útil y lista para que los jugadores se unan." /></CardHeader><CardContent><ServerManageForm server={server} /></CardContent></Card>
+              <Card id="details" className="scroll-mt-5"><CardHeader><PanelHeading eyebrow="Ficha pública" title="Detalles del servidor" description="Mantén la ficha clara, útil y lista para que los jugadores se unan." /></CardHeader><CardContent><ServerManageForm server={serverFormData} /></CardContent></Card>
               <div id="media" className="scroll-mt-5"><MediaUploadForm serverId={server.id} /></div>
               {server.role === "owner" ? <div id="verification" className="scroll-mt-5 space-y-5"><VerificationPanel serverId={server.id} slug={server.slug} verification={javaVerification} edition="java" /><VerificationPanel serverId={server.id} slug={server.slug} verification={bedrockVerification} edition="bedrock" /></div> : null}
               {(server.role === "owner" || server.role === "admin") ? <div id="team" className="scroll-mt-5"><MemberPanel serverId={server.id} slug={server.slug} members={members} canManage={server.role === "owner"} /></div> : null}

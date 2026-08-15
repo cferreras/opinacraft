@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
   /* config options here */
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   reactCompiler: true,
+  experimental: {
+    optimizePackageImports: ["@tabler/icons-react", "lucide-react"],
+  },
   // Keep Sharp external so Node loads its native binding at runtime.
   serverExternalPackages: ["minecraft-protocol", "sharp"],
   // Sharp 0.35 ships native bindings and libvips in separate Linux packages.
