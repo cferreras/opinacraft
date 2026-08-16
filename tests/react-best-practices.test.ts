@@ -37,6 +37,35 @@ test("narrows profile effects to the authenticated user identity", () => {
   assert.doesNotMatch(source, /\}, \[session\]\);/);
 });
 
+test("keeps sortable header hover compact without rounded edges", () => {
+  const source = readProjectFile("src/app/servers/page.tsx");
+  const headerSource = source.slice(
+    source.indexOf("function SortableColumnHeader"),
+    source.indexOf("function countLabel"),
+  );
+  const linkClass = headerSource.match(/<Link[\s\S]*?className="([^"]+)"/)?.[1];
+
+  assert.doesNotMatch(
+    headerSource,
+    /<div role="columnheader"[^>]*className="[^\"]*hover:bg-muted\/60[^\"]*"/,
+  );
+  assert.ok(linkClass, "sortable header link should have a class list");
+  assert.match(linkClass, /\binline-flex\b/);
+  assert.doesNotMatch(linkClass, /(?:^|\s)w-full(?:\s|$)/);
+  assert.doesNotMatch(linkClass, /\brounded-md\b/);
+  assert.match(linkClass, /\bpx-1\b/);
+  assert.match(linkClass, /\bhover:bg-muted\/60\b/);
+});
+
+test("synchronizes the catalog sort control with sortable table state", () => {
+  const source = readProjectFile("src/app/servers/page.tsx");
+
+  assert.match(source, /const activeTableSort = tableSort \?\?/);
+  assert.match(source, /const activeTableDirection(?:[^=]*)= tableSort \?/);
+  assert.match(source, /defaultValue=\{tableSort \? "table" : sort\}/);
+  assert.match(source, /<option value="table" disabled>/);
+});
+
 test("code-splits the Recharts history visualization", () => {
   const cardSource = readProjectFile("src/components/player-history-card.tsx");
   const chartPath = path.resolve("src/components/player-history-chart.tsx");
