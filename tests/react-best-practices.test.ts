@@ -107,3 +107,53 @@ test("code-splits the Recharts history visualization", () => {
   assert.doesNotMatch(cardSource, /from ["']recharts["']/);
   assert.match(chartSource, /from ["']recharts["']/);
 });
+
+test("presents server verification as one generic identity check", () => {
+  const panelSource = readProjectFile("src/components/verification-panel.tsx");
+  const pageSource = readProjectFile("src/app/servers/[slug]/manage/page.tsx");
+
+  assert.match(panelSource, /Verificar identidad/);
+  assert.doesNotMatch(panelSource, /Verificación de propiedad/);
+  assert.doesNotMatch(panelSource, /edition === ["']java["'] \? ["']Java["'] : ["']Bedrock["']/);
+  assert.match(pageSource, /const verificationTarget =/);
+  assert.match(pageSource, /selectIdentityVerificationTarget/);
+  assert.doesNotMatch(pageSource, /javaVerification/);
+  assert.doesNotMatch(pageSource, /bedrockVerification/);
+});
+
+test("keeps opinion and official reply editors behind accessible dialogs", () => {
+  const sectionSource = readProjectFile("src/components/review-section.tsx");
+  const replyFormSource = readProjectFile("src/components/official-reply-form.tsx");
+  const replyEditorSource = readProjectFile("src/components/official-reply-editor.tsx");
+  const editDialogPath = path.resolve("src/components/review-edit-dialog.tsx");
+
+  assert.equal(
+    existsSync(editDialogPath),
+    true,
+    "the opinion editor should be a dedicated dialog component",
+  );
+  const editDialogSource = readFileSync(editDialogPath, "utf8");
+
+  assert.match(sectionSource, /ReviewEditDialog/);
+  assert.doesNotMatch(sectionSource, /<ReviewForm[^>]*action=\{updateReviewAction\}/);
+  assert.match(editDialogSource, /DialogTrigger/);
+  assert.match(editDialogSource, /DialogContent/);
+  assert.match(editDialogSource, /<ReviewForm[\s\S]*editing/);
+  assert.match(replyFormSource, /DialogTrigger/);
+  assert.match(replyFormSource, /DialogContent/);
+  assert.match(replyEditorSource, /DialogTrigger/);
+  assert.match(replyEditorSource, /DialogContent/);
+});
+
+test("groups official reply edit and delete actions together", () => {
+  const source = readProjectFile("src/components/review-card.tsx");
+  const actionsStart = source.indexOf('<div className="flex flex-wrap items-center justify-between gap-2">');
+  const contentStart = source.indexOf('<p className="mt-2 text-sm leading-6 text-muted-foreground">{review.reply.content}</p>');
+
+  assert.ok(actionsStart >= 0, "official reply actions should have a shared action row");
+  assert.ok(contentStart > actionsStart, "official reply content should follow the action row");
+  const actionSource = source.slice(actionsStart, contentStart);
+
+  assert.match(actionSource, /deleteOfficialReplyAction/);
+  assert.match(actionSource, /<OfficialReplyEditor/);
+});

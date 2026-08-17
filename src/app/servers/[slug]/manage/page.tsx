@@ -15,13 +15,14 @@ import { ServerLogo } from "@/components/server-logo";
 import { ServerManageForm } from "@/components/server-manage-form";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { VerificationPanel } from "@/components/verification-panel";
+import { VerificationPanel, VerificationPanelEmpty } from "@/components/verification-panel";
 import { formatEndpoint } from "@/lib/servers/format";
 import { listServerMembers } from "@/lib/servers/members";
 import { toServerManageFormData } from "@/lib/servers/manage-form-data";
 import { getManagedServerBySlug } from "@/lib/servers/queries";
 import { queryPlayerHistory } from "@/lib/servers/player-history";
 import { getVerificationDisplay } from "@/lib/servers/verification";
+import { selectIdentityVerificationTarget } from "@/lib/servers/verification-target";
 import { requireServerSession } from "@/lib/session";
 
 type Props = {
@@ -36,11 +37,11 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
   const session = await requireServerSession(`/servers/${slug}/manage`);
   const server = await getManagedServerBySlug(slug, session.user.id);
   if (!server) notFound();
+  const verificationTarget = selectIdentityVerificationTarget(server.endpoints);
 
-  const [members, javaVerification, bedrockVerification, history] = await Promise.all([
+  const [members, identityVerification, history] = await Promise.all([
     server.role === "owner" || server.role === "admin" ? listServerMembers(server.id, session.user.id) : Promise.resolve([]),
-    server.role === "owner" ? getVerificationDisplay(server.id, session.user.id) : Promise.resolve(null),
-    server.role === "owner" ? getVerificationDisplay(server.id, session.user.id, "bedrock") : Promise.resolve(null),
+    server.role === "owner" && verificationTarget ? getVerificationDisplay(server.id, session.user.id, verificationTarget.edition) : Promise.resolve(null),
     queryPlayerHistory(server.id, "24h", "all"),
   ]);
   const serverFormData = toServerManageFormData(server);
@@ -75,25 +76,26 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
             <SectionLink href="#activity" icon={<Activity aria-hidden="true" />}>Actividad</SectionLink>
             <SectionLink href="#details" icon={<FileText aria-hidden="true" />}>Detalles</SectionLink>
             <SectionLink href="#media" icon={<ImageIcon aria-hidden="true" />}>Marca</SectionLink>
-            {server.role === "owner" ? <SectionLink href="#verification" icon={<ShieldCheck aria-hidden="true" />}>Verificación</SectionLink> : null}
+            {server.role === "owner" ? <SectionLink href="#verification" icon={<ShieldCheck aria-hidden="true" />}>Identidad</SectionLink> : null}
             {(server.role === "owner" || server.role === "admin") ? <SectionLink href="#team" icon={<Users aria-hidden="true" />}>Miembros</SectionLink> : null}
           </nav>
 
           <div className="mt-5 grid gap-2.5">
             {query.created ? <Notice>Se creó el borrador. Revísalo y publícalo cuando esté listo.</Notice> : null}
             {query.updated ? <Notice>Se guardaron los datos del servidor.</Notice> : null}
-            {query.verification === "verified" ? <Notice>Propiedad verificada. Ya puedes retirar el código del MOTD.</Notice> : null}
+            {query.verification === "verified" ? <Notice>Identidad verificada. Ya puedes retirar el código del MOTD.</Notice> : null}
             {query.verification === "code_not_found" ? <Notice tone="warning">No se encontró el código en el MOTD.</Notice> : null}
             {query.verification === "offline" ? <Notice tone="warning">El servidor está fuera de línea o no respondió a tiempo.</Notice> : null}
             {query.verification === "timeout" ? <Notice tone="warning">La comprobación agotó el tiempo de espera.</Notice> : null}
             {query.verification === "blocked_target" ? <Notice tone="warning">Este destino está bloqueado porque no es una dirección pública.</Notice> : null}
             {query.verification === "invalid_response" ? <Notice tone="warning">El servidor devolvió una respuesta no válida.</Notice> : null}
-            {query.verification === "endpoint_taken" ? <Notice tone="warning">Ese endpoint ya está verificado por otro servidor.</Notice> : null}
+            {query.verification === "endpoint_taken" ? <Notice tone="warning">Esta dirección ya está verificada por otro servidor.</Notice> : null}
             {query.verification === "stale" ? <Notice tone="warning">La verificación ya no está activa. Genera un código nuevo.</Notice> : null}
             {query.verification === "expired" ? <Notice tone="warning">El código de verificación ha caducado. Genera uno nuevo.</Notice> : null}
-            {query.verificationError === "already-verified" ? <Notice>Este endpoint ya está verificado; no necesitas generar otro.</Notice> : null}
-            {query.verificationError === "pending" ? <Notice tone="warning">Ya hay un código pendiente para este endpoint. Añádelo al MOTD antes de comprobarlo.</Notice> : null}
-            {query.verificationError && query.verificationError !== "already-verified" && query.verificationError !== "pending" ? <Notice tone="warning">No se pudo iniciar o completar la verificación: {query.verificationError.replaceAll("-", " ")}.</Notice> : null}
+            {query.verificationError === "already-verified" ? <Notice>La identidad de este servidor ya está verificada; no necesitas generar otro código.</Notice> : null}
+            {query.verificationError === "pending" ? <Notice tone="warning">Ya hay un código pendiente para esta dirección. Añádelo al MOTD antes de comprobarla.</Notice> : null}
+            {query.verificationError === "no-endpoint" ? <Notice tone="warning">Añade una dirección pública de Minecraft antes de verificar la identidad de este servidor.</Notice> : null}
+            {query.verificationError && query.verificationError !== "already-verified" && query.verificationError !== "pending" && query.verificationError !== "no-endpoint" ? <Notice tone="warning">No se pudo iniciar o completar la verificación: {query.verificationError.replaceAll("-", " ")}.</Notice> : null}
             {query.memberUpdated ? <Notice>Se actualizó la lista de miembros.</Notice> : null}
             {query.memberError ? <Notice tone="warning">La acción sobre el miembro falló: {query.memberError.replaceAll("-", " ")}.</Notice> : null}
           </div>
@@ -104,7 +106,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
             <div className="min-w-0 space-y-5">
               <Card id="details" className="scroll-mt-5"><CardHeader><PanelHeading eyebrow="Ficha pública" title="Detalles del servidor" description="Mantén la ficha clara, útil y lista para que los jugadores se unan." /></CardHeader><CardContent><ServerManageForm server={serverFormData} /></CardContent></Card>
               <div id="media" className="scroll-mt-5"><MediaUploadForm serverId={server.id} /></div>
-              {server.role === "owner" ? <div id="verification" className="scroll-mt-5 space-y-5"><VerificationPanel serverId={server.id} slug={server.slug} verification={javaVerification} edition="java" /><VerificationPanel serverId={server.id} slug={server.slug} verification={bedrockVerification} edition="bedrock" /></div> : null}
+              {server.role === "owner" ? <div id="verification" className="scroll-mt-5">{verificationTarget ? <VerificationPanel serverId={server.id} slug={server.slug} verification={identityVerification} targetEdition={verificationTarget.edition} targetAddress={formatEndpoint(verificationTarget)} /> : <VerificationPanelEmpty />}</div> : null}
               {(server.role === "owner" || server.role === "admin") ? <div id="team" className="scroll-mt-5"><MemberPanel serverId={server.id} slug={server.slug} members={members} canManage={server.role === "owner"} /></div> : null}
               {server.role === "owner" ? <DeleteServerForm serverId={server.id} slug={server.slug} /> : null}
             </div>
@@ -113,7 +115,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
               <div className="space-y-4">
                 <Card><CardHeader><CardDescription className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Vista pública</CardDescription><div className="mt-2 flex items-center gap-3"><ServerLogo name={server.name} media={server.media} className="size-11 rounded-lg" /><div className="min-w-0"><CardTitle className="truncate text-sm">{server.name}</CardTitle><p className="mt-0.5 text-xs text-muted-foreground">/{server.slug}</p></div></div></CardHeader><CardContent><div className="rounded-md border bg-muted/30 p-3 text-xs"><div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Estado de la ficha</span><span className={server.publicationStatus === "published" ? "font-semibold text-success" : "font-semibold text-warning"}>{publicationLabel(server.publicationStatus)}</span></div><div className="mt-2.5 flex items-center justify-between gap-3"><span className="text-muted-foreground">Identidad verificada</span><span className="inline-flex items-center gap-1 font-semibold text-success"><Check aria-hidden="true" className="size-3.5" />{server.verificationStatus === "verified" ? "Lista" : "Pendiente"}</span></div></div>{server.publicationStatus === "published" ? <Button asChild size="lg" className="mt-3 w-full justify-between"><Link href={`/servers/${server.slug}`}>Abrir página pública<ChevronRight aria-hidden="true" /></Link></Button> : <p className="mt-3 rounded-md bg-warning/10 px-3 py-2.5 text-xs leading-4 text-warning">Publica la ficha desde Detalles cuando esté lista para descubrirse.</p>}</CardContent></Card>
 
-                <Card><CardHeader><CardTitle className="text-sm">Espacio de trabajo</CardTitle><CardDescription>Haz cambios, verifica la propiedad y mantén al equipo sincronizado.</CardDescription></CardHeader><CardContent className="grid gap-1"><RailLink href="#details" icon={<FileText aria-hidden="true" />}>Editar ficha</RailLink><RailLink href="#media" icon={<ImageIcon aria-hidden="true" />}>Gestionar marca</RailLink>{server.role === "owner" ? <RailLink href="#verification" icon={<ShieldCheck aria-hidden="true" />}>Verificar endpoints</RailLink> : null}{(server.role === "owner" || server.role === "admin") ? <RailLink href="#team" icon={<Users aria-hidden="true" />}>Gestionar miembros</RailLink> : null}</CardContent></Card>
+                <Card><CardHeader><CardTitle className="text-sm">Espacio de trabajo</CardTitle><CardDescription>Haz cambios, verifica la identidad y mantén al equipo sincronizado.</CardDescription></CardHeader><CardContent className="grid gap-1"><RailLink href="#details" icon={<FileText aria-hidden="true" />}>Editar ficha</RailLink><RailLink href="#media" icon={<ImageIcon aria-hidden="true" />}>Gestionar marca</RailLink>{server.role === "owner" ? <RailLink href="#verification" icon={<ShieldCheck aria-hidden="true" />}>Verificar identidad</RailLink> : null}{(server.role === "owner" || server.role === "admin") ? <RailLink href="#team" icon={<Users aria-hidden="true" />}>Gestionar miembros</RailLink> : null}</CardContent></Card>
 
                 <Card><CardHeader><CardTitle className="text-sm">Conexión</CardTitle><CardDescription>Direcciones asociadas a esta ficha.</CardDescription></CardHeader><CardContent className="grid gap-2.5">{server.endpoints.length ? server.endpoints.map((endpoint) => <div key={endpoint.edition} className="flex min-w-0 items-center gap-2.5 rounded-md border bg-muted/20 px-3 py-2.5"><span className={`size-2 shrink-0 rounded-full ${endpoint.verificationStatus === "verified" ? "bg-success" : "bg-warning"}`} /><div className="min-w-0"><p className="text-xs font-semibold capitalize">{endpoint.edition}</p><code className="mt-0.5 block truncate text-xs text-muted-foreground">{formatEndpoint(endpoint)}</code></div></div>) : <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">Todavía no hay direcciones de conexión.</p>}</CardContent></Card>
               </div>

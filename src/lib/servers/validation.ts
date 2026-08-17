@@ -9,12 +9,20 @@ import {
   MINECRAFT_PORT_MAX,
   MINECRAFT_PORT_MIN,
 } from "./endpoint-fields.ts";
+import {
+  serverAccessTypes,
+  serverAccountModes,
+  serverAuthModes,
+  type ServerAccessType,
+  type ServerAccountMode,
+  type ServerAuthMode,
+} from "./access.ts";
 
 export const minecraftEditions = ["java", "bedrock"] as const;
 export type MinecraftEdition = (typeof minecraftEditions)[number];
 
 const MAX_URL_LENGTH = 2_048;
-type ServerUrlField = "websiteUrl" | "storeUrl" | "discordUrl";
+type ServerUrlField = "websiteUrl" | "storeUrl" | "discordUrl" | "accessFormUrl";
 
 export type RawServerEndpoint = {
   edition: MinecraftEdition;
@@ -28,6 +36,10 @@ export type CreateServerInput = {
   websiteUrl?: string;
   storeUrl?: string;
   discordUrl?: string;
+  accessType?: ServerAccessType;
+  accessFormUrl?: string;
+  accountMode?: ServerAccountMode;
+  authMode?: ServerAuthMode;
   tags?: string[];
   host?: string;
   javaPort?: number;
@@ -49,6 +61,10 @@ export type NormalizedCreateServerInput = {
   websiteUrl: string | null;
   storeUrl: string | null;
   discordUrl: string | null;
+  accessType: ServerAccessType;
+  accessFormUrl: string | null;
+  accountMode: ServerAccountMode;
+  authMode: ServerAuthMode;
   tags: string[];
   host: string;
   endpoints: NormalizedServerEndpoint[];
@@ -69,6 +85,10 @@ export const createServerInputSchema = z
     websiteUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     storeUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     discordUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
+    accessType: z.enum(serverAccessTypes).default("open"),
+    accessFormUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
+    accountMode: z.enum(serverAccountModes).default("premium_only"),
+    authMode: z.enum(serverAuthModes).default("direct"),
     tags: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
     host: z.string().trim().min(1).max(253).optional(),
     javaPort: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
@@ -85,25 +105,44 @@ export const createServerInputSchema = z
         path: ["host"],
         message: "Provide one shared host and its ports.",
       });
-      return;
-    }
-
-    if (usesSharedHost && input.javaPort === undefined && input.bedrockPort === undefined) {
+    } else if (usesSharedHost && input.javaPort === undefined && input.bedrockPort === undefined) {
       ctx.addIssue({
         code: "custom",
         path: ["host"],
         message: "Enable at least one Minecraft edition.",
       });
+    } else if (input.endpoints) {
+      const editions = new Set(input.endpoints.map((endpoint) => endpoint.edition));
+      if (editions.size !== input.endpoints.length) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["endpoints"],
+          message: "Only one endpoint per Minecraft edition is allowed.",
+        });
+      }
     }
 
-    if (!input.endpoints) return;
-    const editions = new Set(input.endpoints.map((endpoint) => endpoint.edition));
-
-    if (editions.size !== input.endpoints.length) {
+    if (input.accessType === "open" && input.accessFormUrl) {
       ctx.addIssue({
         code: "custom",
-        path: ["endpoints"],
-        message: "Only one endpoint per Minecraft edition is allowed.",
+        path: ["accessFormUrl"],
+        message: "El formulario de acceso solo está disponible con whitelist.",
+      });
+    }
+
+    if (input.accountMode === "premium_only" && input.authMode !== "direct") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["authMode"],
+        message: "La autenticación para no-premium solo aplica cuando se aceptan cuentas no-premium.",
+      });
+    }
+
+    if (input.accountMode === "premium_and_non_premium" && input.authMode === "direct") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["authMode"],
+        message: "Las cuentas no-premium necesitan un método de autenticación.",
       });
     }
   });
@@ -115,6 +154,7 @@ export class ServerInputError extends Error {
     | "websiteUrl"
     | "storeUrl"
     | "discordUrl"
+    | "accessFormUrl"
     | "endpoints"
     | "host"
     | "port";
@@ -127,6 +167,7 @@ export class ServerInputError extends Error {
       | "websiteUrl"
       | "storeUrl"
       | "discordUrl"
+      | "accessFormUrl"
       | "endpoints"
       | "host"
       | "port" = "endpoints",
@@ -266,6 +307,7 @@ export function normalizeCreateServerInput(
     websiteUrl: emptyToUndefined(input.websiteUrl),
     storeUrl: emptyToUndefined(input.storeUrl),
     discordUrl: emptyToUndefined(input.discordUrl),
+    accessFormUrl: emptyToUndefined(input.accessFormUrl),
   });
 
   const legacyHosts = parsed.endpoints?.map((endpoint) => normalizeHost(endpoint.host)) ?? [];
@@ -304,6 +346,12 @@ export function normalizeCreateServerInput(
     discordUrl: parsed.discordUrl
       ? normalizeHttpUrl(parsed.discordUrl, "discordUrl")
       : null,
+    accessType: parsed.accessType,
+    accessFormUrl: parsed.accessFormUrl
+      ? normalizeHttpUrl(parsed.accessFormUrl, "accessFormUrl")
+      : null,
+    accountMode: parsed.accountMode,
+    authMode: parsed.authMode,
     tags: parsed.tags ?? [],
     host,
     endpoints,

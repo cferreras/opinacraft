@@ -9,10 +9,12 @@ import {
   Code2,
   ExternalLink,
   Globe,
+  KeyRound,
   MessageCircle,
   Monitor,
   Smartphone,
   ShoppingBag,
+  ShieldCheck,
   Star,
   Users,
 } from "lucide-react";
@@ -31,6 +33,7 @@ import { ServerUtilityActions } from "@/components/server-utility-actions";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getServerSession } from "@/lib/session";
+import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
 import { formatServerDateTime } from "@/lib/servers/display";
 import { formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
 import { getPublishedServerBySlug, type ManagedServer } from "@/lib/servers/queries";
@@ -219,6 +222,12 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                     <ConnectionLink href={server.websiteUrl} icon={<Globe aria-hidden="true" className="size-4" />} label="Web del servidor" />
                     <ConnectionLink href={server.storeUrl} icon={<ShoppingBag aria-hidden="true" className="size-4" />} label="Tienda oficial" />
                     <ConnectionLink href={server.discordUrl} icon={<MessageCircle aria-hidden="true" className="size-4" />} label="Soporte en Discord" external />
+                  </div>
+                  <Separator />
+                  <div className="grid gap-3" aria-labelledby="access-summary-heading">
+                    <div><p id="access-summary-heading" className="text-xs font-semibold">Acceso de jugadores</p><p className="mt-1 text-xs text-muted-foreground">Información para saber cómo entrar antes de copiar la dirección.</p></div>
+                    <div className="grid gap-2 text-xs"><div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Admisión</span><Badge variant={server.accessType === "whitelist" ? "default" : "outline"}>{accessTypeLabel(server.accessType)}</Badge></div><div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Cuentas</span><span className="text-right font-medium">{accountModeLabel(server.accountMode)}</span></div><div className="flex items-start justify-between gap-3"><span className="flex items-center gap-1.5 text-muted-foreground"><KeyRound aria-hidden="true" className="size-3.5" />Inicio de sesión</span><span className="max-w-[12rem] text-right font-medium">{authModeLabel(server)}</span></div></div>
+                    {server.accessType === "whitelist" ? server.accessFormUrl ? <Button asChild variant="outline" className="h-10 w-full justify-between gap-2 text-xs"><a href={server.accessFormUrl} target="_blank" rel="noopener noreferrer"><span className="flex items-center gap-2"><ShieldCheck aria-hidden="true" className="size-4 text-primary" />Solicitar acceso</span><ExternalLink aria-hidden="true" className="size-3.5 text-muted-foreground" /></a></Button> : <p className="rounded-md bg-muted px-3 py-2.5 text-xs leading-5 text-muted-foreground">La whitelist se solicita en los canales oficiales de la comunidad.</p> : null}
                   </div>
                   <p className="text-xs text-muted-foreground">Listado en OpinaCraft desde el {dateLabel(server.createdAt)}.</p>
                   {!viewer ? <Alert><AlertDescription><strong>Sin iniciar sesión.</strong> Inicia sesión para publicar tu opinión sobre {server.name}. <Button asChild variant="link" size="sm" className="h-auto p-0"><Link href={`/sign-in?callbackURL=${encodeURIComponent(`/servers/${server.slug}#reviews`)}`}>Iniciar sesión</Link></Button></AlertDescription></Alert> : null}

@@ -30,6 +30,10 @@ test("normalizes one shared host with optional edition ports", () => {
     websiteUrl: null,
     storeUrl: null,
     discordUrl: null,
+    accessType: "open",
+    accessFormUrl: null,
+    accountMode: "premium_only",
+    authMode: "direct",
     tags: [],
     host: "play.example.com",
     endpoints: [

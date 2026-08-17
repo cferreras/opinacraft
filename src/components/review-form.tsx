@@ -11,7 +11,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 
-type ReviewAction = (previousState: ReviewActionState | null, formData: FormData) => Promise<ReviewActionState | null>;
+export type ReviewAction = (previousState: ReviewActionState | null, formData: FormData) => Promise<ReviewActionState | null>;
 
 function SubmitButton({ editing }: { editing: boolean }) {
   const { pending } = useFormStatus();

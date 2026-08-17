@@ -106,14 +106,14 @@ export class VerificationExpiredError extends Error {
 
 export class NoJavaEndpointError extends Error {
   constructor() {
-    super("Add a Minecraft Java endpoint using a public port between 1024 and 65535 before verifying this server.");
+    super("Añade una dirección pública de Minecraft antes de verificar la identidad de este servidor.");
     this.name = "NoJavaEndpointError";
   }
 }
 
 export class NoBedrockEndpointError extends Error {
   constructor() {
-    super("Añade un endpoint Minecraft Bedrock con un puerto público entre 1024 y 65535 antes de verificar este servidor.");
+    super("Añade una dirección pública de Minecraft antes de verificar la identidad de este servidor.");
     this.name = "NoBedrockEndpointError";
   }
 }

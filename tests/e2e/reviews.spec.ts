@@ -85,22 +85,28 @@ test("verified player can publish, edit, delete and receive an official reply", 
   ).toBeVisible();
 
   await page.goto(`/servers/${slug}#reviews`);
-  await page.getByLabel("Respuesta oficial").fill("Gracias por compartir tu experiencia");
   await page.getByRole("button", { name: "Responder oficialmente" }).click();
+  const replyDialog = page.getByRole("dialog");
+  await replyDialog.getByLabel("Respuesta oficial").fill("Gracias por compartir tu experiencia");
+  await replyDialog.getByRole("button", { name: "Responder oficialmente" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}\\?reply=created`));
   await expect(
     page.getByRole("paragraph").filter({ hasText: "Gracias por compartir tu experiencia" }),
   ).toBeVisible();
 
-  await page.getByLabel("Editar respuesta oficial").fill("Respuesta oficial actualizada desde E2E");
-  await page.getByRole("button", { name: "Guardar edición" }).click();
+  await page.getByRole("button", { name: "Editar respuesta" }).click();
+  const editReplyDialog = page.getByRole("dialog");
+  await editReplyDialog.getByLabel("Editar respuesta oficial").fill("Respuesta oficial actualizada desde E2E");
+  await editReplyDialog.getByRole("button", { name: "Guardar edición" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}\\?reply=updated`));
   await expect(page.getByRole("paragraph").filter({ hasText: "Respuesta oficial actualizada desde E2E" })).toBeVisible();
   await page.getByRole("button", { name: "Eliminar" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}\\?reply=deleted`));
 
-  await reviewer.getByLabel("Comentario").fill("Una comunidad todavía mejor organizada");
-  await reviewer.getByRole("button", { name: "Guardar cambios" }).click();
+  await reviewer.getByRole("button", { name: "Editar opinión" }).click();
+  const opinionDialog = reviewer.getByRole("dialog");
+  await opinionDialog.getByLabel("Comentario").fill("Una comunidad todavía mejor organizada");
+  await opinionDialog.getByRole("button", { name: "Guardar cambios" }).click();
   await expect(reviewer).toHaveURL(new RegExp(`/servers/${slug}\\?review=updated`));
   await reviewer.getByRole("button", { name: "Eliminar opinión" }).click();
   await expect(reviewer).toHaveURL(new RegExp(`/servers/${slug}\\?review=deleted`));

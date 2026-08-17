@@ -112,6 +112,22 @@ export const minecraftEdition = pgEnum("minecraft_edition", [
   "bedrock",
 ]);
 
+export const serverAccessType = pgEnum("server_access_type", [
+  "open",
+  "whitelist",
+]);
+
+export const serverAccountMode = pgEnum("server_account_mode", [
+  "premium_only",
+  "premium_and_non_premium",
+]);
+
+export const serverAuthMode = pgEnum("server_auth_mode", [
+  "direct",
+  "password_non_premium",
+  "password_all",
+]);
+
 export const servers = pgTable(
   "servers",
   {
@@ -122,6 +138,10 @@ export const servers = pgTable(
     websiteUrl: text("website_url"),
     storeUrl: text("store_url"),
     discordUrl: text("discord_url"),
+    accessType: serverAccessType("access_type").default("open").notNull(),
+    accessFormUrl: text("access_form_url"),
+    accountMode: serverAccountMode("account_mode").default("premium_only").notNull(),
+    authMode: serverAuthMode("auth_mode").default("direct").notNull(),
     moderationStatus: serverModerationStatus("moderation_status").default("active").notNull(),
     availabilityHiddenAt: timestamp("availability_hidden_at", { withTimezone: true }),
     publicationStatus: serverPublicationStatus("publication_status")
@@ -152,6 +172,14 @@ export const servers = pgTable(
     check(
       "servers_verified_at_check",
       sql`(${table.verificationStatus} = 'verified') = (${table.verifiedAt} is not null)`,
+    ),
+    check(
+      "servers_access_form_url_check",
+      sql`(${table.accessType} = 'whitelist') OR (${table.accessFormUrl} is null)`,
+    ),
+    check(
+      "servers_account_auth_mode_check",
+      sql`(${table.accountMode} = 'premium_only' AND ${table.authMode} = 'direct') OR (${table.accountMode} = 'premium_and_non_premium' AND ${table.authMode} in ('password_non_premium', 'password_all'))`,
     ),
     index("servers_publication_verification_idx").on(
       table.publicationStatus,
