@@ -26,21 +26,33 @@ FORCE_BACKGROUND="false"
 BIND_HOST="127.0.0.1"
 URL_HOST=""
 IDLE_TIMEOUT_MINUTES=""
+
+require_value() {
+  if [[ $# -lt 2 || -z "$2" ]]; then
+    printf '{"error":"%s requires a value"}\n' "$1"
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --project-dir)
+      require_value "$@"
       PROJECT_DIR="$2"
       shift 2
       ;;
     --host)
+      require_value "$@"
       BIND_HOST="$2"
       shift 2
       ;;
     --url-host)
+      require_value "$@"
       URL_HOST="$2"
       shift 2
       ;;
     --idle-timeout-minutes)
+      require_value "$@"
       IDLE_TIMEOUT_MINUTES="$2"
       shift 2
       ;;
@@ -57,7 +69,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     *)
-      echo "{\"error\": \"Unknown argument: $1\"}"
+      printf '{"error":"Unknown argument"}\n'
       exit 1
       ;;
   esac
@@ -195,7 +207,7 @@ for _ in {1..50}; do
       sleep 0.1
     done
     if [[ "$alive" != "true" ]]; then
-      echo "{\"error\": \"Server started but was killed. Retry in a persistent terminal with: $SCRIPT_DIR/start-server.sh${PROJECT_DIR:+ --project-dir $PROJECT_DIR} --host $BIND_HOST --url-host $URL_HOST --foreground\"}"
+      printf '{"error":"Server started but was killed"}\n'
       exit 1
     fi
     grep "server-started" "$LOG_FILE" | head -1

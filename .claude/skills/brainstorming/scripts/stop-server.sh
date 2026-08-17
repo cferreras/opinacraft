@@ -73,6 +73,13 @@ is_brainstorm_server() {
 if [[ -f "$PID_FILE" ]]; then
   pid=$(cat "$PID_FILE")
 
+  if ! [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
+    rm -f "$PID_FILE" "$SERVER_ID_FILE"
+    mark_stopped "stale_pid"
+    echo '{"status": "stale_pid"}'
+    exit 0
+  fi
+
   # Refuse to signal a PID we can't prove is our server. A stale pid file may
   # point at an unrelated process after a reboot/PID wraparound.
   if ! is_brainstorm_server "$pid"; then
@@ -110,7 +117,7 @@ if [[ -f "$PID_FILE" ]]; then
   mark_stopped "stop-server.sh"
 
   # Only delete ephemeral /tmp directories
-  if [[ "$SESSION_DIR" == /tmp/* ]]; then
+  if [[ "$SESSION_DIR" == /tmp/?* && "$SESSION_DIR" != */ && "$SESSION_DIR" != *..* && "$SESSION_DIR" != "/tmp/." ]]; then
     rm -rf "$SESSION_DIR"
   fi
 

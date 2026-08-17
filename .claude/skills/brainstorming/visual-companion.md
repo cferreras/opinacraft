@@ -98,9 +98,10 @@ If the URL is unreachable from your browser (common in remote/containerized setu
 scripts/start-server.sh \
   --project-dir /path/to/project \
   --host 0.0.0.0 \
-  --url-host localhost
+  --url-host remote.example.com
 ```
 
+Replace `remote.example.com` with the hostname or IP address your browser can reach.
 Use `--url-host` to control what hostname is printed in the returned URL JSON.
 
 ## The Loop
@@ -288,7 +289,8 @@ If `$STATE_DIR/events` doesn't exist, the user didn't interact with the browser 
 ## Cleaning Up
 
 ```bash
-scripts/stop-server.sh $SESSION_DIR
+SESSION_DIR="${STATE_DIR%/state}"
+scripts/stop-server.sh "$SESSION_DIR"
 ```
 
 If the session used `--project-dir`, mockup files persist in `.superpowers/brainstorm/` for later reference. Only `/tmp` sessions get deleted on stop.

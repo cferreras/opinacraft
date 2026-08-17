@@ -67,6 +67,16 @@ test("synchronizes the catalog sort control with sortable table state", () => {
   assert.match(source, /<option value="table" disabled>/);
 });
 
+test("preserves table sorting when the catalog filters submit", () => {
+  const pageSource = readProjectFile("src/app/servers/page.tsx");
+  const filterSource = readProjectFile("src/components/filter-select.tsx");
+
+  assert.match(pageSource, /name="tableSort" value=\{tableSort\}/);
+  assert.match(pageSource, /name="tableDirection" value=\{tableDirection\}/);
+  assert.match(pageSource, /clearFieldsOnChange=\{tableSort \? \["tableSort", "tableDirection"\] : undefined\}/);
+  assert.match(filterSource, /clearFieldsOnChange\?: string\[\]/);
+});
+
 test("does not apply app lint rules to bundled skill scripts", async () => {
   const eslint = new ESLint();
   const results = await eslint.lintFiles([

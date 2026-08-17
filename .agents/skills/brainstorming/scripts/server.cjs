@@ -8,6 +8,7 @@ const path = require('path');
 const OPCODES = { TEXT: 0x01, CLOSE: 0x08, PING: 0x09, PONG: 0x0A };
 const WS_MAGIC = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const MAX_FRAME_PAYLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_EVENT_LOG_BYTES = MAX_FRAME_PAYLOAD_BYTES;
 
 function computeAcceptKey(clientKey) {
   return crypto.createHash('sha1').update(clientKey + WS_MAGIC).digest('base64');
@@ -84,15 +85,20 @@ function decodeFrame(buffer) {
 
 const PORT_FILE = process.env.BRAINSTORM_PORT_FILE || null;
 const randomPort = () => 49152 + Math.floor(Math.random() * 16383);
+const isValidPort = (value) => Number.isInteger(value) && value > 1023 && value < 65536;
 // Prefer an explicit port, else the port this session last bound (so a restart
 // reuses it and an already-open browser tab reconnects), else a random high port.
 function preferredPort() {
-  if (process.env.BRAINSTORM_PORT) return Number(process.env.BRAINSTORM_PORT);
+  if (process.env.BRAINSTORM_PORT) {
+    const p = Number(process.env.BRAINSTORM_PORT);
+    if (isValidPort(p)) return p;
+    console.warn('Invalid BRAINSTORM_PORT; falling back to the session port or a random port.');
+  }
   if (PORT_FILE) {
     try {
       const p = Number(fs.readFileSync(PORT_FILE, 'utf-8').trim());
-      if (Number.isInteger(p) && p > 1023 && p < 65536) return p;
-    } catch (e) { /* no prior port recorded */ }
+      if (isValidPort(p)) return p;
+    } catch { /* no prior port recorded */ }
   }
   return randomPort();
 }
@@ -126,7 +132,7 @@ function generateToken() {
 }
 
 function chmodOwnerOnly(file) {
-  try { fs.chmodSync(file, 0o600); } catch (e) { /* best effort */ }
+  try { fs.chmodSync(file, 0o600); } catch { /* best effort */ }
 }
 
 function initialToken() {
@@ -140,7 +146,7 @@ function initialToken() {
         chmodOwnerOnly(TOKEN_FILE);
         return { value: t, source: 'file' };
       }
-    } catch (e) { /* no prior token recorded */ }
+    } catch { /* no prior token recorded */ }
   }
   return { value: generateToken(), source: 'generated' };
 }
@@ -186,13 +192,17 @@ h1 { color: #333; } p { color: #666; } code { background: #f0f0f0; padding: 0.1e
 <code>?key=&hellip;</code> part. Copy the complete URL and open it again.</p></body></html>`;
 
 function bootstrapPage(key) {
-  const jsonKey = JSON.stringify(String(key));
+  const jsonKey = JSON.stringify(String(key))
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>Opening Brainstorm Companion</title></head>
 <body>
 <script>
-try { sessionStorage.setItem('brainstorm-session-key', ${jsonKey}); } catch (e) {}
+try { sessionStorage.setItem('brainstorm-session-key', ${jsonKey}); } catch {}
 location.replace('/');
 </script>
 </body>
@@ -216,7 +226,7 @@ function readSuperpowersVersion() {
     try {
       const data = JSON.parse(fs.readFileSync(manifest, 'utf-8'));
       if (data.version) return String(data.version);
-    } catch (e) {
+    } catch {
       // Packaged Codex plugins omit package.json; try the next manifest.
     }
   }
@@ -310,7 +320,7 @@ function isRegularFileInsideContentDir(filePath) {
     if (stat.nlink !== 1) return false;
     realContentDir = fs.realpathSync(CONTENT_DIR);
     realFilePath = fs.realpathSync(filePath);
-  } catch (e) {
+  } catch {
     return false;
   }
   return realFilePath.startsWith(realContentDir + path.sep);
@@ -379,7 +389,7 @@ function isAllowedWebSocketOrigin(req) {
   if (!origin) return true;
   const host = req.headers.host;
   if (!host) return false;
-  return origin === 'http://' + host;
+  return origin === 'http://' + host || origin === 'https://' + host;
 }
 
 // ========== HTTP Request Handler ==========
@@ -464,7 +474,7 @@ function handleUpgrade(req, socket) {
       let result;
       try {
         result = decodeFrame(buffer);
-      } catch (e) {
+      } catch {
         socket.end(encodeFrame(OPCODES.CLOSE, Buffer.alloc(0)));
         clients.delete(socket);
         return;
@@ -509,17 +519,23 @@ function handleMessage(text) {
     return;
   }
   touchActivity();
-  console.log(JSON.stringify({ source: 'user-event', ...event }));
+  console.log(JSON.stringify({ ...event, source: 'user-event' }));
   if (event && event.choice) {
     const eventsFile = path.join(STATE_DIR, 'events');
-    fs.appendFileSync(eventsFile, JSON.stringify(event) + '\n');
+    const eventLine = JSON.stringify(event) + '\n';
+    const currentSize = fs.existsSync(eventsFile) ? fs.statSync(eventsFile).size : 0;
+    if (currentSize + Buffer.byteLength(eventLine, 'utf8') <= MAX_EVENT_LOG_BYTES) {
+      fs.appendFileSync(eventsFile, eventLine);
+    } else {
+      console.warn('User event log size limit reached; dropping event.');
+    }
   }
 }
 
 function broadcast(msg) {
   const frame = encodeFrame(OPCODES.TEXT, Buffer.from(JSON.stringify(msg)));
   for (const socket of clients) {
-    try { socket.write(frame); } catch (e) { clients.delete(socket); }
+    try { socket.write(frame); } catch { clients.delete(socket); }
   }
 }
 
@@ -537,14 +553,14 @@ function maybeOpenBrowser() {
   const cp = require('child_process');
   // Operator-provided launcher: run as given (this env var is trusted operator input).
   if (process.env.BRAINSTORM_OPEN_CMD) {
-    try { cp.exec(process.env.BRAINSTORM_OPEN_CMD + ' ' + JSON.stringify(url), () => {}); } catch (e) { /* best effort */ }
+    try { cp.exec(process.env.BRAINSTORM_OPEN_CMD + ' ' + JSON.stringify(url), () => {}); } catch { /* best effort */ }
     return;
   }
   // Platform launchers: pass the URL as an argv element via execFile (no shell),
   // so a url-host containing shell metacharacters can't inject a command.
   const launcher = browserLauncherForPlatform(url);
   if (!launcher) return; // headless: nothing to open
-  try { cp.execFile(launcher.bin, launcher.args, () => {}); } catch (e) { /* best effort */ }
+  try { cp.execFile(launcher.bin, launcher.args, () => {}); } catch { /* best effort */ }
 }
 
 // ========== Activity Tracking ==========
@@ -626,7 +642,7 @@ function startServer() {
     // Close any upgraded WebSocket sockets so server.close() can complete and
     // the process actually exits instead of lingering on an open connection.
     for (const socket of clients) {
-      try { socket.destroy(); } catch (e) { /* already gone */ }
+      try { socket.destroy(); } catch { /* already gone */ }
     }
     server.close(() => process.exit(0));
   }
@@ -670,12 +686,12 @@ function startServer() {
     // *different* port because someone else holds the preferred one; persisting
     // would overwrite the shared files and strand that other session's open tab.
     if (PORT_FILE && !triedFallback) {
-      try { fs.writeFileSync(PORT_FILE, String(PORT)); } catch (e) { /* best effort */ }
+      try { fs.writeFileSync(PORT_FILE, String(PORT)); } catch { /* best effort */ }
       if (TOKEN_FILE) {
         try {
           fs.writeFileSync(TOKEN_FILE, TOKEN, { mode: 0o600 });
           chmodOwnerOnly(TOKEN_FILE);
-        } catch (e) { /* best effort */ }
+        } catch { /* best effort */ }
       }
     }
     const info = JSON.stringify({

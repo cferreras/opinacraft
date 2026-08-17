@@ -102,6 +102,12 @@ test("public catalog headers sort the visible columns and toggle direction", asy
   await expect(page.locator("article h3").nth(0)).toHaveText(alphaName);
   await expect(page.locator("article h3").nth(1)).toHaveText(betaName);
 
+  await page.getByLabel("Edición", { exact: true }).selectOption("java");
+  await expect(page).toHaveURL(/tableSort=name/);
+  await expect(page).toHaveURL(/tableDirection=asc/);
+  await expect(page.getByLabel("Ordenar", { exact: true })).toHaveValue("table");
+  await expect(page.getByRole("columnheader", { name: "Servidor" })).toHaveAttribute("aria-sort", "ascending");
+
   await page.getByRole("link", { name: "Ordenar por Servidor descendente" }).click();
   await expect(page).toHaveURL(/tableDirection=desc/);
   await expect(page.getByLabel("Ordenar", { exact: true }).locator("option:checked")).toHaveText("Servidor · descendente");
