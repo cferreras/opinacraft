@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { ESLint } from "eslint";
 
 const readProjectFile = (filePath: string) =>
   readFileSync(path.resolve(filePath), "utf8");
@@ -64,6 +65,19 @@ test("synchronizes the catalog sort control with sortable table state", () => {
   assert.match(source, /const activeTableDirection(?:[^=]*)= tableSort \?/);
   assert.match(source, /defaultValue=\{tableSort \? "table" : sort\}/);
   assert.match(source, /<option value="table" disabled>/);
+});
+
+test("does not apply app lint rules to bundled skill scripts", async () => {
+  const eslint = new ESLint();
+  const results = await eslint.lintFiles([
+    ".agents/skills/brainstorming/scripts/server.cjs",
+    ".claude/skills/brainstorming/scripts/server.cjs",
+  ]);
+  const errors = results.flatMap((result) =>
+    result.messages.filter((message) => message.severity === 2),
+  );
+
+  assert.deepEqual(errors, []);
 });
 
 test("code-splits the Recharts history visualization", () => {
