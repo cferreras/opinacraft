@@ -12,6 +12,7 @@ type FilterSelectProps = {
   accessibleLabel?: string;
   defaultValue: string;
   submitOnChange?: boolean;
+  clearFieldsOnChange?: string[];
   children: ReactNode;
 };
 
@@ -22,10 +23,16 @@ export function FilterSelect({
   accessibleLabel,
   defaultValue,
   submitOnChange = false,
+  clearFieldsOnChange,
   children,
 }: FilterSelectProps) {
   function handleChange(event: ChangeEvent<HTMLSelectElement>) {
     const form = event.currentTarget.form;
+    if (form && clearFieldsOnChange?.length) {
+      for (const input of form.querySelectorAll<HTMLInputElement>('input[type="hidden"]')) {
+        if (clearFieldsOnChange.includes(input.name)) input.remove();
+      }
+    }
     queueMicrotask(() => form?.requestSubmit());
   }
 

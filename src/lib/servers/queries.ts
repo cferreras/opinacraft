@@ -90,6 +90,14 @@ const MAX_PUBLIC_SERVER_PAGE = 10_000;
 export type PublicServer = Omit<ManagedServer, "role">;
 export type AggregateHealthStatus = "online" | "offline" | "unknown";
 export type PublicServerSort = "rating" | "players" | "recent";
+export type PublicServerTableSort = "name" | "edition" | "players" | "version" | "latency" | "rating" | "ip";
+export type PublicServerSortDirection = "asc" | "desc";
+
+const publicServerTableSorts: PublicServerTableSort[] = ["name", "edition", "players", "version", "latency", "rating", "ip"];
+
+export function isPublicServerTableSort(value: string | undefined): value is PublicServerTableSort {
+  return value !== undefined && publicServerTableSorts.includes(value as PublicServerTableSort);
+}
 
 const monitorColumns = {
   monitorHealthStatus: servers.monitorHealthStatus,
@@ -285,6 +293,42 @@ async function attachReviewSummaries<T extends { id: string }>(items: T[]): Prom
   }));
 }
 
+function tableSortOrder(sort: PublicServerTableSort, direction: PublicServerSortDirection) {
+  const directionClause = direction === "asc" ? sql`asc nulls last` : sql`desc nulls last`;
+  const primaryEndpointEdition = sql`(
+    select se.edition
+    from server_endpoints se
+    where se.server_id = ${servers.id}
+      and se.verification_status = 'verified'
+    order by case when se.edition = 'java' then 0 else 1 end
+    limit 1
+  )`;
+  const primaryEndpointAddress = sql`(
+    select se.host || ':' || se.port::text
+    from server_endpoints se
+    where se.server_id = ${servers.id}
+      and se.verification_status = 'verified'
+    order by case when se.edition = 'java' then 0 else 1 end
+    limit 1
+  )`;
+  const reviewAverage = sql`(
+    select avg(sr.rating)
+    from server_reviews sr
+    where sr.server_id = ${servers.id}
+      and sr.status = 'published'
+  )`;
+
+  switch (sort) {
+    case "name": return sql`${servers.name} ${directionClause}`;
+    case "edition": return sql`${primaryEndpointEdition} ${directionClause}`;
+    case "players": return sql`${servers.monitorPlayersCurrent} ${directionClause}`;
+    case "version": return sql`${servers.monitorVersion} ${directionClause}`;
+    case "latency": return sql`${servers.monitorLatencyMs} ${directionClause}`;
+    case "rating": return sql`${reviewAverage} ${directionClause}`;
+    case "ip": return sql`${primaryEndpointAddress} ${directionClause}`;
+  }
+}
+
 export async function listManagedServers(userId: string) {
   const rows = await db
     .select({
@@ -328,11 +372,20 @@ export async function listManagedServers(userId: string) {
   return attachCatalogData(groupServerRows(rows));
 }
 
-export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating" }: { page?: number; query?: string; tagSlugs?: string[]; edition?: "java" | "bedrock"; status?: AggregateHealthStatus; sort?: PublicServerSort } = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; page: number }> {
+export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating", tableSort, tableDirection = "asc" }: { page?: number; query?: string; tagSlugs?: string[]; edition?: "java" | "bedrock"; status?: AggregateHealthStatus; sort?: PublicServerSort; tableSort?: PublicServerTableSort; tableDirection?: PublicServerSortDirection } = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; page: number }> {
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
     : 1;
   const queryText = query.trim();
+  const catalogOrder = tableSort
+    ? [tableSortOrder(tableSort, tableDirection)]
+    : queryText
+      ? [desc(sql`greatest(similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) * 3, coalesce((select max(similarity(lower(t.slug), lower(${queryText.slice(0, 80)}))) * 2 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})))`)]
+      : sort === "players"
+        ? [desc(sql`coalesce(${servers.monitorPlayersCurrent}, 0)`)]
+        : sort === "recent"
+          ? [desc(servers.createdAt)]
+          : [desc(sql`coalesce((select avg(sr.rating) from server_reviews sr where sr.server_id = ${servers.id} and sr.status = 'published'), 0)`)];
   const serverIds = await db
     .select({ id: servers.id })
     .from(servers)
@@ -347,16 +400,7 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
       ...tagSlugs.slice(0, 8).map((slug) => sql`exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.slug = ${slug} and t.status = 'active')`),
       status ? sql`case when ${servers.monitorLastCheckedAt} is null then 'unknown' when ${servers.monitorLastCheckedAt} <= now() - (case when ${servers.publicationStatus} = 'published' and ${servers.moderationStatus} = 'active' and ${servers.availabilityHiddenAt} is null then interval '30 minutes' else interval '120 minutes' end) then 'unknown' else ${servers.monitorHealthStatus} end = ${status}` : undefined,
     ))
-    .orderBy(
-      ...(queryText
-        ? [desc(sql`greatest(similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) * 3, coalesce((select max(similarity(lower(t.slug), lower(${queryText.slice(0, 80)}))) * 2 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})))`)]
-        : sort === "players"
-          ? [desc(sql`coalesce(${servers.monitorPlayersCurrent}, 0)`)]
-          : sort === "recent"
-            ? [desc(servers.createdAt)]
-            : [desc(sql`coalesce((select avg(sr.rating) from server_reviews sr where sr.server_id = ${servers.id} and sr.status = 'published'), 0)`)]),
-      desc(servers.createdAt), desc(servers.id),
-    )
+    .orderBy(...catalogOrder, desc(servers.createdAt), desc(servers.id))
     .limit(PUBLIC_SERVER_PAGE_SIZE + 1)
     .offset((safePage - 1) * PUBLIC_SERVER_PAGE_SIZE);
   const hasNextPage = serverIds.length > PUBLIC_SERVER_PAGE_SIZE;

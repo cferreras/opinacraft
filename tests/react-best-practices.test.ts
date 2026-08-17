@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { ESLint } from "eslint";
 
 const readProjectFile = (filePath: string) =>
   readFileSync(path.resolve(filePath), "utf8");
@@ -35,6 +36,58 @@ test("narrows profile effects to the authenticated user identity", () => {
 
   assert.match(source, /session\?\.user\?\.id/);
   assert.doesNotMatch(source, /\}, \[session\]\);/);
+});
+
+test("keeps sortable header hover compact without rounded edges", () => {
+  const source = readProjectFile("src/app/servers/page.tsx");
+  const headerSource = source.slice(
+    source.indexOf("function SortableColumnHeader"),
+    source.indexOf("function countLabel"),
+  );
+  const linkClass = headerSource.match(/<Link[\s\S]*?className="([^"]+)"/)?.[1];
+
+  assert.doesNotMatch(
+    headerSource,
+    /<div role="columnheader"[^>]*className="[^\"]*hover:bg-muted\/60[^\"]*"/,
+  );
+  assert.ok(linkClass, "sortable header link should have a class list");
+  assert.match(linkClass, /\binline-flex\b/);
+  assert.doesNotMatch(linkClass, /(?:^|\s)w-full(?:\s|$)/);
+  assert.doesNotMatch(linkClass, /\brounded-md\b/);
+  assert.match(linkClass, /\bpx-1\b/);
+  assert.match(linkClass, /\bhover:bg-muted\/60\b/);
+});
+
+test("synchronizes the catalog sort control with sortable table state", () => {
+  const source = readProjectFile("src/app/servers/page.tsx");
+
+  assert.match(source, /const activeTableSort = tableSort \?\?/);
+  assert.match(source, /const activeTableDirection(?:[^=]*)= tableSort \?/);
+  assert.match(source, /defaultValue=\{tableSort \? "table" : sort\}/);
+  assert.match(source, /<option value="table" disabled>/);
+});
+
+test("preserves table sorting when the catalog filters submit", () => {
+  const pageSource = readProjectFile("src/app/servers/page.tsx");
+  const filterSource = readProjectFile("src/components/filter-select.tsx");
+
+  assert.match(pageSource, /name="tableSort" value=\{tableSort\}/);
+  assert.match(pageSource, /name="tableDirection" value=\{tableDirection\}/);
+  assert.match(pageSource, /clearFieldsOnChange=\{tableSort \? \["tableSort", "tableDirection"\] : undefined\}/);
+  assert.match(filterSource, /clearFieldsOnChange\?: string\[\]/);
+});
+
+test("does not apply app lint rules to bundled skill scripts", async () => {
+  const eslint = new ESLint();
+  const results = await eslint.lintFiles([
+    ".agents/skills/brainstorming/scripts/server.cjs",
+    ".claude/skills/brainstorming/scripts/server.cjs",
+  ]);
+  const errors = results.flatMap((result) =>
+    result.messages.filter((message) => message.severity === 2),
+  );
+
+  assert.deepEqual(errors, []);
 });
 
 test("code-splits the Recharts history visualization", () => {
