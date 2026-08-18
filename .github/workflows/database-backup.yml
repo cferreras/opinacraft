@@ -1,0 +1,196 @@
+name: PostgreSQL database backup
+
+run-name: PostgreSQL database backup by @${{ github.actor }}
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: postgres-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      # postgres:18-alpine, immutable multi-platform manifest.
+      image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    env:
+      BACKUP_FILE: /tmp/opinacraft-postgres.dump
+      BACKUP_PREFIX: opinacraft/postgres
+
+    steps:
+      - name: Install backup tools
+        shell: sh
+        run: apk add --no-cache aws-cli bash
+
+      - name: Validate backup configuration
+        shell: bash
+        env:
+          NEON_BACKUP_DATABASE_URL: ${{ secrets.NEON_BACKUP_DATABASE_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+
+          test -n "$NEON_BACKUP_DATABASE_URL"
+          case "$NEON_BACKUP_DATABASE_URL" in
+            postgres://*|postgresql://*) ;;
+            *) echo "NEON_BACKUP_DATABASE_URL must use postgres:// or postgresql://" >&2; exit 1 ;;
+          esac
+          if [[ "$NEON_BACKUP_DATABASE_URL" == *-pooler.* || "$NEON_BACKUP_DATABASE_URL" == *-pooler/* ]]; then
+            echo "NEON_BACKUP_DATABASE_URL must be a direct, non-pooled Neon URL" >&2
+            exit 1
+          fi
+          if [[ "$NEON_BACKUP_DATABASE_URL" != *"sslmode=require"* && "$NEON_BACKUP_DATABASE_URL" != *"sslmode=verify-full"* ]]; then
+            echo "NEON_BACKUP_DATABASE_URL must require TLS with sslmode=require or sslmode=verify-full" >&2
+            exit 1
+          fi
+
+          [[ "$R2_ACCOUNT_ID" =~ ^[[:xdigit:]]{32}$ ]] || {
+            echo "R2_ACCOUNT_ID must be a 32-character Cloudflare account ID" >&2
+            exit 1
+          }
+          test -n "$R2_ACCESS_KEY_ID"
+          test -n "$R2_SECRET_ACCESS_KEY"
+          test -n "$R2_BUCKET_NAME"
+
+          echo "::add-mask::$NEON_BACKUP_DATABASE_URL"
+          echo "::add-mask::$R2_ACCESS_KEY_ID"
+          echo "::add-mask::$R2_SECRET_ACCESS_KEY"
+          echo "::add-mask::$R2_BUCKET_NAME"
+
+      - name: Create and verify PostgreSQL dump
+        id: dump
+        shell: bash
+        env:
+          NEON_BACKUP_DATABASE_URL: ${{ secrets.NEON_BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$NEON_BACKUP_DATABASE_URL"
+          rm -f "$BACKUP_FILE" /tmp/opinacraft-postgres.contents
+
+          pg_dump \
+            --dbname="$NEON_BACKUP_DATABASE_URL" \
+            --format=custom \
+            --file="$BACKUP_FILE" \
+            --no-owner \
+            --no-privileges \
+            --quote-all-identifiers
+
+          test -s "$BACKUP_FILE"
+          pg_restore --list "$BACKUP_FILE" > /tmp/opinacraft-postgres.contents
+          test -s /tmp/opinacraft-postgres.contents
+
+          backup_sha256="$(sha256sum "$BACKUP_FILE" | awk '{print $1}')"
+          backup_size="$(stat -c '%s' "$BACKUP_FILE")"
+          echo "sha256=$backup_sha256" >> "$GITHUB_OUTPUT"
+          echo "size=$backup_size" >> "$GITHUB_OUTPUT"
+
+      - name: Upload snapshots and prune retention
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          BACKUP_SHA256: ${{ steps.dump.outputs.sha256 }}
+          BACKUP_SIZE: ${{ steps.dump.outputs.size }}
+        run: |
+          set -euo pipefail
+
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          bucket_uri="s3://${R2_BUCKET_NAME}"
+          day="$(date -u +%F)"
+          week="$(date -u +%G-W%V)"
+          month="$(date -u +%Y-%m)"
+          daily_key="$BACKUP_PREFIX/daily/opinacraft-${day}.dump"
+          weekly_key="$BACKUP_PREFIX/weekly/opinacraft-${week}.dump"
+          monthly_key="$BACKUP_PREFIX/monthly/opinacraft-${month}.dump"
+
+          aws s3 cp "$BACKUP_FILE" "$bucket_uri/$daily_key" \
+            --endpoint-url "$endpoint" \
+            --content-type application/octet-stream \
+            --metadata "sha256=$BACKUP_SHA256" \
+            --only-show-errors
+
+          aws s3 cp "$bucket_uri/$daily_key" "$bucket_uri/$weekly_key" \
+            --endpoint-url "$endpoint" \
+            --metadata-directive COPY \
+            --only-show-errors
+          aws s3 cp "$bucket_uri/$daily_key" "$bucket_uri/$monthly_key" \
+            --endpoint-url "$endpoint" \
+            --metadata-directive COPY \
+            --only-show-errors
+
+          for key in "$daily_key" "$weekly_key" "$monthly_key"; do
+            remote_size="$(aws s3api head-object \
+              --bucket "$R2_BUCKET_NAME" \
+              --key "$key" \
+              --endpoint-url "$endpoint" \
+              --query ContentLength \
+              --output text)"
+            remote_sha256="$(aws s3api head-object \
+              --bucket "$R2_BUCKET_NAME" \
+              --key "$key" \
+              --endpoint-url "$endpoint" \
+              --query 'Metadata.sha256' \
+              --output text)"
+            test "$remote_size" = "$BACKUP_SIZE"
+            test "$remote_sha256" = "$BACKUP_SHA256"
+          done
+
+          prune_prefix() {
+            local prefix="$1"
+            local keep="$2"
+            local keys=()
+            mapfile -t keys < <(
+              aws s3api list-objects-v2 \
+                --bucket "$R2_BUCKET_NAME" \
+                --prefix "$prefix/" \
+                --endpoint-url "$endpoint" \
+                --query 'sort_by(Contents,&Key)[].Key' \
+                --output text | tr '\t' '\n' | sed '/^None$/d;/^$/d'
+            )
+
+            if (( ${#keys[@]} <= keep )); then
+              return
+            fi
+
+            local delete_count
+            delete_count=$((${#keys[@]} - keep))
+            for key in "${keys[@]:0:delete_count}"; do
+              aws s3api delete-object \
+                --bucket "$R2_BUCKET_NAME" \
+                --key "$key" \
+                --endpoint-url "$endpoint"
+            done
+          }
+
+          prune_prefix "$BACKUP_PREFIX/daily" 7
+          prune_prefix "$BACKUP_PREFIX/weekly" 4
+          prune_prefix "$BACKUP_PREFIX/monthly" 6
+
+          {
+            echo "### PostgreSQL backup"
+            echo "- Daily: \`$daily_key\`"
+            echo "- Weekly: \`$weekly_key\`"
+            echo "- Monthly: \`$monthly_key\`"
+            echo "- SHA-256: \`$BACKUP_SHA256\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove local dump
+        if: always()
+        shell: bash
+        run: rm -f "$BACKUP_FILE" /tmp/opinacraft-postgres.contents

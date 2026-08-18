@@ -67,6 +67,14 @@ The workflow serializes migration runs, rejects Neon pooler URLs, applies all pe
 
 The repository currently contains migrations for Better Auth, server management, Java/Bedrock MOTD verification, verified endpoint claims, tags/media, pg_trgm search, endpoint health, availability hiding, Blob quota counters, notification outbox, moderation/reporting and the canonical server monitor worker. Review every generated migration before applying it to a database.
 
+### Automatic PostgreSQL backups
+
+The `PostgreSQL database backup` GitHub Actions workflow creates daily Neon
+backups in private Cloudflare R2 storage and retains seven daily, four weekly
+and six monthly copies. Configure its repository secrets and follow the
+restore procedure in [`docs/database-backups.md`](docs/database-backups.md)
+before enabling the scheduled run.
+
 ## Tests
 
 Run the baseline checks:
