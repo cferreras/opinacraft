@@ -50,10 +50,37 @@ jobs:
             echo "NEON_BACKUP_DATABASE_URL must be a direct, non-pooled Neon URL" >&2
             exit 1
           fi
-          if [[ "$NEON_BACKUP_DATABASE_URL" != *"sslmode=require"* && "$NEON_BACKUP_DATABASE_URL" != *"sslmode=verify-full"* ]]; then
-            echo "NEON_BACKUP_DATABASE_URL must require TLS with sslmode=require or sslmode=verify-full" >&2
+          sslmode_count=0
+          sslmode_value=""
+          if [[ "$NEON_BACKUP_DATABASE_URL" == *\?* ]]; then
+            connection_query="${NEON_BACKUP_DATABASE_URL#*\?}"
+            IFS='&' read -r -a query_fields <<< "$connection_query"
+            for query_field in "${query_fields[@]}"; do
+              query_key="${query_field%%=*}"
+              if [[ "$query_key" != "sslmode" ]]; then
+                continue
+              fi
+
+              sslmode_count=$((sslmode_count + 1))
+              if [[ "$query_field" == *=* ]]; then
+                sslmode_value="${query_field#*=}"
+              else
+                sslmode_value=""
+              fi
+            done
+          fi
+
+          if (( sslmode_count != 1 )); then
+            echo "NEON_BACKUP_DATABASE_URL must contain exactly one sslmode=require or sslmode=verify-full query parameter" >&2
             exit 1
           fi
+          case "$sslmode_value" in
+            require|verify-full) ;;
+            *)
+              echo "NEON_BACKUP_DATABASE_URL must contain exactly one sslmode=require or sslmode=verify-full query parameter" >&2
+              exit 1
+              ;;
+          esac
 
           [[ "$R2_ACCOUNT_ID" =~ ^[[:xdigit:]]{32}$ ]] || {
             echo "R2_ACCOUNT_ID must be a 32-character Cloudflare account ID" >&2
