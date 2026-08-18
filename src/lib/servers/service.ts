@@ -41,7 +41,7 @@ export class UnverifiedEmailError extends Error {
 
 export class NoVerifiedEndpointError extends Error {
   constructor() {
-    super("Verify at least one Minecraft endpoint before publishing this server.");
+    super("Verifica al menos un endpoint de Minecraft antes de publicar este servidor.");
     this.name = "NoVerifiedEndpointError";
   }
 }
@@ -139,6 +139,10 @@ async function insertServerBundle(
     websiteUrl: input.websiteUrl,
     storeUrl: input.storeUrl,
     discordUrl: input.discordUrl,
+    accessType: input.accessType,
+    accessFormUrl: input.accessFormUrl,
+    accountMode: input.accountMode,
+    authMode: input.authMode,
     publicationStatus: "draft",
   });
   await tx.insert(serverNetworkTargets).values({
@@ -290,6 +294,10 @@ export async function updateServer(
         websiteUrl: input.websiteUrl,
         storeUrl: input.storeUrl,
         discordUrl: input.discordUrl,
+        accessType: input.accessType,
+        accessFormUrl: input.accessFormUrl,
+        accountMode: input.accountMode,
+        authMode: input.authMode,
         ...(publicationStatus ? { publicationStatus } : {}),
         ...(publicationStatus === "published" ? { availabilityHiddenAt: null } : {}),
         ...(javaChanged

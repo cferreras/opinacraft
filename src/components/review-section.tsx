@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { DeletedReviewNotice, ReviewCard } from "@/components/review-card";
+import { ReviewEditDialog } from "@/components/review-edit-dialog";
 import { ReviewForm } from "@/components/review-form";
 import { canPublishOfficialReply, type ReviewSummary, type ReviewView } from "@/lib/servers/reviews";
 
@@ -52,7 +53,7 @@ function Composer({ serverId, slug, viewer }: { serverId: string; slug: string; 
   if (viewer.membershipRole) return <Alert><AlertDescription><strong>Formas parte del equipo.</strong> Los miembros no pueden puntuar su propio servidor.</AlertDescription></Alert>;
   if (viewer.review?.status === "hidden") return <DeletedReviewNotice status="hidden" content={viewer.review.content} />;
   if (viewer.review?.status === "deleted") return <Card><CardContent className="grid gap-4 p-4"><DeletedReviewNotice status="deleted" content={viewer.review.content} /><ReviewForm action={createReviewAction} serverId={serverId} slug={slug} /></CardContent></Card>;
-  if (viewer.review) return <Card><CardContent className="grid gap-4 p-4"><p className="text-sm font-semibold">Edita tu opinión</p><ReviewForm action={updateReviewAction} serverId={serverId} slug={slug} reviewId={viewer.review.id} initialRating={viewer.review.rating} initialContent={viewer.review.content} editing /><form action={deleteReviewAction} className="flex justify-end"><input type="hidden" name="reviewId" value={viewer.review.id} /><input type="hidden" name="slug" value={slug} /><Button type="submit" variant="link" size="sm" className="h-auto p-0 text-destructive">Eliminar opinión</Button></form></CardContent></Card>;
+  if (viewer.review) return <Card><CardContent className="grid gap-4 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">Tu opinión está publicada</p><p className="mt-1 text-xs text-muted-foreground">Puedes actualizarla cuando quieras.</p></div><div className="flex flex-wrap items-center gap-2"><ReviewEditDialog action={updateReviewAction} serverId={serverId} slug={slug} reviewId={viewer.review.id} initialRating={viewer.review.rating} initialContent={viewer.review.content} /><form action={deleteReviewAction}><input type="hidden" name="reviewId" value={viewer.review.id} /><input type="hidden" name="slug" value={slug} /><Button type="submit" variant="link" size="sm" className="h-auto p-0 text-destructive">Eliminar opinión</Button></form></div></div></CardContent></Card>;
   return <Card><CardContent className="grid gap-4 p-4"><p className="text-sm font-semibold">Comparte tu experiencia</p><ReviewForm action={createReviewAction} serverId={serverId} slug={slug} /></CardContent></Card>;
 }
 

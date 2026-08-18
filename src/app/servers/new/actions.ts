@@ -21,7 +21,7 @@ import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type CreateServerState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "tags" | "endpoints", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "tags" | "endpoints", string>>;
   created?: { id: string; slug: string };
 };
 
@@ -40,6 +40,10 @@ function getInput(formData: FormData): CreateServerInput {
     websiteUrl: formValue(formData, "websiteUrl"),
     storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
+    accessType: formValue(formData, "accessType") as CreateServerInput["accessType"],
+    accessFormUrl: formValue(formData, "accessFormUrl"),
+    accountMode: formValue(formData, "accountMode") as CreateServerInput["accountMode"],
+    authMode: formValue(formData, "authMode") as CreateServerInput["authMode"],
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
     host: formValue(formData, "host"),
     javaPort: parseEnabledPort(formValue(formData, "javaPort"), javaEnabled),

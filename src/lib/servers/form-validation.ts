@@ -4,6 +4,10 @@ export type ServerValidationField =
   | "websiteUrl"
   | "storeUrl"
   | "discordUrl"
+  | "accessFormUrl"
+  | "accessType"
+  | "accountMode"
+  | "authMode"
   | "tags"
   | "endpoints"
   | "publicationStatus";
@@ -15,6 +19,10 @@ const serverFields = new Set<ServerValidationField>([
   "websiteUrl",
   "storeUrl",
   "discordUrl",
+  "accessFormUrl",
+  "accessType",
+  "accountMode",
+  "authMode",
   "tags",
   "endpoints",
   "publicationStatus",

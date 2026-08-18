@@ -55,10 +55,9 @@ export function ReviewCard({ review, serverId, slug, canReport, canReply, canMan
                 <p className="text-xs font-semibold text-primary">Respuesta oficial</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{review.reply.authorName} · {review.reply.createdAt.toLocaleDateString("es-ES")}</p>
               </div>
-              {canManageReplies ? <form action={deleteOfficialReplyAction}><input type="hidden" name="replyId" value={review.reply.id} /><input type="hidden" name="slug" value={slug} /><Button type="submit" variant="link" size="sm" className="h-auto p-0 text-xs text-primary">Eliminar</Button></form> : null}
+              {canManageReplies ? <div className="flex flex-wrap items-center gap-2"><OfficialReplyEditor replyId={review.reply.id} slug={slug} content={review.reply.content} /><form action={deleteOfficialReplyAction}><input type="hidden" name="replyId" value={review.reply.id} /><input type="hidden" name="slug" value={slug} /><Button type="submit" variant="link" size="sm" className="h-auto p-0 text-xs text-primary">Eliminar</Button></form></div> : null}
             </div>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{review.reply.content}</p>
-            {canManageReplies ? <OfficialReplyEditor replyId={review.reply.id} slug={slug} content={review.reply.content} /> : null}
           </div>
         ) : canReply ? <OfficialReplyForm reviewId={review.id} slug={slug} /> : null}
 

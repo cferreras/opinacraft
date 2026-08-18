@@ -21,6 +21,10 @@ type ServerBase = {
   websiteUrl: string | null;
   storeUrl: string | null;
   discordUrl: string | null;
+  accessType: "open" | "whitelist";
+  accessFormUrl: string | null;
+  accountMode: "premium_only" | "premium_and_non_premium";
+  authMode: "direct" | "password_non_premium" | "password_all";
   publicationStatus: "draft" | "published" | "hidden";
   verificationStatus: "unverified" | "verified";
   createdAt: Date;
@@ -340,6 +344,10 @@ export async function listManagedServers(userId: string) {
         websiteUrl: servers.websiteUrl,
         storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
+        accessType: servers.accessType,
+        accessFormUrl: servers.accessFormUrl,
+        accountMode: servers.accountMode,
+        authMode: servers.authMode,
         publicationStatus: servers.publicationStatus,
         verificationStatus: servers.verificationStatus,
         createdAt: servers.createdAt,
@@ -420,6 +428,10 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
         websiteUrl: servers.websiteUrl,
         storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
+        accessType: servers.accessType,
+        accessFormUrl: servers.accessFormUrl,
+        accountMode: servers.accountMode,
+        authMode: servers.authMode,
         publicationStatus: servers.publicationStatus,
         verificationStatus: servers.verificationStatus,
         createdAt: servers.createdAt,
@@ -471,6 +483,10 @@ export async function getPublishedServerBySlug(slug: string) {
         websiteUrl: servers.websiteUrl,
         storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
+        accessType: servers.accessType,
+        accessFormUrl: servers.accessFormUrl,
+        accountMode: servers.accountMode,
+        authMode: servers.authMode,
         publicationStatus: servers.publicationStatus,
         verificationStatus: servers.verificationStatus,
         createdAt: servers.createdAt,
@@ -517,6 +533,10 @@ export async function getManagedServerBySlug(slug: string, userId: string) {
       websiteUrl: servers.websiteUrl,
       storeUrl: servers.storeUrl,
       discordUrl: servers.discordUrl,
+      accessType: servers.accessType,
+      accessFormUrl: servers.accessFormUrl,
+      accountMode: servers.accountMode,
+      authMode: servers.authMode,
       publicationStatus: servers.publicationStatus,
       verificationStatus: servers.verificationStatus,
       verifiedAt: servers.verifiedAt,

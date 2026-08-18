@@ -44,7 +44,7 @@ import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 
 export type ManageState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "tags" | "endpoints" | "publicationStatus", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "tags" | "endpoints" | "publicationStatus", string>>;
 };
 
 function formValue(formData: FormData, key: string) {
@@ -62,6 +62,10 @@ function getServerInput(formData: FormData): UpdateServerInput {
     websiteUrl: formValue(formData, "websiteUrl"),
     storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
+    accessType: formValue(formData, "accessType") as UpdateServerInput["accessType"],
+    accessFormUrl: formValue(formData, "accessFormUrl"),
+    accountMode: formValue(formData, "accountMode") as UpdateServerInput["accountMode"],
+    authMode: formValue(formData, "authMode") as UpdateServerInput["authMode"],
     tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
     host: formValue(formData, "host"),
     javaPort: parseEnabledPort(formValue(formData, "javaPort"), javaEnabled),
@@ -225,7 +229,7 @@ export async function startVerificationAction(formData: FormData) {
   } catch (error) {
     const reason = error instanceof EndpointAlreadyVerifiedError ? "already-verified" :
       error instanceof VerificationAlreadyPendingError ? "pending" :
-      error instanceof NoJavaEndpointError || error instanceof NoBedrockEndpointError ? `no-${edition}` :
+      error instanceof NoJavaEndpointError || error instanceof NoBedrockEndpointError ? "no-endpoint" :
       error instanceof VerificationRateLimitError ? "rate-limit" :
       error instanceof VerificationUnavailableError ? "unavailable" : "unknown";
     if (reason === "unknown") console.error("Failed to start server verification", error);

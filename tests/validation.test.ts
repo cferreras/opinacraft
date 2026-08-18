@@ -4,6 +4,9 @@ import test from "node:test";
 import { safeCallbackUrl } from "../src/lib/callback-url.ts";
 import { databaseConstraint, databaseErrorCode } from "../src/lib/db-errors.ts";
 import { isPublicAddress } from "../src/lib/minecraft/address.ts";
+import { accessTypeLabel, accountModeLabel, authModeLabel } from "../src/lib/servers/access.ts";
+import { NoVerifiedEndpointError } from "../src/lib/servers/service.ts";
+import { NoBedrockEndpointError, NoJavaEndpointError } from "../src/lib/servers/verification.ts";
 import {
   formatEndpoint,
   latencyClass,
@@ -180,4 +183,112 @@ test("trims server tags and enforces the eight-tag limit", () => {
   });
   assert.deepEqual(input.tags, ["Survival", "survival", "español"]);
   assert.equal(createServerInputSchema.safeParse({ name: "A Minecraft Community", tags: Array.from({ length: 9 }, () => "tag"), endpoints: [{ edition: "java", host: "play.example.com" }] }).success, false);
+});
+
+test("accepts a whitelist form and the mixed-account password profile", () => {
+  const result = createServerInputSchema.safeParse({
+    name: "A Minecraft Community",
+    accessType: "whitelist",
+    accessFormUrl: "https://forms.example.com/apply#questions",
+    accountMode: "premium_and_non_premium",
+    authMode: "password_non_premium",
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  });
+
+  assert.equal(result.success, true);
+});
+
+test("normalizes access details and strips a form URL fragment", () => {
+  const input = normalizeCreateServerInput({
+    name: "A Minecraft Community",
+    accessType: "whitelist",
+    accessFormUrl: " https://forms.example.com/apply#questions ",
+    accountMode: "premium_and_non_premium",
+    authMode: "password_non_premium",
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  });
+
+  assert.deepEqual(
+    {
+      accessType: input.accessType,
+      accessFormUrl: input.accessFormUrl,
+      accountMode: input.accountMode,
+      authMode: input.authMode,
+    },
+    {
+      accessType: "whitelist",
+      accessFormUrl: "https://forms.example.com/apply",
+      accountMode: "premium_and_non_premium",
+      authMode: "password_non_premium",
+    },
+  );
+});
+
+test("defaults new servers to open premium-only direct access", () => {
+  const input = normalizeCreateServerInput({
+    name: "A Minecraft Community",
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  });
+
+  assert.deepEqual(
+    {
+      accessType: input.accessType,
+      accessFormUrl: input.accessFormUrl,
+      accountMode: input.accountMode,
+      authMode: input.authMode,
+    },
+    { accessType: "open", accessFormUrl: null, accountMode: "premium_only", authMode: "direct" },
+  );
+});
+
+test("keeps access labels understandable for public server views", () => {
+  assert.equal(accessTypeLabel("open"), "Acceso abierto");
+  assert.equal(accessTypeLabel("whitelist"), "Whitelist");
+  assert.equal(accountModeLabel("premium_only"), "Solo premium");
+  assert.equal(accountModeLabel("premium_and_non_premium"), "Premium y no-premium");
+  assert.equal(authModeLabel({ accountMode: "premium_only", authMode: "direct" }), "Entrada directa");
+  assert.equal(authModeLabel({ accountMode: "premium_and_non_premium", authMode: "password_non_premium" }), "Premium directo · no-premium con contraseña");
+  assert.equal(authModeLabel({ accountMode: "premium_and_non_premium", authMode: "password_all" }), "Contraseña para todas las cuentas");
+});
+
+test("rejects a form link when the server is open", () => {
+  const result = createServerInputSchema.safeParse({
+    name: "A Minecraft Community",
+    accessType: "open",
+    accessFormUrl: "https://forms.example.com/apply",
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  });
+
+  assert.equal(result.success, false);
+  if (!result.success) {
+    assert.equal(result.error.issues.some((issue) => issue.message === "El formulario de acceso solo está disponible con whitelist."), true);
+  }
+});
+
+test("rejects an authentication profile that cannot describe premium-only access", () => {
+  const result = createServerInputSchema.safeParse({
+    name: "A Minecraft Community",
+    accountMode: "premium_only",
+    authMode: "password_non_premium",
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  });
+
+  assert.equal(result.success, false);
+  if (!result.success) {
+    assert.equal(result.error.issues.some((issue) => issue.message === "La autenticación para no-premium solo aplica cuando se aceptan cuentas no-premium."), true);
+  }
+});
+
+test("explains in Spanish that a published server needs a verified endpoint", () => {
+  assert.equal(
+    new NoVerifiedEndpointError().message,
+    "Verifica al menos un endpoint de Minecraft antes de publicar este servidor.",
+  );
+});
+
+test("uses one identity message when no verification address is available", () => {
+  const expected = "Añade una dirección pública de Minecraft antes de verificar la identidad de este servidor.";
+
+  assert.equal(new NoJavaEndpointError().message, expected);
+  assert.equal(new NoBedrockEndpointError().message, expected);
 });
