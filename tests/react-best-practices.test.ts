@@ -157,3 +157,26 @@ test("groups official reply edit and delete actions together", () => {
   assert.match(actionSource, /deleteOfficialReplyAction/);
   assert.match(actionSource, /<OfficialReplyEditor/);
 });
+
+test("shows a completed state for an already verified identity", () => {
+  const source = readProjectFile("src/components/verification-panel.tsx");
+
+  assert.match(source, /\{verified \? \(/);
+  assert.match(source, /La identidad de este servidor ya está verificada/);
+});
+
+test("adds server access constraints without blocking the migration scan", () => {
+  const source = readProjectFile("src/migrations/20260817120000_server_access_details/migration.sql");
+
+  assert.match(source, /servers_access_form_url_check[\s\S]*?NOT VALID/);
+  assert.match(source, /servers_account_auth_mode_check[\s\S]*?NOT VALID/);
+  assert.match(source, /VALIDATE CONSTRAINT "servers_access_form_url_check"/);
+  assert.match(source, /VALIDATE CONSTRAINT "servers_account_auth_mode_check"/);
+});
+
+test("keeps the E2E server fixture aligned with the shared host input", () => {
+  const source = readProjectFile("tests/e2e/helpers.ts");
+
+  assert.match(source, /input\[name="host"\]/);
+  assert.doesNotMatch(source, /input\[name="javaHost"\]/);
+});

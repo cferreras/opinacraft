@@ -48,7 +48,9 @@ export function VerificationPanel({ serverId, slug, verification, targetEdition,
           <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Dirección que se verificará</p>
           <code className="mt-1 block truncate text-sm text-foreground">{targetAddress}</code>
         </div>
-        {active ? (
+        {verified ? (
+          <p className="rounded-lg bg-success/10 p-4 text-sm leading-5 text-success">La identidad de este servidor ya está verificada.</p>
+        ) : active ? (
           <div className="grid gap-4 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.1em] text-primary">Código MOTD temporal</p>

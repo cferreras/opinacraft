@@ -107,7 +107,7 @@ export async function createServer(
   if (options.discordUrl) await page.getByLabel("Invitación de Discord", { exact: true }).fill(options.discordUrl);
 
   const javaHost = options.javaHost ?? `java-${Date.now()}.example.invalid`;
-  await page.locator('input[name="javaHost"]').fill(javaHost);
+  await page.locator('input[name="host"]').fill(javaHost);
   if (options.javaPort !== undefined) await page.locator('input[name="javaPort"]').fill(String(options.javaPort));
 
   if (options.bedrockHost) {
