@@ -132,6 +132,26 @@ test("keeps dismissed reports recoverable through the moderation UI", () => {
   assert.match(schemaSource, /"reopened"/);
 });
 
+test("does not report a stale moderation transition as successful", () => {
+  const source = readProjectFile("src/app/admin/actions.ts");
+
+  assert.match(source, /transitioned = await moderateReport/);
+  assert.match(source, /if \(!transitioned\) redirect\("\/admin\?error=transition"\)/);
+  assert.match(source, /transitioned = await moderateReviewReport/);
+  assert.match(source, /if \(!transitioned\) redirect\("\/admin\?error=transition"\)/);
+});
+
+test("guards moderation transitions against conflicting reports and hidden server reports", () => {
+  const source = readProjectFile("src/lib/admin.ts");
+
+  assert.match(source, /ReportAlreadyOpenError/);
+  assert.match(source, /ReviewReportAlreadyOpenError/);
+  assert.match(source, /decision === "reopened"[\s\S]*createdAt/);
+  assert.match(source, /hasAnotherHiddenLatestAction/);
+  assert.match(source, /moderateReport[\s\S]*hasAnotherHiddenLatestAction/);
+  assert.match(source, /moderateReviewReport[\s\S]*hasAnotherHiddenLatestAction/);
+});
+
 test("keeps sortable header hover compact without rounded edges", () => {
   const source = readProjectFile("src/app/servers/page.tsx");
   const headerSource = source.slice(

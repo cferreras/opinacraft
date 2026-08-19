@@ -31,6 +31,7 @@ const createdServerIds = new Set<string>();
 const createdUserIds = new Set<string>();
 let serverServices: typeof import("../src/lib/servers/service.ts") | null = null;
 let reviewServices: typeof import("../src/lib/servers/reviews.ts") | null = null;
+let adminServices: typeof import("../src/lib/admin.ts") | null = null;
 let closeDatabase: (() => Promise<void>) | null = null;
 
 const testOptions = { skip: !integrationEnabled };
@@ -60,6 +61,17 @@ async function loadReviewServices() {
     ({ closeDatabase } = await import("../src/db.ts"));
   }
   return reviewServices;
+}
+
+async function loadAdminServices() {
+  if (!adminServices) {
+    process.env.DATABASE_URL = testDatabaseUrl;
+    process.env.BETTER_AUTH_SECRET ??= "integration-test-secret-that-is-at-least-32-characters";
+    process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
+    adminServices = await import("../src/lib/admin.ts");
+    ({ closeDatabase } = await import("../src/db.ts"));
+  }
+  return adminServices;
 }
 
 function uniqueEmail() {
@@ -447,6 +459,126 @@ test("review reports reject self reports and open duplicates", testOptions, asyn
   await assert.rejects(() => createReviewReport(reviewerId, serverId, review!.id, { reason: "other" }), ReviewReportSelfError);
   await createReviewReport(reporterId, serverId, review!.id, { reason: "offensive", details: "Detalle del reporte" });
   await assert.rejects(() => createReviewReport(reporterId, serverId, review!.id, { reason: "offensive" }), ReviewReportAlreadyOpenError);
+});
+
+test("reopening a dismissed server report rejects a newer open report from the same reporter", testOptions, async () => {
+  const ownerId = await createUser();
+  const reporterId = await createUser();
+  const moderatorId = await createUser();
+  const serverId = await createServerRecord({ ownerId });
+  const dismissedReportId = randomUUID();
+  const openReportId = randomUUID();
+  const dismissedAt = new Date("2026-08-18T10:00:00.000Z");
+  const openAt = new Date("2026-08-19T10:00:00.000Z");
+
+  await database().query(
+    `insert into server_reports
+      (id, server_id, reporter_user_id, reason, status, created_at, updated_at)
+     values ($1, $2, $3, 'other', 'dismissed', $4, $4),
+            ($5, $2, $3, 'other', 'open', $6, $6)`,
+    [dismissedReportId, serverId, reporterId, dismissedAt, openReportId, openAt],
+  );
+  await database().query(
+    `insert into moderation_events
+      (server_id, report_id, actor_user_id, action, created_at)
+     values ($1, $2, $3, 'dismissed', $4),
+            ($1, $5, $3, 'report_created', $6)`,
+    [serverId, dismissedReportId, moderatorId, dismissedAt, openReportId, openAt],
+  );
+  await database().query(
+    "insert into platform_roles (user_id, role) values ($1, 'moderator')",
+    [moderatorId],
+  );
+
+  const { moderateReport } = await loadAdminServices();
+  const { ReportAlreadyOpenError } = await import("../src/lib/servers/reports.ts");
+
+  await assert.rejects(
+    () => moderateReport(moderatorId, dismissedReportId, "reopened"),
+    ReportAlreadyOpenError,
+  );
+  const result = await database().query("select status from server_reports where id = $1", [dismissedReportId]);
+  assert.equal(result.rows[0].status, "dismissed");
+});
+
+test("restoring one server report keeps the server blocked when another report is still hidden", testOptions, async () => {
+  const ownerId = await createUser();
+  const firstReporterId = await createUser();
+  const secondReporterId = await createUser();
+  const moderatorId = await createUser();
+  const serverId = await createServerRecord({ ownerId });
+  const restoredReportId = randomUUID();
+  const hiddenReportId = randomUUID();
+  const hiddenAt = new Date("2026-08-19T10:00:00.000Z");
+
+  await database().query("update servers set moderation_status = 'blocked' where id = $1", [serverId]);
+  await database().query(
+    `insert into server_reports
+      (id, server_id, reporter_user_id, reason, status)
+     values ($1, $3, $4, 'other', 'actioned'),
+            ($2, $3, $5, 'other', 'actioned')`,
+    [restoredReportId, hiddenReportId, serverId, firstReporterId, secondReporterId],
+  );
+  await database().query(
+    `insert into moderation_events
+      (server_id, report_id, actor_user_id, action, created_at)
+     values ($1, $2, $4, 'hidden', $3),
+            ($1, $5, $4, 'hidden', $3)`,
+    [serverId, restoredReportId, hiddenAt, moderatorId, hiddenReportId],
+  );
+  await database().query(
+    "insert into platform_roles (user_id, role) values ($1, 'moderator')",
+    [moderatorId],
+  );
+
+  const { moderateReport } = await loadAdminServices();
+
+  await moderateReport(moderatorId, restoredReportId, "restored");
+  const result = await database().query("select moderation_status from servers where id = $1", [serverId]);
+  assert.equal(result.rows[0].moderation_status, "blocked");
+});
+
+test("reopening a dismissed review report rejects a newer open report from the same reporter", testOptions, async () => {
+  const ownerId = await createUser();
+  const reviewerId = await createUser();
+  const reporterId = await createUser();
+  const moderatorId = await createUser();
+  const serverId = await createServerRecord({ ownerId });
+  await publishServer(serverId);
+  const { createReview, ReviewReportAlreadyOpenError } = await loadReviewServices();
+  const review = await createReview(reviewerId, serverId, { rating: 3, content: "Una opinión suficientemente larga" });
+  const dismissedReportId = randomUUID();
+  const openReportId = randomUUID();
+  const dismissedAt = new Date("2026-08-18T10:00:00.000Z");
+  const openAt = new Date("2026-08-19T10:00:00.000Z");
+
+  await database().query(
+    `insert into server_review_reports
+      (id, server_id, review_id, reporter_user_id, reason, status, created_at, updated_at)
+     values ($1, $2, $3, $4, 'other', 'dismissed', $5, $5),
+            ($6, $2, $3, $4, 'other', 'open', $7, $7)`,
+    [dismissedReportId, serverId, review!.id, reporterId, dismissedAt, openReportId, openAt],
+  );
+  await database().query(
+    `insert into moderation_events
+      (server_id, review_id, review_report_id, actor_user_id, action, created_at)
+     values ($1, $2, $3, $4, 'dismissed', $5),
+            ($1, $2, $6, $4, 'report_created', $7)`,
+    [serverId, review!.id, dismissedReportId, moderatorId, dismissedAt, openReportId, openAt],
+  );
+  await database().query(
+    "insert into platform_roles (user_id, role) values ($1, 'moderator')",
+    [moderatorId],
+  );
+
+  const { moderateReviewReport } = await loadAdminServices();
+
+  await assert.rejects(
+    () => moderateReviewReport(moderatorId, dismissedReportId, "reopened"),
+    ReviewReportAlreadyOpenError,
+  );
+  const result = await database().query("select status from server_review_reports where id = $1", [dismissedReportId]);
+  assert.equal(result.rows[0].status, "dismissed");
 });
 
 test("player observations are atomic, deduplicated and preserve source history", testOptions, async () => {

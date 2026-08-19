@@ -53,6 +53,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       reporterName: report.reporterName,
     })),
   ];
+  const moderationErrorMessage = query.error === "report-open"
+    ? "No se puede reabrir este reporte porque el mismo usuario ya tiene otro reporte abierto para este servidor."
+    : query.error === "review-report-open"
+      ? "No se puede reabrir este reporte porque el mismo usuario ya tiene otro reporte abierto para esta opinión."
+      : query.error === "transition"
+        ? "El reporte ya no está en el estado esperado. Actualiza la cola e inténtalo de nuevo."
+        : "No se pudo completar la acción de moderación.";
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,7 +70,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <div className="flex flex-wrap gap-2"><Button asChild variant={reportStatus === "open" ? "default" : "outline"} size="sm"><a href="/admin">Pendientes</a></Button><Button asChild variant={reportStatus === "actioned" ? "default" : "outline"} size="sm"><a href="/admin?status=actioned">Resueltos</a></Button><Button asChild variant={reportStatus === "dismissed" ? "default" : "outline"} size="sm"><a href="/admin?status=dismissed">Descartados</a></Button></div>
         </header>
         {query.updated ? <Alert className="mt-5 border-success/30 bg-success/10"><CheckCircle2 aria-hidden="true" className="text-success" /><AlertDescription className="text-success">La acción se completó correctamente.</AlertDescription></Alert> : null}
-        {query.error ? <Alert variant="destructive" className="mt-5"><AlertCircle aria-hidden="true" /><AlertDescription>No se pudo completar la acción de moderación.</AlertDescription></Alert> : null}
+        {query.error ? <Alert variant="destructive" className="mt-5"><AlertCircle aria-hidden="true" /><AlertDescription>{moderationErrorMessage}</AlertDescription></Alert> : null}
 
         <AdminModerationWorkbench items={moderationItems} status={reportStatus} serverAction={moderateReportAction} reviewAction={moderateReviewReportAction} />
 
