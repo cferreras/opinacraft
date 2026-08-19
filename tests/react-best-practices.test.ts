@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { ESLint } from "eslint";
 
@@ -36,6 +37,119 @@ test("narrows profile effects to the authenticated user identity", () => {
 
   assert.match(source, /session\?\.user\?\.id/);
   assert.doesNotMatch(source, /\}, \[session\]\);/);
+});
+
+test("keeps moderation access out of the header layout flow", () => {
+  const source = readProjectFile("src/components/site-header.tsx");
+  const navigationStart = source.indexOf("function NavigationLinks");
+  const mobileNavigationStart = source.indexOf("function MobileNavigationSection");
+  const navigationSource = source.slice(navigationStart, mobileNavigationStart);
+  const menuStart = source.indexOf("<DropdownMenuContent");
+  const menuEnd = source.indexOf("</DropdownMenuContent>", menuStart);
+  const menuSource = source.slice(menuStart, menuEnd);
+
+  assert.doesNotMatch(navigationSource, /canModerate|moderationNavigation/);
+  assert.match(menuSource, /canModerate/);
+  assert.match(menuSource, /Moderación/);
+});
+
+test("requires confirmation before applying moderation report actions", () => {
+  const source = readProjectFile("src/app/admin/page.tsx");
+  const workbenchSource = readProjectFile("src/components/admin-moderation-workbench.tsx");
+
+  assert.match(source, /AdminModerationWorkbench/);
+  assert.match(workbenchSource, /AlertDialogTrigger/);
+  assert.match(workbenchSource, /target=\{item\.kind\}/);
+  assert.match(workbenchSource, /AlertDialogCancel[\s\S]*Cancelar/);
+  assert.match(workbenchSource, /Sí, descartar/);
+  assert.match(workbenchSource, /Sí, ocultar/);
+  assert.match(workbenchSource, /Sí, restaurar/);
+});
+
+test("groups moderation queue items by target and surfaces repeated activity", async () => {
+  const helperPath = path.resolve("src/lib/moderation-workbench.ts");
+
+  assert.equal(
+    existsSync(helperPath),
+    true,
+    "the moderation workbench should have a tested grouping helper",
+  );
+
+  const { groupModerationItems } = await import(pathToFileURL(helperPath).href);
+  const groups = groupModerationItems([
+    {
+      id: "report-1",
+      kind: "server",
+      subjectKey: "server:one",
+      subjectLabel: "Servidor Uno",
+      serverSlug: "servidor-uno",
+      reason: "offline",
+      details: null,
+      status: "open",
+      createdAt: "2026-08-19T10:00:00.000Z",
+    },
+    {
+      id: "report-2",
+      kind: "server",
+      subjectKey: "server:one",
+      subjectLabel: "Servidor Uno",
+      serverSlug: "servidor-uno",
+      reason: "inappropriate",
+      details: "Contenido que revisar",
+      status: "open",
+      createdAt: "2026-08-19T11:00:00.000Z",
+    },
+    {
+      id: "report-3",
+      kind: "review",
+      subjectKey: "review:three",
+      subjectLabel: "Servidor Dos",
+      serverSlug: "servidor-dos",
+      reason: "spam",
+      details: null,
+      status: "open",
+      createdAt: "2026-08-19T12:00:00.000Z",
+    },
+  ]);
+
+  assert.equal(groups.length, 2);
+  assert.equal(groups[0].subjectKey, "server:one");
+  assert.equal(groups[0].reportCount, 2);
+  assert.equal(groups[0].isRepeated, true);
+  assert.equal(groups[0].priority, "high");
+  assert.equal(groups[1].reportCount, 1);
+});
+
+test("keeps dismissed reports recoverable through the moderation UI", () => {
+  const pageSource = readProjectFile("src/app/admin/page.tsx");
+  const actionSource = readProjectFile("src/app/admin/actions.ts");
+  const adminSource = readProjectFile("src/lib/admin.ts");
+  const schemaSource = readProjectFile("src/schema.ts");
+
+  assert.match(pageSource, /status === "dismissed"/);
+  assert.match(actionSource, /reopened/);
+  assert.match(adminSource, /decision === "reopened"/);
+  assert.match(schemaSource, /"reopened"/);
+});
+
+test("does not report a stale moderation transition as successful", () => {
+  const source = readProjectFile("src/app/admin/actions.ts");
+
+  assert.match(source, /transitioned = await moderateReport/);
+  assert.match(source, /if \(!transitioned\) redirect\("\/admin\?error=transition"\)/);
+  assert.match(source, /transitioned = await moderateReviewReport/);
+  assert.match(source, /if \(!transitioned\) redirect\("\/admin\?error=transition"\)/);
+});
+
+test("guards moderation transitions against conflicting reports and hidden server reports", () => {
+  const source = readProjectFile("src/lib/admin.ts");
+
+  assert.match(source, /ReportAlreadyOpenError/);
+  assert.match(source, /ReviewReportAlreadyOpenError/);
+  assert.match(source, /decision === "reopened"[\s\S]*createdAt/);
+  assert.match(source, /hasAnotherHiddenLatestAction/);
+  assert.match(source, /moderateReport[\s\S]*hasAnotherHiddenLatestAction/);
+  assert.match(source, /moderateReviewReport[\s\S]*hasAnotherHiddenLatestAction/);
 });
 
 test("keeps sortable header hover compact without rounded edges", () => {

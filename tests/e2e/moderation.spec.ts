@@ -63,16 +63,20 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   createdEmails.push(moderatorAccount.email);
   await grantPlatformRole(moderatorAccount.email, "moderator");
   await moderator.goto("/admin");
-  const report = moderator.locator('[data-slot="card"]').filter({ hasText: serverName });
-  await report.getByRole("button", { name: "Ocultar" }).click();
+  const report = moderator.locator("article").filter({ hasText: serverName }).first();
+  await report.getByRole("button", { name: "Revisar" }).click();
+  await moderator.getByRole("dialog").getByRole("button", { name: "Ocultar" }).click();
+  await moderator.getByRole("alertdialog").getByRole("button", { name: "Sí, ocultar" }).click();
   await expect(moderator).toHaveURL(/\/admin\?updated=1$/);
 
   await reporter.goto("/servers");
   await expect(reporter.getByRole("heading", { name: serverName })).toHaveCount(0);
 
   await moderator.goto("/admin?status=actioned");
-  const resolved = moderator.locator('[data-slot="card"]').filter({ hasText: serverName });
-  await resolved.getByRole("button", { name: "Restaurar" }).click();
+  const resolved = moderator.locator("article").filter({ hasText: serverName }).first();
+  await resolved.getByRole("button", { name: "Revisar" }).click();
+  await moderator.getByRole("dialog").getByRole("button", { name: "Restaurar" }).click();
+  await moderator.getByRole("alertdialog").getByRole("button", { name: "Sí, restaurar" }).click();
   await expect(moderator).toHaveURL(/\/admin\?updated=1$/);
   await reporter.goto(`/servers/${slug}`);
   await expect(reporter.getByRole("heading", { name: serverName })).toBeVisible();
@@ -83,10 +87,20 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   await secondReportForm.getByRole("button", { name: "Enviar reporte" }).click();
   await expect(reporter.getByRole("alert").filter({ hasText: "Hemos recibido" })).toBeVisible();
   await moderator.goto("/admin");
-  await moderator.locator('[data-slot="card"]').filter({ hasText: serverName }).getByRole("button", { name: "Descartar" }).click();
+  await moderator.locator("article").filter({ hasText: serverName }).first().getByRole("button", { name: "Revisar" }).click();
+  await moderator.getByRole("dialog").getByRole("button", { name: "Descartar" }).click();
+  await moderator.getByRole("alertdialog").getByRole("button", { name: "Sí, descartar" }).click();
   await expect(moderator).toHaveURL(/\/admin\?updated=1$/);
   await reporter.reload();
   await expect(reporter.getByRole("heading", { name: serverName })).toBeVisible();
+
+  await moderator.goto("/admin?status=dismissed");
+  await moderator.locator("article").filter({ hasText: serverName }).first().getByRole("button", { name: "Revisar" }).click();
+  await moderator.getByRole("dialog").getByRole("button", { name: "Reabrir" }).click();
+  await moderator.getByRole("alertdialog").getByRole("button", { name: "Sí, reabrir" }).click();
+  await expect(moderator).toHaveURL(/\/admin\?updated=1$/);
+  await moderator.goto("/admin");
+  await expect(moderator.locator("article").filter({ hasText: serverName }).first()).toBeVisible();
 
   await reporterContext.close();
   await moderatorContext.close();

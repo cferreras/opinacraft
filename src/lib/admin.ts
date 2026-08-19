@@ -1,8 +1,10 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull } from "drizzle-orm";
 
 import { db } from "@/db";
 import { moderationEvents, notificationJobs, platformRoles, serverMembers, serverReports, serverReviewReports, serverReviews, servers } from "@/schema";
 import { user } from "@/auth-schema";
+import { ReportAlreadyOpenError } from "@/lib/servers/reports";
+import { ReviewReportAlreadyOpenError } from "@/lib/servers/reviews";
 
 export async function requirePlatformRole(userId: string, minimum: "moderator" | "admin" = "moderator") {
   const role = await getPlatformRole(userId);
@@ -22,29 +24,52 @@ export async function getPlatformRole(userId: string) {
   return role?.role ?? null;
 }
 
-export async function listOpenReports(status: "open" | "actioned" = "open") {
+function hasAnotherHiddenLatestAction(events: Array<{ reportId: string | null; action: string }>, currentReportId: string) {
+  const latestActionByReport = new Map<string, string>();
+  for (const event of events) {
+    if (event.reportId && !latestActionByReport.has(event.reportId)) latestActionByReport.set(event.reportId, event.action);
+  }
+  return [...latestActionByReport.entries()].some(([reportId, action]) => reportId !== currentReportId && action === "hidden");
+}
+
+export async function listOpenReports(status: "open" | "actioned" | "dismissed" = "open") {
   return db.select({ id: serverReports.id, serverId: serverReports.serverId, serverName: servers.name, serverSlug: servers.slug, reason: serverReports.reason, details: serverReports.details, status: serverReports.status, createdAt: serverReports.createdAt }).from(serverReports).innerJoin(servers, eq(serverReports.serverId, servers.id)).where(eq(serverReports.status, status)).orderBy(desc(serverReports.createdAt));
 }
 
-export async function moderateReport(userId: string, reportId: string, decision: "dismissed" | "hidden" | "restored") {
+export async function moderateReport(userId: string, reportId: string, decision: "dismissed" | "hidden" | "restored" | "reopened") {
   await requirePlatformRole(userId);
   return db.transaction(async (tx) => {
     const [report] = await tx
-      .select({ id: serverReports.id, serverId: serverReports.serverId, reporterUserId: serverReports.reporterUserId })
+      .select({ id: serverReports.id, serverId: serverReports.serverId, reporterUserId: serverReports.reporterUserId, createdAt: serverReports.createdAt })
       .from(serverReports)
-      .where(and(eq(serverReports.id, reportId), inArray(serverReports.status, decision === "restored" ? ["open", "actioned"] : ["open"])))
+      .where(and(eq(serverReports.id, reportId), inArray(serverReports.status, decision === "reopened" ? ["dismissed"] : decision === "restored" ? ["open", "actioned"] : ["open"])))
       .for("update")
       .limit(1);
     if (!report) return false;
+    if (decision === "reopened" && report.reporterUserId) {
+      const [newerOpenReport] = await tx
+        .select({ id: serverReports.id })
+        .from(serverReports)
+        .where(and(eq(serverReports.serverId, report.serverId), eq(serverReports.reporterUserId, report.reporterUserId), eq(serverReports.status, "open"), gt(serverReports.createdAt, report.createdAt)))
+        .limit(1);
+      if (newerOpenReport) throw new ReportAlreadyOpenError();
+    }
     const [reporter] = report.reporterUserId
       ? await tx.select({ email: user.email }).from(user).where(eq(user.id, report.reporterUserId)).limit(1)
       : [];
     const reporterEmail = reporter?.email ?? null;
-    const status = decision === "dismissed" ? "dismissed" : "actioned";
+    const status = decision === "dismissed" ? "dismissed" : decision === "reopened" ? "open" : "actioned";
     await tx.update(serverReports).set({ status, assignedToUserId: userId }).where(eq(serverReports.id, reportId));
     await tx.insert(moderationEvents).values({ serverId: report.serverId, reportId, actorUserId: userId, action: decision, details: null });
     if (decision === "hidden") await tx.update(servers).set({ moderationStatus: "blocked" }).where(eq(servers.id, report.serverId));
-    if (decision === "restored") await tx.update(servers).set({ moderationStatus: "active" }).where(eq(servers.id, report.serverId));
+    if (decision === "restored") {
+      const serverEvents = await tx
+        .select({ reportId: moderationEvents.reportId, action: moderationEvents.action, createdAt: moderationEvents.createdAt })
+        .from(moderationEvents)
+        .where(and(eq(moderationEvents.serverId, report.serverId), isNotNull(moderationEvents.reportId)))
+        .orderBy(desc(moderationEvents.createdAt), desc(moderationEvents.id));
+      if (!hasAnotherHiddenLatestAction(serverEvents, report.id)) await tx.update(servers).set({ moderationStatus: "active" }).where(eq(servers.id, report.serverId));
+    }
     if (reporterEmail) await tx.insert(notificationJobs).values({ dedupeKey: `report:${reportId}:${decision}`, recipientUserId: report.reporterUserId, recipientEmail: reporterEmail, template: "report_decision", payload: { decision, serverId: report.serverId } }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
     const [owner] = await tx.select({ userId: serverMembers.userId, email: user.email }).from(serverMembers).innerJoin(user, eq(serverMembers.userId, user.id)).where(and(eq(serverMembers.serverId, report.serverId), eq(serverMembers.role, "owner"))).limit(1);
     if (owner?.email && owner.userId !== report.reporterUserId) await tx.insert(notificationJobs).values({ dedupeKey: `report-owner:${reportId}:${decision}`, recipientUserId: owner.userId, recipientEmail: owner.email, template: "report_decision", payload: { decision, serverId: report.serverId } }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
@@ -52,7 +77,7 @@ export async function moderateReport(userId: string, reportId: string, decision:
   });
 }
 
-export async function listOpenReviewReports(status: "open" | "actioned" = "open") {
+export async function listOpenReviewReports(status: "open" | "actioned" | "dismissed" = "open") {
   return db
     .select({
       id: serverReviewReports.id,
@@ -78,7 +103,7 @@ export async function listOpenReviewReports(status: "open" | "actioned" = "open"
     .orderBy(desc(serverReviewReports.createdAt));
 }
 
-export async function moderateReviewReport(userId: string, reportId: string, decision: "dismissed" | "hidden" | "restored") {
+export async function moderateReviewReport(userId: string, reportId: string, decision: "dismissed" | "hidden" | "restored" | "reopened") {
   await requirePlatformRole(userId);
   return db.transaction(async (tx) => {
     const [report] = await tx
@@ -88,12 +113,21 @@ export async function moderateReviewReport(userId: string, reportId: string, dec
         reviewId: serverReviewReports.reviewId,
         reporterUserId: serverReviewReports.reporterUserId,
         status: serverReviewReports.status,
+        createdAt: serverReviewReports.createdAt,
       })
       .from(serverReviewReports)
-      .where(and(eq(serverReviewReports.id, reportId), inArray(serverReviewReports.status, decision === "restored" ? ["open", "actioned"] : ["open"])))
+      .where(and(eq(serverReviewReports.id, reportId), inArray(serverReviewReports.status, decision === "reopened" ? ["dismissed"] : decision === "restored" ? ["open", "actioned"] : ["open"])))
       .for("update")
       .limit(1);
     if (!report) return false;
+    if (decision === "reopened" && report.reporterUserId && report.reviewId) {
+      const [newerOpenReport] = await tx
+        .select({ id: serverReviewReports.id })
+        .from(serverReviewReports)
+        .where(and(eq(serverReviewReports.serverId, report.serverId), eq(serverReviewReports.reviewId, report.reviewId), eq(serverReviewReports.reporterUserId, report.reporterUserId), eq(serverReviewReports.status, "open"), gt(serverReviewReports.createdAt, report.createdAt)))
+        .limit(1);
+      if (newerOpenReport) throw new ReviewReportAlreadyOpenError();
+    }
     const [reporter] = report.reporterUserId
       ? await tx.select({ email: user.email }).from(user).where(eq(user.id, report.reporterUserId)).limit(1)
       : [];
@@ -107,7 +141,7 @@ export async function moderateReviewReport(userId: string, reportId: string, dec
           .limit(1)
       : [];
 
-    const nextReportStatus = decision === "dismissed" ? "dismissed" : "actioned";
+    const nextReportStatus = decision === "dismissed" ? "dismissed" : decision === "reopened" ? "open" : "actioned";
     await tx.update(serverReviewReports).set({ status: nextReportStatus, assignedToUserId: userId, updatedAt: new Date() }).where(eq(serverReviewReports.id, reportId));
 
     let reviewChanged = false;
@@ -130,14 +164,10 @@ export async function moderateReviewReport(userId: string, reportId: string, dec
         .from(moderationEvents)
         .where(eq(moderationEvents.reviewId, review.id))
         .orderBy(desc(moderationEvents.createdAt), desc(moderationEvents.id));
-      const latestActionByReport = new Map<string, string>();
-      for (const event of reviewEvents) {
-        if (event.reviewReportId && !latestActionByReport.has(event.reviewReportId)) {
-          latestActionByReport.set(event.reviewReportId, event.action);
-        }
-      }
-      const anotherReportStillHides = [...latestActionByReport.entries()]
-        .some(([reviewReportId, action]) => reviewReportId !== report.id && action === "hidden");
+      const anotherReportStillHides = hasAnotherHiddenLatestAction(
+        reviewEvents.map((event) => ({ reportId: event.reviewReportId, action: event.action })),
+        report.id,
+      );
       if (!anotherReportStillHides) {
         const [changed] = await tx
           .update(serverReviews)
