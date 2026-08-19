@@ -639,7 +639,7 @@ export async function getReviewModerationContext(reviewId: string, reader: Datab
 
 export async function addReviewModerationEvent(
   tx: DatabaseTransaction,
-  values: { serverId: string; reviewId?: string | null; reviewReportId?: string | null; actorUserId?: string | null; action: "report_created" | "dismissed" | "hidden" | "restored"; details?: string | null },
+  values: { serverId: string; reviewId?: string | null; reviewReportId?: string | null; actorUserId?: string | null; action: "report_created" | "dismissed" | "hidden" | "restored" | "reopened"; details?: string | null },
 ) {
   await tx.insert(moderationEvents).values({
     serverId: values.serverId,

@@ -22,17 +22,17 @@ export async function getPlatformRole(userId: string) {
   return role?.role ?? null;
 }
 
-export async function listOpenReports(status: "open" | "actioned" = "open") {
+export async function listOpenReports(status: "open" | "actioned" | "dismissed" = "open") {
   return db.select({ id: serverReports.id, serverId: serverReports.serverId, serverName: servers.name, serverSlug: servers.slug, reason: serverReports.reason, details: serverReports.details, status: serverReports.status, createdAt: serverReports.createdAt }).from(serverReports).innerJoin(servers, eq(serverReports.serverId, servers.id)).where(eq(serverReports.status, status)).orderBy(desc(serverReports.createdAt));
 }
 
-export async function moderateReport(userId: string, reportId: string, decision: "dismissed" | "hidden" | "restored") {
+export async function moderateReport(userId: string, reportId: string, decision: "dismissed" | "hidden" | "restored" | "reopened") {
   await requirePlatformRole(userId);
   return db.transaction(async (tx) => {
     const [report] = await tx
       .select({ id: serverReports.id, serverId: serverReports.serverId, reporterUserId: serverReports.reporterUserId })
       .from(serverReports)
-      .where(and(eq(serverReports.id, reportId), inArray(serverReports.status, decision === "restored" ? ["open", "actioned"] : ["open"])))
+      .where(and(eq(serverReports.id, reportId), inArray(serverReports.status, decision === "reopened" ? ["dismissed"] : decision === "restored" ? ["open", "actioned"] : ["open"])))
       .for("update")
       .limit(1);
     if (!report) return false;
@@ -40,7 +40,7 @@ export async function moderateReport(userId: string, reportId: string, decision:
       ? await tx.select({ email: user.email }).from(user).where(eq(user.id, report.reporterUserId)).limit(1)
       : [];
     const reporterEmail = reporter?.email ?? null;
-    const status = decision === "dismissed" ? "dismissed" : "actioned";
+    const status = decision === "dismissed" ? "dismissed" : decision === "reopened" ? "open" : "actioned";
     await tx.update(serverReports).set({ status, assignedToUserId: userId }).where(eq(serverReports.id, reportId));
     await tx.insert(moderationEvents).values({ serverId: report.serverId, reportId, actorUserId: userId, action: decision, details: null });
     if (decision === "hidden") await tx.update(servers).set({ moderationStatus: "blocked" }).where(eq(servers.id, report.serverId));
@@ -52,7 +52,7 @@ export async function moderateReport(userId: string, reportId: string, decision:
   });
 }
 
-export async function listOpenReviewReports(status: "open" | "actioned" = "open") {
+export async function listOpenReviewReports(status: "open" | "actioned" | "dismissed" = "open") {
   return db
     .select({
       id: serverReviewReports.id,
@@ -78,7 +78,7 @@ export async function listOpenReviewReports(status: "open" | "actioned" = "open"
     .orderBy(desc(serverReviewReports.createdAt));
 }
 
-export async function moderateReviewReport(userId: string, reportId: string, decision: "dismissed" | "hidden" | "restored") {
+export async function moderateReviewReport(userId: string, reportId: string, decision: "dismissed" | "hidden" | "restored" | "reopened") {
   await requirePlatformRole(userId);
   return db.transaction(async (tx) => {
     const [report] = await tx
@@ -90,7 +90,7 @@ export async function moderateReviewReport(userId: string, reportId: string, dec
         status: serverReviewReports.status,
       })
       .from(serverReviewReports)
-      .where(and(eq(serverReviewReports.id, reportId), inArray(serverReviewReports.status, decision === "restored" ? ["open", "actioned"] : ["open"])))
+      .where(and(eq(serverReviewReports.id, reportId), inArray(serverReviewReports.status, decision === "reopened" ? ["dismissed"] : decision === "restored" ? ["open", "actioned"] : ["open"])))
       .for("update")
       .limit(1);
     if (!report) return false;
@@ -107,7 +107,7 @@ export async function moderateReviewReport(userId: string, reportId: string, dec
           .limit(1)
       : [];
 
-    const nextReportStatus = decision === "dismissed" ? "dismissed" : "actioned";
+    const nextReportStatus = decision === "dismissed" ? "dismissed" : decision === "reopened" ? "open" : "actioned";
     await tx.update(serverReviewReports).set({ status: nextReportStatus, assignedToUserId: userId, updatedAt: new Date() }).where(eq(serverReviewReports.id, reportId));
 
     let reviewChanged = false;

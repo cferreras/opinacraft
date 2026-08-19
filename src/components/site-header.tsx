@@ -69,12 +69,10 @@ function avatarLabel(session: { user?: { name?: string | null; email?: string | 
   return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "OC";
 }
 
-function NavigationLinks({ pathname, canModerate = false }: { pathname: string; canModerate?: boolean }) {
-  const items = canModerate ? [...navigation, moderationNavigation] : navigation;
-
+function NavigationLinks({ pathname }: { pathname: string }) {
   return (
     <nav aria-label="Navegación principal" className="flex items-center gap-1">
-      {items.map((item) => {
+      {navigation.map((item) => {
         const active = isNavigationActive(pathname, item.href);
         const Icon = item.icon;
         return (
@@ -241,7 +239,7 @@ export function SiteHeader() {
         </Sheet>
 
         <Link href="/" aria-label="OpinaCraft, inicio" className="shrink-0"><Brand compact={false} /></Link>
-        <div className="hidden lg:block"><NavigationLinks pathname={pathname} canModerate={canModerate} /></div>
+        <div className="hidden lg:block"><NavigationLinks pathname={pathname} /></div>
 
         <form onSubmit={submitSearch} className="relative ml-auto hidden w-full max-w-xs lg:block">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -265,6 +263,7 @@ export function SiteHeader() {
               <DropdownMenuContent align="end" className="w-40">
                 <DropdownMenuItem asChild><Link href="/profile"><User className="size-4" /> Mi perfil</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild><Link href="/dashboard/servers"><Server className="size-4" /> Mis servidores</Link></DropdownMenuItem>
+                {canModerate ? <DropdownMenuItem asChild><Link href="/admin"><ShieldCheck className="size-4" /> Moderación</Link></DropdownMenuItem> : null}
               </DropdownMenuContent>
             </DropdownMenu>
           ) : <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex"><Link href="/sign-in">Iniciar sesión</Link></Button>}
