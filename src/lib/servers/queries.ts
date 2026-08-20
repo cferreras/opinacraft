@@ -380,6 +380,21 @@ export async function listManagedServers(userId: string) {
   return attachCatalogData(groupServerRows(rows));
 }
 
+export async function countPublishedServers(): Promise<number> {
+  const [row] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(servers)
+    .where(and(
+      eq(servers.publicationStatus, "published"),
+      eq(servers.moderationStatus, "active"),
+      eq(servers.verificationStatus, "verified"),
+      isNull(servers.availabilityHiddenAt),
+      sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
+    ));
+
+  return row?.total ?? 0;
+}
+
 export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating", tableSort, tableDirection = "asc" }: { page?: number; query?: string; tagSlugs?: string[]; edition?: "java" | "bedrock"; status?: AggregateHealthStatus; sort?: PublicServerSort; tableSort?: PublicServerTableSort; tableDirection?: PublicServerSortDirection } = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; page: number }> {
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)

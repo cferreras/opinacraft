@@ -72,7 +72,7 @@ export function ReviewSection({ serverId, slug, summary, reviews, page, hasNextP
   const canReport = Boolean(viewer?.emailVerified);
   return (
     <Card id="reviews" className="mt-4 scroll-mt-8">
-      <CardHeader className="flex flex-row flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-[0.08em] text-primary">La voz de la comunidad</p><CardTitle className="mt-1">Opiniones de jugadores</CardTitle></div>{notice ? <Alert className="w-auto py-2"><AlertDescription>{notice}</AlertDescription></Alert> : null}</CardHeader>
+      <CardHeader className="flex flex-row flex-wrap items-end justify-between gap-3"><CardTitle>Opiniones de jugadores</CardTitle>{notice ? <Alert className="w-auto py-2"><AlertDescription>{notice}</AlertDescription></Alert> : null}</CardHeader>
       <CardContent className="grid gap-4">
         {errorNotice ? <Alert variant="destructive"><AlertDescription>{errorNotice}</AlertDescription></Alert> : null}
         <Summary summary={summary} />

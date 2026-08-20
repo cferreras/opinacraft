@@ -123,7 +123,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
           </div>
         </div>
       </main>
-      <SiteFooter />
+      <SiteFooter variant="compact" />
     </div>
   );
 }

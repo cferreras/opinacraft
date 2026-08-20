@@ -41,11 +41,10 @@ test("owner can create a complete Java/Bedrock listing, upload media, edit visib
   await expect(hero.getByText("community")).toBeVisible();
   await expect(page.getByRole("link", { name: "Web del servidor" })).toHaveAttribute("href", "https://example.com/community");
   await expect(page.getByRole("link", { name: "Tienda oficial" })).toHaveAttribute("href", "https://shop.example.com/store");
-  await expect(page.getByRole("link", { name: "Soporte en Discord" })).toHaveAttribute("href", "https://discord.gg/example");
-  const utilityDiscord = page.getByRole("link", { name: "Discord", exact: true });
-  await expect(utilityDiscord).toBeVisible();
-  await expect(utilityDiscord.locator("svg.tabler-icon-brand-discord")).toHaveCount(1);
-  const connection = page.getByRole("complementary", { name: "Conexión" });
+  const discordLink = page.getByRole("link", { name: "Soporte en Discord" });
+  await expect(discordLink).toHaveAttribute("href", "https://discord.gg/example");
+  await expect(discordLink.locator("svg.tabler-icon-brand-discord")).toHaveCount(1);
+  const connection = page.getByRole("complementary", { name: "Conexión y acceso" });
   await expect(connection.getByText("Java", { exact: true })).toBeVisible();
   await expect(connection.getByText("Bedrock", { exact: true })).toBeVisible();
 

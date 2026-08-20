@@ -201,6 +201,3 @@ select {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-section[aria-labelledby="why-heading"] {
-  background-color: var(--background);
-}
