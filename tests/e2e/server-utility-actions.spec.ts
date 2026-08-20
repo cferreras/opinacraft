@@ -30,11 +30,22 @@ test.afterAll(async () => {
 test("public server Discord action exposes the Discord brand icon", async ({ page }) => {
   await page.goto(`/servers/${serverSlug}`);
 
-  const discordLink = page.getByRole("link", { name: "Discord", exact: true });
+  const discordLink = page.getByRole("link", { name: "Soporte en Discord" });
   await expect(discordLink).toBeVisible();
-  await expect(discordLink.locator("svg.tabler-icon-brand-discord")).toHaveCount(1);
+  await expect(discordLink.getByTestId("discord-icon")).toHaveCount(1);
 
-  const discordColor = await discordLink.locator("svg").evaluate((element) => getComputedStyle(element).color);
-  const webColor = await page.getByRole("link", { name: "Web", exact: true }).locator("svg").evaluate((element) => getComputedStyle(element).color);
+  const discordColor = await discordLink.locator("svg").first().evaluate((element) => getComputedStyle(element).color);
+  const webColor = await page
+    .getByRole("link", { name: "Web del servidor" })
+    .locator("svg")
+    .first()
+    .evaluate((element) => getComputedStyle(element).color);
   expect(discordColor).toBe(webColor);
+});
+
+test("public server keeps share and report next to the connection details", async ({ page }) => {
+  await page.goto(`/servers/${serverSlug}`);
+
+  await expect(page.getByRole("button", { name: "Compartir" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Reportar" })).toBeVisible();
 });

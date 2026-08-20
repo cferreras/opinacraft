@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ChevronRight,
   CircleHelp,
@@ -39,15 +39,19 @@ const moderationNavigation = { label: "Moderación", href: "/admin", icon: Shiel
 
 type NavigationItem = (typeof navigation)[number] | typeof moderationNavigation;
 
+const emptySubscribe = () => () => {};
+const getMacPlatform = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+const getServerPlatform = () => false;
+
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-2 font-semibold tracking-tight">
+    <span className="inline-flex items-center gap-2 text-[0.9375rem] font-bold tracking-tight">
       <Image
         src="/brand/opinacraft-server-mark.webp"
         alt=""
         aria-hidden="true"
-        width={compact ? 28 : 32}
-        height={compact ? 28 : 32}
+        width={compact ? 26 : 28}
+        height={compact ? 26 : 28}
         priority
         className="object-contain"
       />
@@ -71,16 +75,19 @@ function avatarLabel(session: { user?: { name?: string | null; email?: string | 
 
 function NavigationLinks({ pathname }: { pathname: string }) {
   return (
-    <nav aria-label="Navegación principal" className="flex items-center gap-1">
+    <nav aria-label="Navegación principal" className="flex h-16 items-stretch gap-0.5">
       {navigation.map((item) => {
         const active = isNavigationActive(pathname, item.href);
-        const Icon = item.icon;
         return (
-          <Button key={item.href} variant={active ? "secondary" : "ghost"} size="sm" asChild>
-            <Link href={item.href} aria-current={active ? "page" : undefined}>
-              <Icon className="size-4" /> {item.label}
-            </Link>
-          </Button>
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={`relative flex items-center rounded-sm px-3 text-sm transition-colors ${active ? "font-semibold text-foreground" : "font-medium text-muted-foreground hover:text-foreground"}`}
+          >
+            {item.label}
+            {active ? <span aria-hidden="true" className="absolute inset-x-3 -bottom-px h-0.5 rounded-t-full bg-primary" /> : null}
+          </Link>
         );
       })}
     </nav>
@@ -147,6 +154,7 @@ export function SiteHeader() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const desktopSearchRef = useRef<HTMLInputElement>(null);
+  const isMac = useSyncExternalStore(emptySubscribe, getMacPlatform, getServerPlatform);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -244,11 +252,12 @@ export function SiteHeader() {
         <form onSubmit={submitSearch} className="relative ml-auto hidden w-full max-w-xs lg:block">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <label htmlFor="header-search" className="sr-only">Buscar servidores</label>
-          <Input ref={desktopSearchRef} id="header-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar servidores" className="h-9 pl-8 pr-14" />
-          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-muted px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">Ctrl K</kbd>
+          <Input ref={desktopSearchRef} id="header-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar servidores" className="h-9 bg-muted pl-8 pr-14" />
+          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-background px-1.5 py-0.5 text-[0.625rem] font-semibold text-muted-foreground">{isMac ? "⌘ K" : "Ctrl K"}</kbd>
         </form>
 
         <div className="ml-auto flex items-center gap-1 lg:ml-0">
+          <span aria-hidden="true" className="mx-1 hidden h-5 w-px bg-border lg:block" />
           <Button variant="ghost" size="icon" asChild className="hidden sm:inline-flex"><Link href="/contact" aria-label="Ayuda"><CircleHelp className="size-4" /></Link></Button>
           <ThemeToggle />
           <Button size="lg" asChild className="hidden sm:inline-flex"><Link href="/servers/new"><Plus className="size-4" /> Publicar</Link></Button>

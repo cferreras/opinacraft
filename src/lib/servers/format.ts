@@ -25,6 +25,11 @@ export function statusLabel(status: ServerStatus) {
   return "Estado desconocido";
 }
 
+export function editionLabel(server: { endpoints: ReadonlyArray<{ edition: "java" | "bedrock" }> }) {
+  const editions = server.endpoints.map((endpoint) => (endpoint.edition === "bedrock" ? "Bedrock" : "Java"));
+  return [...new Set(editions)].join(" · ") || "Sin edición";
+}
+
 export function statusClass(status: ServerStatus) {
   if (status === "online") return "text-success";
   if (status === "offline") return "text-destructive";

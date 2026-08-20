@@ -1,13 +1,13 @@
 import { test, expect } from "@playwright/test";
 
-test("mobile footer keeps its three content groups readable", async ({ page }) => {
+test("mobile footer keeps its content groups readable", async ({ page }) => {
   await page.setViewportSize({ width: 412, height: 915 });
   await page.goto("/");
 
   const footer = page.locator("footer");
   await expect(footer).toBeVisible();
 
-  const groups = footer.locator(":scope > div > *");
+  const groups = footer.getByRole("navigation");
   await expect(groups).toHaveCount(3);
 
   const groupRects = await groups.evaluateAll((elements) =>
@@ -26,7 +26,7 @@ test("mobile footer keeps its three content groups readable", async ({ page }) =
   expect(footerBounds.scrollWidth).toBeLessThanOrEqual(footerBounds.clientWidth);
   expect(groupRects.every(({ right }) => right <= footerBounds.clientWidth)).toBe(true);
 
-  const legalNavigation = footer.getByRole("navigation", { name: "Enlaces legales" });
-  await expect(legalNavigation).toBeVisible();
-  await expect(legalNavigation.getByRole("link", { name: /Privacidad/ })).toBeVisible();
+  const helpNavigation = footer.getByRole("navigation", { name: "Ayuda" });
+  await expect(helpNavigation).toBeVisible();
+  await expect(helpNavigation.getByRole("link", { name: /Privacidad/ })).toBeVisible();
 });

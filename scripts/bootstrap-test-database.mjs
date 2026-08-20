@@ -65,6 +65,9 @@ async function main() {
 
     await ensureEnum(client, "server_endpoint_health", ["unknown", "online", "offline"]);
     await ensureEnum(client, "server_endpoint_sample_failure", ["unreachable", "timeout", "invalid_response", "dns_error", "blocked_target", "monitor_error"]);
+    await ensureEnum(client, "server_access_type", ["open", "whitelist"]);
+    await ensureEnum(client, "server_account_mode", ["premium_only", "premium_and_non_premium"]);
+    await ensureEnum(client, "server_auth_mode", ["direct", "password_non_premium", "password_all"]);
     await ensureEnum(client, "server_tag_status", ["active", "blocked", "merged"]);
     await ensureEnum(client, "server_media_kind", ["logo", "banner"]);
     await ensureEnum(client, "server_media_status", ["pending", "active", "failed", "deleted"]);
@@ -102,6 +105,10 @@ async function main() {
     );
     await addColumn(client, "servers", '"availability_hidden_at" timestamp with time zone');
     await addColumn(client, "servers", '"store_url" text');
+    await addColumn(client, "servers", '"access_type" "server_access_type" DEFAULT \'open\'::"server_access_type" NOT NULL');
+    await addColumn(client, "servers", '"access_form_url" text');
+    await addColumn(client, "servers", '"account_mode" "server_account_mode" DEFAULT \'premium_only\'::"server_account_mode" NOT NULL');
+    await addColumn(client, "servers", '"auth_mode" "server_auth_mode" DEFAULT \'direct\'::"server_auth_mode" NOT NULL');
     await addColumn(client, "servers", '"monitor_health_status" "server_endpoint_health" DEFAULT \'unknown\'::"server_endpoint_health" NOT NULL');
     await addColumn(client, "servers", '"monitor_players_current" integer');
     await addColumn(client, "servers", '"monitor_players_max" integer');
