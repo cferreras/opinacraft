@@ -294,3 +294,76 @@ test("keeps the E2E server fixture aligned with the shared host input", () => {
   assert.match(source, /input\[name="host"\]/);
   assert.doesNotMatch(source, /input\[name="javaHost"\]/);
 });
+
+test("uses complete identities for verified endpoints and one directory grid template", () => {
+  const detailSource = readProjectFile("src/app/servers/[slug]/page.tsx");
+  const directorySource = readProjectFile("src/app/servers/page.tsx");
+  const rowSource = readProjectFile("src/components/public-server-row.tsx");
+
+  assert.match(detailSource, /<EndpointRow key=\{`\$\{item\.edition\}:\$\{item\.host\}:\$\{item\.port\}`\} endpoint=\{item\} \/>/);
+  assert.doesNotMatch(detailSource, /<EndpointRow key=\{item\.edition\}/);
+  assert.match(directorySource, /export const tableGridTemplate =/);
+  assert.match(rowSource, /import \{ tableGridTemplate \} from ["']@\/app\/servers\/page["']/);
+  assert.match(rowSource, /\$\{tableGridTemplate\}/);
+});
+
+test("describes relevance ordering when a search has no explicit table sort", () => {
+  const source = readProjectFile("src/app/servers/page.tsx");
+
+  assert.match(source, /function orderSummary\([^)]*hasQuery/);
+  assert.match(source, /if \(hasQuery && !activeSort\) return "Ordenado por relevancia";/);
+  assert.match(source, /orderSummary\(activeTableSort, activeTableDirection, sort, hasQuery\)/);
+});
+
+test("only reports a successful share when the share or clipboard capability succeeds", () => {
+  const source = readProjectFile("src/components/server-utility-actions.tsx");
+
+  assert.match(source, /if \(!navigator\.clipboard\?\.writeText\) throw new Error\("Clipboard API unavailable"\);/);
+  assert.match(source, /\{shared \? "Compartido" : "Compartir"\}/);
+  assert.doesNotMatch(source, /else await navigator\.clipboard\?\.writeText\(url\)/);
+});
+
+test("shows the platform-specific search shortcut without changing its keyboard behavior", () => {
+  const source = readProjectFile("src/components/site-header.tsx");
+
+  assert.match(source, /useSyncExternalStore/);
+  assert.match(source, /const isMac = useSyncExternalStore\(emptySubscribe, getMacPlatform, getServerPlatform\);/);
+  assert.doesNotMatch(source, /setIsMac/);
+  assert.match(source, /\{isMac \? "⌘ K" : "Ctrl K"\}/);
+  assert.match(source, /event\.metaKey \|\| event\.ctrlKey/);
+  assert.match(source, /event\.key\.toLowerCase\(\) === "k"/);
+});
+
+test("shares server status and edition presentation helpers", () => {
+  const formatSource = readProjectFile("src/lib/servers/format.ts");
+  const homeSource = readProjectFile("src/app/page.tsx");
+  const rowSource = readProjectFile("src/components/public-server-row.tsx");
+  const detailSource = readProjectFile("src/app/servers/[slug]/page.tsx");
+
+  assert.match(formatSource, /export function editionLabel/);
+  assert.match(homeSource, /import \{ StatusPill \} from ["']@\/components\/server-status-pill["']/);
+  assert.match(homeSource, /editionLabel, playersLabel, primaryEndpoint/);
+  assert.doesNotMatch(homeSource, /function editionLabel/);
+  assert.doesNotMatch(homeSource, /function StatusPill/);
+  assert.match(rowSource, /import \{ StatusPill \} from ["']@\/components\/server-status-pill["']/);
+  assert.doesNotMatch(rowSource, /function statusLabel/);
+  assert.doesNotMatch(rowSource, /function StatusPill/);
+  assert.match(rowSource, /editionLabel\(server\)/);
+  assert.match(detailSource, /editionLabel\(server\)/);
+  assert.match(detailSource, /statusLabel\(server\.aggregateStatus\)/);
+  assert.doesNotMatch(detailSource, /const editions = \[\.\.\.new Set/);
+  assert.doesNotMatch(detailSource, /const compactStatus =/);
+});
+
+test("uses a stable test id for the Discord icon in both server E2E flows", () => {
+  const detailSource = readProjectFile("src/app/servers/[slug]/page.tsx");
+  const lifecycleSource = readProjectFile("tests/e2e/server-lifecycle.spec.ts");
+  const utilitySource = readProjectFile("tests/e2e/server-utility-actions.spec.ts");
+
+  assert.match(detailSource, /data-testid=\{iconTestId\}/);
+  assert.match(detailSource, /iconTestId="discord-icon"/);
+  for (const source of [lifecycleSource, utilitySource]) {
+    assert.match(source, /discordLink\.getByTestId\("discord-icon"\)/);
+    assert.doesNotMatch(source, /tabler-icon-brand-discord/);
+  }
+});

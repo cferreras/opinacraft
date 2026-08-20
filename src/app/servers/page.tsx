@@ -23,7 +23,7 @@ import { normalizeTagSlug } from "@/lib/servers/tags";
 export const metadata: Metadata = { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", alternates: { canonical: "/servers" }, openGraph: { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", type: "website" } };
 export const dynamic = "force-dynamic";
 
-const tableGridTemplate = "lg:grid-cols-[minmax(0,1fr)_5rem_5.75rem_4.75rem_4rem_6rem_9.5rem]";
+export const tableGridTemplate = "lg:grid-cols-[minmax(0,1fr)_5rem_5.75rem_4.75rem_4rem_6rem_9.5rem]";
 
 const sortOptions: Array<{ value: PublicServerSort; label: string }> = [
   { value: "rating", label: "Mejor valorados" },
@@ -46,7 +46,8 @@ function tableSortLabel(sort: PublicServerTableSort, direction: PublicServerSort
   return `${column?.label ?? "Tabla"} · ${direction === "asc" ? "ascendente" : "descendente"}`;
 }
 
-function orderSummary(activeSort: PublicServerTableSort | undefined, direction: PublicServerSortDirection, fallback: PublicServerSort) {
+function orderSummary(activeSort: PublicServerTableSort | undefined, direction: PublicServerSortDirection, fallback: PublicServerSort, hasQuery: boolean) {
+  if (hasQuery && !activeSort) return "Ordenado por relevancia";
   if (!activeSort) return `Ordenado por ${sortOptions.find((option) => option.value === fallback)?.label.toLowerCase() ?? "valoración"}`;
   const column = tableColumns.find((item) => item.key === activeSort);
   return `Ordenado por ${(column?.label ?? "tabla").toLowerCase()}, de ${direction === "asc" ? "menor a mayor" : "mayor a menor"}`;
@@ -89,13 +90,14 @@ function countLabel(count: number) { return `${count} ${count === 1 ? "servidor"
 export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; tags?: string; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
   const query = await searchParams;
   const requestedPage = Number.parseInt(query.page ?? "1", 10);
+  const hasQuery = Boolean(query.q?.trim());
   const edition = query.edition === "java" || query.edition === "bedrock" ? query.edition : undefined;
   const status = query.status === "online" || query.status === "offline" || query.status === "unknown" ? query.status : undefined;
   const sort: PublicServerSort = query.sort === "players" || query.sort === "recent" ? query.sort : "rating";
   const hasExplicitSort = query.sort === "rating" || query.sort === "players" || query.sort === "recent";
   const tableSort = isPublicServerTableSort(query.tableSort) ? query.tableSort : undefined;
   const tableDirection: PublicServerSortDirection = query.tableDirection === "desc" ? "desc" : "asc";
-  const presetTableSort = (sort === "rating" || sort === "players") && (!query.q || hasExplicitSort) ? sort : undefined;
+  const presetTableSort = (sort === "rating" || sort === "players") && (!hasQuery || hasExplicitSort) ? sort : undefined;
   const activeTableSort = tableSort ?? presetTableSort;
   const activeTableDirection: PublicServerSortDirection = tableSort ? tableDirection : "desc";
   const tagSlugs = (query.tags ?? "").split(",").map((tag) => normalizeTagSlug(tag)).filter(Boolean);
@@ -121,7 +123,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     return `/servers?${nextSearchParams.toString()}`;
   };
   const initialTags = (query.tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean);
-  const hasActiveFilters = Boolean(query.q || query.tags || query.edition || query.status || (query.sort && query.sort !== "rating") || tableSort);
+  const hasActiveFilters = Boolean(hasQuery || query.tags || query.edition || query.status || (query.sort && query.sort !== "rating") || tableSort);
 
   return (
     <div className="min-h-screen bg-background">
@@ -173,7 +175,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
               <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-3">
                 <p className="text-sm text-muted-foreground"><strong className="font-bold tabular-nums text-foreground">{countLabel(servers.length)}</strong> en esta página</p>
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span>{orderSummary(activeTableSort, activeTableDirection, sort)}</span>
+                  <span>{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span>
                   {hasActiveFilters ? <Button variant="link" asChild size="sm" className="h-auto p-0 text-xs font-semibold"><Link href="/servers">Limpiar filtros</Link></Button> : null}
                 </div>
               </div>

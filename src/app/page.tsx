@@ -8,9 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { ServerLogo } from "@/components/server-logo";
+import { StatusPill } from "@/components/server-status-pill";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { playersLabel, primaryEndpoint, statusLabel } from "@/lib/servers/format";
+import { editionLabel, playersLabel, primaryEndpoint } from "@/lib/servers/format";
 import { countPublishedServers, listPublishedServers, type CatalogServer } from "@/lib/servers/queries";
 
 export const metadata: Metadata = { title: "Encuentra tu servidor de Minecraft | OpinaCraft", description: "Descubre, compara y comparte comunidades de Minecraft en OpinaCraft.", alternates: { canonical: "/" }, openGraph: { title: "Encuentra tu servidor de Minecraft | OpinaCraft", description: "Descubre, compara y comparte comunidades de Minecraft en OpinaCraft.", type: "website" } };
@@ -43,28 +44,6 @@ const trustPoints = [
     description: "Encuentra la edición, la versión y la dirección que necesitas, listas para copiar y entrar en un clic.",
   },
 ] as const;
-
-function editionLabel(server: CatalogServer) {
-  const editions = server.endpoints.map((endpoint) => (endpoint.edition === "bedrock" ? "Bedrock" : "Java"));
-  return [...new Set(editions)].join(" · ") || "Sin edición";
-}
-
-function StatusPill({ status }: { status: CatalogServer["aggregateStatus"] }) {
-  const tone =
-    status === "online"
-      ? "bg-success-soft text-success"
-      : status === "offline"
-        ? "bg-destructive/10 text-destructive"
-        : "bg-muted text-muted-foreground";
-  const dot = status === "online" ? "bg-success" : status === "offline" ? "bg-destructive" : "bg-muted-foreground/40";
-
-  return (
-    <span className={`inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2 text-[0.6875rem] font-semibold ${tone}`}>
-      <span aria-hidden="true" className={`size-1.5 rounded-full ${dot}`} />
-      {statusLabel(status)}
-    </span>
-  );
-}
 
 function FeaturedCharacter({ highlight }: { highlight?: CatalogServer }) {
   const endpoint = highlight ? primaryEndpoint(highlight) : undefined;

@@ -32,7 +32,7 @@ import { SiteHeader } from "@/components/site-header";
 import { getServerSession } from "@/lib/session";
 import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
 import { formatServerDateTime } from "@/lib/servers/display";
-import { formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot } from "@/lib/servers/format";
+import { editionLabel, formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
 import { getPublishedServerBySlug, type ManagedServer } from "@/lib/servers/queries";
 import { queryPlayerHistory } from "@/lib/servers/player-history";
 import { getReviewSummary, getReviewViewerState, listServerReviews } from "@/lib/servers/reviews";
@@ -109,12 +109,12 @@ function EndpointRow({ endpoint }: { endpoint: ManagedServer["endpoints"][number
   );
 }
 
-function ConnectionLink({ href, icon, label }: { href?: string | null; icon: ReactNode; label: string }) {
+function ConnectionLink({ href, icon, iconTestId, label }: { href?: string | null; icon: ReactNode; iconTestId?: string; label: string }) {
   if (!href) return null;
   return (
     <Button asChild variant="outline" className="h-10 w-full justify-start gap-2.5 text-xs">
       <a href={href} target="_blank" rel="noopener noreferrer">
-        <span className="text-primary">{icon}</span>
+        <span data-testid={iconTestId} className="text-primary">{icon}</span>
         <span className="flex-1 text-left">{label}</span>
         <ExternalLink aria-hidden="true" className="size-3.5 text-muted-foreground" />
       </a>
@@ -163,8 +163,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
   const endpoint = primaryEndpoint(server);
   const copyAddress = endpoint ? formatEndpoint(endpoint) : server.slug;
   const rating = reviewSummary.average === null ? "—" : reviewSummary.average.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const editions = [...new Set(server.endpoints.map((item) => (item.edition === "bedrock" ? "Bedrock" : "Java")))].join(" · ");
-  const compactStatus = server.aggregateStatus === "online" ? "En línea" : server.aggregateStatus === "offline" ? "Fuera de línea" : "Desconocido";
+  const editions = editionLabel(server);
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -208,7 +207,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                 <Metric
                   label="Estado"
                   tone={statusClass(server.aggregateStatus)}
-                  value={<><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${statusDot(server.aggregateStatus)}`} /><span className="truncate">{compactStatus}</span></>}
+                  value={<><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${statusDot(server.aggregateStatus)}`} /><span className="truncate">{statusLabel(server.aggregateStatus)}</span></>}
                 />
                 <Metric label="Jugadores" value={server.monitor.playersCurrent !== null && server.monitor.playersMax !== null ? `${server.monitor.playersCurrent} / ${server.monitor.playersMax}` : "— / —"} />
                 <Metric label="Versión" value={server.monitor.version ?? "—"} />
@@ -225,7 +224,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
             <Card className="gap-0 overflow-hidden pb-0" aria-labelledby="connection-heading">
               <CardHeader><CardTitle id="connection-heading">Conectar</CardTitle><CardDescription>Elige tu edición y conéctate.</CardDescription></CardHeader>
               <CardContent className="grid gap-4 pt-4">
-                {server.endpoints.length ? server.endpoints.map((item) => <EndpointRow key={item.edition} endpoint={item} />) : <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">No hay direcciones verificadas disponibles.</p>}
+                {server.endpoints.length ? server.endpoints.map((item) => <EndpointRow key={`${item.edition}:${item.host}:${item.port}`} endpoint={item} />) : <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">No hay direcciones verificadas disponibles.</p>}
                 <CopyAddressButton value={copyAddress} showIcon label="Copiar dirección" className="h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90" />
               </CardContent>
               {server.websiteUrl || server.storeUrl || server.discordUrl ? (
@@ -233,7 +232,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                   <p className="text-xs font-semibold">Enlaces oficiales</p>
                   <ConnectionLink href={server.websiteUrl} icon={<Globe aria-hidden="true" className="size-4" />} label="Web del servidor" />
                   <ConnectionLink href={server.storeUrl} icon={<ShoppingBag aria-hidden="true" className="size-4" />} label="Tienda oficial" />
-                  <ConnectionLink href={server.discordUrl} icon={<IconBrandDiscord aria-hidden="true" className="size-4" />} label="Soporte en Discord" />
+                  <ConnectionLink href={server.discordUrl} icon={<IconBrandDiscord aria-hidden="true" className="size-4" />} iconTestId="discord-icon" label="Soporte en Discord" />
                 </CardContent>
               ) : null}
               <div className="mt-4"><ServerUtilityActions name={server.name} /></div>

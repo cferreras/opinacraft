@@ -43,7 +43,7 @@ test("owner can create a complete Java/Bedrock listing, upload media, edit visib
   await expect(page.getByRole("link", { name: "Tienda oficial" })).toHaveAttribute("href", "https://shop.example.com/store");
   const discordLink = page.getByRole("link", { name: "Soporte en Discord" });
   await expect(discordLink).toHaveAttribute("href", "https://discord.gg/example");
-  await expect(discordLink.locator("svg.tabler-icon-brand-discord")).toHaveCount(1);
+  await expect(discordLink.getByTestId("discord-icon")).toHaveCount(1);
   const connection = page.getByRole("complementary", { name: "Conexión y acceso" });
   await expect(connection.getByText("Java", { exact: true })).toBeVisible();
   await expect(connection.getByText("Bedrock", { exact: true })).toBeVisible();

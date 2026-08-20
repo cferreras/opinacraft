@@ -1,36 +1,15 @@
 import Link from "next/link";
 import { Star, Users } from "lucide-react";
 
-import type { CatalogServer, PublicServer } from "@/lib/servers/queries";
-import { formatEndpoint, latencyClass } from "@/lib/servers/format";
+import { tableGridTemplate } from "@/app/servers/page";
+import { StatusPill } from "@/components/server-status-pill";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CopyAddressButton } from "@/components/copy-address-button";
 import { ServerLogo } from "@/components/server-logo";
 import { accessTypeLabel, accountModeLabel } from "@/lib/servers/access";
-
-function statusLabel(status: PublicServer["aggregateStatus"]) {
-  if (status === "online") return "En línea";
-  if (status === "offline") return "Fuera de línea";
-  return "Desconocido";
-}
-
-function StatusPill({ status }: { status: PublicServer["aggregateStatus"] }) {
-  const tone =
-    status === "online"
-      ? "bg-success-soft text-success"
-      : status === "offline"
-        ? "bg-destructive/10 text-destructive"
-        : "bg-muted text-muted-foreground";
-  const dot = status === "online" ? "bg-success" : status === "offline" ? "bg-destructive" : "bg-muted-foreground/40";
-
-  return (
-    <span className={`inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2 text-[0.625rem] font-semibold ${tone}`}>
-      <span aria-hidden="true" className={`size-1.5 rounded-full ${dot}`} />
-      {statusLabel(status)}
-    </span>
-  );
-}
+import { editionLabel, formatEndpoint, latencyClass } from "@/lib/servers/format";
+import type { CatalogServer } from "@/lib/servers/queries";
 
 function playersLabel(monitor: CatalogServer["monitor"]) {
   if (monitor.playersCurrent !== null || monitor.playersMax !== null) return `${monitor.playersCurrent ?? "—"} / ${monitor.playersMax ?? "—"}`;
@@ -57,18 +36,18 @@ function AddressField({ value, className = "" }: { value: string; className?: st
 export function PublicServerRow({ server }: { server: CatalogServer }) {
   const endpoint = server.endpoints.find((item) => item.edition === "java") ?? server.endpoints[0];
   const endpointAddress = endpoint ? formatEndpoint(endpoint) : server.slug;
-  const editions = [...new Set(server.endpoints.map((item) => (item.edition === "bedrock" ? "Bedrock" : "Java")))].join(" · ");
+  const editions = editionLabel(server);
   const restrictedAccess = server.accessType === "whitelist";
   const openAccounts = server.accountMode !== "premium_only";
 
   return (
-    <article className="grid gap-3 border-t px-3 py-3.5 transition-colors first:border-t-0 hover:bg-muted/30 sm:px-4 lg:grid-cols-[minmax(0,1fr)_5rem_5.75rem_4.75rem_4rem_6rem_9.5rem] lg:items-center lg:gap-3">
+    <article className={`grid gap-3 border-t px-3 py-3.5 transition-colors first:border-t-0 hover:bg-muted/30 sm:px-4 ${tableGridTemplate} lg:items-center lg:gap-3`}>
       <div className="flex min-w-0 items-start gap-3">
         <ServerLogo name={server.name} media={server.media} className="size-10 rounded-lg" />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <h3 className="truncate text-sm font-semibold"><Link href={`/servers/${server.slug}`} className="hover:text-primary">{server.name}</Link></h3>
-            <StatusPill status={server.aggregateStatus} />
+            <StatusPill status={server.aggregateStatus} className="text-[0.625rem]" />
           </div>
           <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{server.description ?? "Una comunidad de Minecraft lista para recibirte."}</p>
           <div className="mt-1.5 flex max-w-full flex-wrap items-center gap-1.5 overflow-hidden">
@@ -80,7 +59,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
         </div>
       </div>
 
-      <div className="hidden text-xs text-muted-foreground lg:block"><span className="truncate">{editions || "—"}</span></div>
+      <div className="hidden text-xs text-muted-foreground lg:block"><span className="truncate">{editions}</span></div>
       <div className="hidden text-xs font-medium tabular-nums lg:block">{playersLabel(server.monitor)}</div>
       <div className="hidden truncate text-xs tabular-nums text-muted-foreground lg:block">{server.monitor.version ?? "—"}</div>
       <div className={`hidden text-xs tabular-nums lg:block ${latencyClass(server.monitor.latencyMs)}`}>{server.monitor.latencyMs !== null ? `${server.monitor.latencyMs} ms` : "—"}</div>
@@ -90,7 +69,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t pt-3 text-xs text-muted-foreground lg:hidden">
         <div className="flex min-w-0 items-center gap-1.5"><Users aria-hidden="true" className="size-3.5" /><span className="tabular-nums">{playersLabel(server.monitor)}</span></div>
         <div className={`flex min-w-0 items-center justify-end gap-1.5 tabular-nums ${latencyClass(server.monitor.latencyMs)}`}>{server.monitor.latencyMs !== null ? `${server.monitor.latencyMs} ms` : "Sin latencia"}</div>
-        <div className="flex min-w-0 items-center gap-1.5"><span className="truncate">{editions || "—"}</span><span aria-hidden="true">·</span><span className="truncate tabular-nums">{server.monitor.version ?? "—"}</span></div>
+        <div className="flex min-w-0 items-center gap-1.5"><span className="truncate">{editions}</span><span aria-hidden="true">·</span><span className="truncate tabular-nums">{server.monitor.version ?? "—"}</span></div>
         <Rating server={server} className="flex items-center justify-end gap-1 text-xs" />
       </div>
 

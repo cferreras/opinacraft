@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ChevronRight,
   CircleHelp,
@@ -38,6 +38,10 @@ type PlatformRole = "moderator" | "admin";
 const moderationNavigation = { label: "Moderación", href: "/admin", icon: ShieldCheck } as const;
 
 type NavigationItem = (typeof navigation)[number] | typeof moderationNavigation;
+
+const emptySubscribe = () => () => {};
+const getMacPlatform = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+const getServerPlatform = () => false;
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -150,6 +154,7 @@ export function SiteHeader() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const desktopSearchRef = useRef<HTMLInputElement>(null);
+  const isMac = useSyncExternalStore(emptySubscribe, getMacPlatform, getServerPlatform);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -248,7 +253,7 @@ export function SiteHeader() {
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <label htmlFor="header-search" className="sr-only">Buscar servidores</label>
           <Input ref={desktopSearchRef} id="header-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar servidores" className="h-9 bg-muted pl-8 pr-14" />
-          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-background px-1.5 py-0.5 text-[0.625rem] font-semibold text-muted-foreground">Ctrl K</kbd>
+          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-background px-1.5 py-0.5 text-[0.625rem] font-semibold text-muted-foreground">{isMac ? "⌘ K" : "Ctrl K"}</kbd>
         </form>
 
         <div className="ml-auto flex items-center gap-1 lg:ml-0">

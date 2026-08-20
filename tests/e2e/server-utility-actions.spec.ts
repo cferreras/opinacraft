@@ -32,7 +32,7 @@ test("public server Discord action exposes the Discord brand icon", async ({ pag
 
   const discordLink = page.getByRole("link", { name: "Soporte en Discord" });
   await expect(discordLink).toBeVisible();
-  await expect(discordLink.locator("svg.tabler-icon-brand-discord")).toHaveCount(1);
+  await expect(discordLink.getByTestId("discord-icon")).toHaveCount(1);
 
   const discordColor = await discordLink.locator("svg").first().evaluate((element) => getComputedStyle(element).color);
   const webColor = await page
