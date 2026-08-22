@@ -1,4 +1,15 @@
-import type { HistoryPoint, HistorySeries } from "./player-history";
+import type { HistoryPoint, HistoryPointStatus, HistorySeries } from "./player-history";
+
+const availabilityLegend: ReadonlyArray<{ status: HistoryPointStatus; label: string }> = [
+  { status: "online", label: "En línea" },
+  { status: "offline", label: "Sin respuesta" },
+  { status: "unknown", label: "Sin comprobar" },
+  { status: "no_data", label: "Sin histórico" },
+];
+
+export function getAvailabilityLegend() {
+  return availabilityLegend.map((entry) => ({ ...entry }));
+}
 
 export type PlayerHistoryChartPoint = HistoryPoint & {
   serverPeak?: number | null;

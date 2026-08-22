@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+test("availability legend identifies completed intervals without history", async () => {
+  const historyChart = await import("../src/lib/servers/player-history-chart.ts");
+  const getAvailabilityLegend = Reflect.get(historyChart, "getAvailabilityLegend") as undefined | (() => unknown);
+
+  assert.deepEqual(getAvailabilityLegend?.(), [
+    { status: "online", label: "En línea" },
+    { status: "offline", label: "Sin respuesta" },
+    { status: "unknown", label: "Sin comprobar" },
+    { status: "no_data", label: "Sin histórico" },
+  ]);
+});
+
 test("monitor samples are normalized to a UTC fifteen-minute slot", async () => {
   const { getMonitorSampleSlot } = await import("../src/lib/servers/monitor-persistence.ts");
   const slot = getMonitorSampleSlot(new Date("2026-08-03T12:14:59.000Z"));

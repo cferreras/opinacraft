@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { Activity, CheckCircle2, Info, RefreshCcw } from "lucide-react";
 
-import { mergeHistoryChartData } from "@/lib/servers/player-history-chart";
+import { getAvailabilityLegend, mergeHistoryChartData } from "@/lib/servers/player-history-chart";
 import type { HistoryPointStatus, PlayerHistoryResponse } from "@/lib/servers/player-history";
 import { useBrowserDateFormatter } from "@/components/localized-timestamp";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 type Props = { serverId: string; initialData: PlayerHistoryResponse; mode?: "public" | "managed" };
 const periodLabels = { "24h": "24 h", "7d": "7 días", "30d": "30 días", "90d": "90 días" } as const;
+const availabilityLegend = getAvailabilityLegend();
 const PlayerHistoryChart = dynamic(
   () => import("./player-history-chart").then((module) => module.PlayerHistoryChart),
   {
@@ -25,7 +26,7 @@ const PlayerHistoryChart = dynamic(
 );
 
 function statusLabel(status: HistoryPointStatus) {
-  return status === "online" ? "En línea" : status === "offline" ? "Sin respuesta" : status === "unknown" ? "Sin comprobar" : "Sin datos";
+  return availabilityLegend.find((entry) => entry.status === status)?.label ?? "Sin histórico";
 }
 
 function statusClass(status: HistoryPointStatus) {
@@ -40,7 +41,7 @@ function cadenceLabel(minutes: number | null) {
 function AvailabilityRail({ data, formatDate }: { data: PlayerHistoryResponse; formatDate: (value: string | null) => string }) {
   const points = data.series.flatMap((series) => series.points);
   if (!points.length) return null;
-  return <div className="grid gap-2" aria-label="Disponibilidad por intervalo"><div className="flex items-center justify-between gap-3 text-xs text-muted-foreground"><span className="font-medium text-foreground/80">Disponibilidad</span><span>puntos de {data.resolutionMinutes} min</span></div><div className="flex h-2.5 gap-px overflow-hidden rounded-full bg-muted" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(points.length, 1)}, minmax(2px, 1fr))` }}>{points.map((point, index) => <span key={`${point.at}-${index}`} className={statusClass(point.status)} title={`${formatDate(point.at)} · ${statusLabel(point.status)}`} />)}</div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-success" />En línea</span><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-destructive" />Sin respuesta</span><span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full bg-warning" />Sin comprobar</span></div></div>;
+  return <div className="grid gap-2" aria-label="Disponibilidad por intervalo"><div className="flex items-center justify-between gap-3 text-xs text-muted-foreground"><span className="font-medium text-foreground/80">Disponibilidad</span><span>puntos de {data.resolutionMinutes} min</span></div><div className="flex h-2.5 gap-px overflow-hidden rounded-full bg-muted" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(points.length, 1)}, minmax(2px, 1fr))` }}>{points.map((point, index) => <span key={`${point.at}-${index}`} className={statusClass(point.status)} title={`${formatDate(point.at)} · ${statusLabel(point.status)}`} />)}</div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">{availabilityLegend.map((entry) => <span key={entry.status} className="inline-flex items-center gap-1.5"><span className={`size-2 rounded-full ${statusClass(entry.status)}`} />{entry.label}</span>)}</div></div>;
 }
 
 export function PlayerHistoryCard({ serverId, initialData, mode = "public" }: Props) {

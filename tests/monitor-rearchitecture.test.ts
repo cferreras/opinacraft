@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { buildHistorySourceQuery } from "../scripts/backfill-monitor-queries.mjs";
+import * as backfillHelpers from "../scripts/backfill-monitor-queries.mjs";
 
 import {
   createServerInputSchema,
@@ -21,7 +21,7 @@ const secret = "a".repeat(32);
 const backfillSource = readFileSync(new URL("../scripts/backfill-monitor.mjs", import.meta.url), "utf8");
 
 test("backfill scopes Neon history to target IDs from Monitor DB", () => {
-  const query = buildHistorySourceQuery({
+  const query = backfillHelpers.buildHistorySourceQuery({
     table: "server_player_snapshots",
     alias: "s",
     columns: ["s.server_id", "s.scheduled_at"],
@@ -32,6 +32,82 @@ test("backfill scopes Neon history to target IDs from Monitor DB", () => {
   assert.doesNotMatch(query, /monitor_targets/i);
   assert.match(backfillSource, /backfill-monitor-queries\.mjs/);
   assert.match(backfillSource, /buildHistorySourceQuery/);
+});
+
+test("backfill rebuilds an overlapping hourly bucket without double counting legacy samples", () => {
+  const mergeHourlyBackfillRow = Reflect.get(backfillHelpers, "mergeHourlyBackfillRow") as undefined | ((source: unknown, snapshots: unknown[]) => unknown);
+  const source = {
+    serverId: "server-1",
+    bucketStart: new Date("2026-08-22T10:00:00.000Z"),
+    lastProbeEdition: "java",
+    sourceChanged: 0,
+    sampleCount: 2,
+    onlineCount: 1,
+    unknownCount: 0,
+    playerDataCount: 1,
+    playersTotal: 3,
+    playersPeak: 3,
+    capacityDataCount: 1,
+    capacityTotal: 20,
+    capacityLatest: 20,
+    occupancyDataCount: 1,
+    occupancyBasisPointsTotal: 1500,
+    lastObservedAt: new Date("2026-08-22T10:20:00.000Z"),
+  };
+  const snapshots = [
+    { observedAt: new Date("2026-08-22T10:19:00.000Z"), probeEdition: "java", status: "online", playersCurrent: 99, playersMax: 100 },
+    { observedAt: new Date("2026-08-22T10:31:00.000Z"), probeEdition: "java", status: "online", playersCurrent: 5, playersMax: 20 },
+    { observedAt: new Date("2026-08-22T10:46:00.000Z"), probeEdition: "java", status: "offline", playersCurrent: null, playersMax: null },
+  ];
+
+  assert.deepEqual(mergeHourlyBackfillRow?.(source, snapshots), {
+    ...source,
+    sampleCount: 4,
+    onlineCount: 2,
+    playerDataCount: 2,
+    playersTotal: 8,
+    playersPeak: 5,
+    capacityDataCount: 2,
+    capacityTotal: 40,
+    capacityLatest: 20,
+    occupancyDataCount: 2,
+    occupancyBasisPointsTotal: 4000,
+    lastObservedAt: new Date("2026-08-22T10:46:00.000Z"),
+  });
+});
+
+test("backfill verification rejects missing source history", () => {
+  const assertBackfillVerification = Reflect.get(backfillHelpers, "assertBackfillVerification") as undefined | ((summary: unknown) => unknown);
+
+  assert.throws(() => assertBackfillVerification?.({
+    targets: 1,
+    sourceSnapshots: 12,
+    missingSnapshots: 1,
+    sourceHourly: 3,
+    missingHourly: 0,
+  }), /missing 1 snapshot/i);
+});
+
+test("backfill verification rejects an hourly aggregate mismatch", () => {
+  const assertBackfillVerification = Reflect.get(backfillHelpers, "assertBackfillVerification") as undefined | ((summary: unknown) => unknown);
+
+  assert.throws(() => assertBackfillVerification?.({
+    targets: 1,
+    sourceSnapshots: 12,
+    missingSnapshots: 0,
+    sourceHourly: 3,
+    missingHourly: 0,
+    mismatchedHourly: 1,
+  }), /mismatched 1 hourly/i);
+});
+
+test("backfill locks history writes while rebuilding overlapping buckets", () => {
+  const getBackfillHistoryLockSql = Reflect.get(backfillHelpers, "getBackfillHistoryLockSql") as undefined | (() => unknown);
+
+  assert.equal(
+    getBackfillHistoryLockSql?.(),
+    "lock table monitor_player_snapshots, monitor_player_hourly in share row exclusive mode",
+  );
 });
 
 test("normalizes one shared host with optional edition ports", () => {

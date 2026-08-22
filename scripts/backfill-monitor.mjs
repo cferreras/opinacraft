@@ -3,7 +3,12 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 import pg from "pg";
 
-import { buildHistorySourceQuery } from "./backfill-monitor-queries.mjs";
+import {
+  assertBackfillVerification,
+  buildHistorySourceQuery,
+  getBackfillHistoryLockSql,
+  mergeHourlyBackfillRow,
+} from "./backfill-monitor-queries.mjs";
 
 const neonUrl = process.env.DATABASE_URL?.trim();
 const monitorUrl = process.env.MONITOR_DATABASE_URL?.trim();
@@ -119,10 +124,16 @@ async function migrateTargets(neonClient, monitorClient) {
   return migrated;
 }
 
-async function migrateHistory(neonClient, monitorClient, targetIds, tableName, selectSql, buildInsertSql, valuesForRow) {
-  if (!targetIds.length || !(await tableExists(neonClient, tableName))) return 0;
-  const result = await neonClient.query(selectSql, [targetIds]);
-  const rowValues = result.rows.map(valuesForRow);
+async function readHistory(neonClient, targetIds, tableName, selectSql) {
+  if (!targetIds.length) return [];
+  if (!(await tableExists(neonClient, tableName))) {
+    throw new Error(`Required Neon history table ${tableName} does not exist.`);
+  }
+  return (await neonClient.query(selectSql, [targetIds])).rows;
+}
+
+async function insertHistory(monitorClient, rows, buildInsertSql, valuesForRow) {
+  const rowValues = rows.map(valuesForRow);
   const batchSize = 500;
 
   for (let offset = 0; offset < rowValues.length; offset += batchSize) {
@@ -131,7 +142,66 @@ async function migrateHistory(neonClient, monitorClient, targetIds, tableName, s
     const placeholders = batch.map((values, rowIndex) => `(${values.map((_, columnIndex) => `$${rowIndex * columnCount + columnIndex + 1}`).join(", ")})`).join(", ");
     await monitorClient.query(buildInsertSql(placeholders), batch.flat());
   }
-  return result.rows.length;
+}
+
+function snapshotKey(row) {
+  return `${row.server_id}:${new Date(row.scheduled_at).toISOString()}`;
+}
+
+function hourlyKey(row) {
+  return `${row.serverId}:${new Date(row.bucketStart).toISOString()}`;
+}
+
+function toHourlyRow(row) {
+  return {
+    serverId: row.server_id,
+    bucketStart: new Date(row.bucket_start),
+    lastProbeEdition: row.last_probe_edition,
+    sourceChanged: Number(row.source_changed),
+    sampleCount: Number(row.sample_count),
+    onlineCount: Number(row.online_count),
+    unknownCount: Number(row.unknown_count),
+    playerDataCount: Number(row.player_data_count),
+    playersTotal: Number(row.players_total),
+    playersPeak: row.players_peak === null ? null : Number(row.players_peak),
+    capacityDataCount: Number(row.capacity_data_count),
+    capacityTotal: Number(row.capacity_total),
+    capacityLatest: row.capacity_latest === null ? null : Number(row.capacity_latest),
+    occupancyDataCount: Number(row.occupancy_data_count),
+    occupancyBasisPointsTotal: Number(row.occupancy_basis_points_total),
+    lastObservedAt: row.last_observed_at ? new Date(row.last_observed_at) : null,
+  };
+}
+
+function toBackfillSnapshot(row) {
+  return {
+    observedAt: new Date(row.observed_at),
+    probeEdition: row.probe_edition,
+    status: row.status,
+    playersCurrent: row.players_current === null ? null : Number(row.players_current),
+    playersMax: row.players_max === null ? null : Number(row.players_max),
+  };
+}
+
+function snapshotBucketKey(row) {
+  const bucketStart = new Date(row.scheduled_at);
+  bucketStart.setUTCMinutes(0, 0, 0);
+  return `${row.server_id}:${bucketStart.toISOString()}`;
+}
+
+function hourlyValues(row) {
+  return [
+    row.serverId, row.bucketStart, row.lastProbeEdition, row.sourceChanged,
+    row.sampleCount, row.onlineCount, row.unknownCount, row.playerDataCount,
+    row.playersTotal, row.playersPeak, row.capacityDataCount, row.capacityTotal,
+    row.capacityLatest, row.occupancyDataCount, row.occupancyBasisPointsTotal,
+    row.lastObservedAt,
+  ];
+}
+
+function sameHourlyAggregate(left, right) {
+  return JSON.stringify(hourlyValues(left).map((value) => value instanceof Date ? value.toISOString() : value))
+    === JSON.stringify(hourlyValues(right).map((value) => value instanceof Date ? value.toISOString() : value));
 }
 
 async function rebuildDerivedStateHistory(monitorClient) {
@@ -224,9 +294,8 @@ async function migrate() {
       "select server_id from monitor_targets order by server_id asc",
     )).rows.map((row) => row.server_id);
 
-    const snapshots = await migrateHistory(
+    const sourceSnapshotRows = await readHistory(
       neonClient,
-      monitorClient,
       targetIds,
       "server_player_snapshots",
       buildHistorySourceQuery({
@@ -239,6 +308,10 @@ async function migrate() {
         ],
         orderBy: "s.server_id, s.scheduled_at",
       }),
+    );
+    await insertHistory(
+      monitorClient,
+      sourceSnapshotRows,
       (placeholders) => `insert into monitor_player_snapshots (
         server_id, scheduled_at, observed_at, probe_edition, status, failure_code,
         players_current, players_max, version, latency_ms, job_id
@@ -247,9 +320,8 @@ async function migrate() {
       (row) => [row.server_id, row.scheduled_at, row.observed_at, row.probe_edition, row.status, row.failure_code, row.players_current, row.players_max, row.version, row.latency_ms, row.job_id],
     );
 
-    const hourly = await migrateHistory(
+    const sourceHourlyRows = await readHistory(
       neonClient,
-      monitorClient,
       targetIds,
       "server_player_hourly",
       buildHistorySourceQuery({
@@ -264,20 +336,79 @@ async function migrate() {
         ],
         orderBy: "h.server_id, h.bucket_start",
       }),
+    );
+    await monitorClient.query(getBackfillHistoryLockSql());
+    const destinationSnapshots = targetIds.length ? (await monitorClient.query(`
+      select server_id, scheduled_at, observed_at, probe_edition, status, players_current, players_max
+      from monitor_player_snapshots
+      where server_id = any($1::uuid[])
+      order by server_id, scheduled_at
+    `, [targetIds])).rows : [];
+    const snapshotsByBucket = new Map();
+    for (const row of destinationSnapshots) {
+      const key = snapshotBucketKey(row);
+      const bucket = snapshotsByBucket.get(key) ?? [];
+      bucket.push(toBackfillSnapshot(row));
+      snapshotsByBucket.set(key, bucket);
+    }
+    const mergedHourlyRows = sourceHourlyRows.map((row) => {
+      const source = toHourlyRow(row);
+      return mergeHourlyBackfillRow(source, snapshotsByBucket.get(hourlyKey(source)) ?? []);
+    });
+    await insertHistory(
+      monitorClient,
+      mergedHourlyRows,
       (placeholders) => `insert into monitor_player_hourly (
         server_id, bucket_start, last_probe_edition, source_changed, sample_count,
         online_count, unknown_count, player_data_count, players_total, players_peak,
         capacity_data_count, capacity_total, capacity_latest, occupancy_data_count,
         occupancy_basis_points_total, last_observed_at
       ) values ${placeholders}
-      on conflict (server_id, bucket_start) do nothing`,
-      (row) => [row.server_id, row.bucket_start, row.last_probe_edition, row.source_changed, row.sample_count, row.online_count, row.unknown_count, row.player_data_count, row.players_total, row.players_peak, row.capacity_data_count, row.capacity_total, row.capacity_latest, row.occupancy_data_count, row.occupancy_basis_points_total, row.last_observed_at],
+      on conflict (server_id, bucket_start) do update set
+        last_probe_edition = excluded.last_probe_edition,
+        source_changed = excluded.source_changed,
+        sample_count = excluded.sample_count,
+        online_count = excluded.online_count,
+        unknown_count = excluded.unknown_count,
+        player_data_count = excluded.player_data_count,
+        players_total = excluded.players_total,
+        players_peak = excluded.players_peak,
+        capacity_data_count = excluded.capacity_data_count,
+        capacity_total = excluded.capacity_total,
+        capacity_latest = excluded.capacity_latest,
+        occupancy_data_count = excluded.occupancy_data_count,
+        occupancy_basis_points_total = excluded.occupancy_basis_points_total,
+        last_observed_at = excluded.last_observed_at`,
+      hourlyValues,
     );
+
+    const destinationSnapshotKeys = new Set(destinationSnapshots.map(snapshotKey));
+    const destinationHourlyRows = targetIds.length ? (await monitorClient.query(`
+      select server_id, bucket_start, last_probe_edition, source_changed, sample_count,
+             online_count, unknown_count, player_data_count, players_total, players_peak,
+             capacity_data_count, capacity_total, capacity_latest, occupancy_data_count,
+             occupancy_basis_points_total, last_observed_at
+      from monitor_player_hourly
+      where server_id = any($1::uuid[])
+      order by server_id, bucket_start
+    `, [targetIds])).rows.map(toHourlyRow) : [];
+    const destinationHourlyByKey = new Map(destinationHourlyRows.map((row) => [hourlyKey(row), row]));
+    const verification = assertBackfillVerification({
+      targets,
+      sourceSnapshots: sourceSnapshotRows.length,
+      missingSnapshots: sourceSnapshotRows.filter((row) => !destinationSnapshotKeys.has(snapshotKey(row))).length,
+      sourceHourly: sourceHourlyRows.length,
+      missingHourly: mergedHourlyRows.filter((row) => !destinationHourlyByKey.has(hourlyKey(row))).length,
+      mismatchedHourly: mergedHourlyRows.filter((row) => {
+        const destination = destinationHourlyByKey.get(hourlyKey(row));
+        return destination ? !sameHourlyAggregate(row, destination) : false;
+      }).length,
+    });
 
     const stateChanges = await rebuildDerivedStateHistory(monitorClient);
 
     await monitorClient.query("commit");
-    console.log(JSON.stringify({ ok: true, targets, snapshots, hourly, stateChanges }));
+    console.log(JSON.stringify({ ok: true, ...verification, stateChanges }));
   } catch (error) {
     await monitorClient.query("rollback").catch(() => undefined);
     throw error;
