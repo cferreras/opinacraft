@@ -211,6 +211,13 @@ test("Monitor API history keeps generated and bucket timestamps in UTC", () => {
   assert.equal(result.series[0]?.summary.lastSampleAt, "2026-08-22T10:00:02.000Z");
 });
 
+test("monitor state update casts the reused health parameter consistently", () => {
+  const source = readFileSync("src/lib/monitor/repository.ts", "utf8");
+
+  assert.match(source, /health_status = \$2::varchar,/);
+  assert.match(source, /case when \$2::varchar = 'online' then \$7/);
+});
+
 test("hourly business-event route only loads Neon after a non-empty Monitor claim", () => {
   const source = readFileSync("src/app/api/internal/monitor/events/route.ts", "utf8");
   assert.doesNotMatch(source, /from ["']@\/db["']/);

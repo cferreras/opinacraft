@@ -238,13 +238,13 @@ export async function persistMonitorObservation(observation: CanonicalMonitorObs
     if (nextStatus !== currentStatus) lastStateChangeAt = observation.observedAt;
     await client.query(`
       update monitor_states set
-        health_status = $2,
+        health_status = $2::varchar,
         players_current = $3,
         players_max = $4,
         version = $5,
         latency_ms = $6,
         last_checked_at = $7,
-        last_online_at = case when $2 = 'online' then $7 else last_online_at end,
+        last_online_at = case when $2::varchar = 'online' then $7 else last_online_at end,
         offline_since = $8,
         last_recovered_at = $9,
         last_state_change_at = $10,
