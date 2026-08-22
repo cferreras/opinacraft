@@ -222,6 +222,16 @@ test("code-splits the Recharts history visualization", () => {
   assert.match(chartSource, /from ["']recharts["']/);
 });
 
+test("loads public player history after hydration instead of embedding the monitor cache", () => {
+  const pageSource = readProjectFile("src/app/servers/[slug]/page.tsx");
+  const cardSource = readProjectFile("src/components/player-history-card.tsx");
+
+  assert.doesNotMatch(pageSource, /getCachedMonitorHistory/);
+  assert.doesNotMatch(pageSource, /historyPromise/);
+  assert.match(cardSource, /useState\(mode === "public" \? 1 : 0\)/);
+  assert.match(cardSource, /useState\(mode === "public"\)/);
+});
+
 test("presents server verification as one generic identity check", () => {
   const panelSource = readProjectFile("src/components/verification-panel.tsx");
   const pageSource = readProjectFile("src/app/servers/[slug]/manage/page.tsx");

@@ -47,8 +47,8 @@ export function PlayerHistoryCard({ serverId, initialData, mode = "public" }: Pr
   const dateFormatter = useBrowserDateFormatter();
   const [data, setData] = useState(initialData);
   const [period, setPeriod] = useState(initialData.period);
-  const [requestKey, setRequestKey] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [requestKey, setRequestKey] = useState(mode === "public" ? 1 : 0);
+  const [loading, setLoading] = useState(mode === "public");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
