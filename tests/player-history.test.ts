@@ -110,6 +110,62 @@ test("player history chart preserves the observed peak across wider intervals", 
   assert.equal(chart[0]?.serverPeak, 10);
 });
 
+test("player history chart stops at the last observed player sample", async () => {
+  const { trimTrailingEmptyChartPoints } = await import("../src/lib/servers/player-history-chart.ts");
+  const point = (at: string, serverPeak: number | null) => ({
+    at,
+    averagePlayers: serverPeak,
+    peakPlayers: serverPeak,
+    capacity: 20,
+    averageOccupancyPct: serverPeak,
+    responseRatePct: serverPeak === null ? 0 : 100,
+    monitorCoveragePct: serverPeak === null ? 0 : 100,
+    sampleCount: serverPeak === null ? 0 : 1,
+    status: serverPeak === null ? "no_data" as const : "online" as const,
+    sourceChanged: false,
+    serverPeak,
+  });
+  const chart = trimTrailingEmptyChartPoints([
+    point("2026-08-22T18:45:00.000Z", 3),
+    point("2026-08-22T19:00:00.000Z", 0),
+    point("2026-08-22T19:15:00.000Z", null),
+    point("2026-08-23T00:00:00.000Z", null),
+  ]);
+
+  assert.deepEqual(chart.map((entry) => entry.at), [
+    "2026-08-22T18:45:00.000Z",
+    "2026-08-22T19:00:00.000Z",
+  ]);
+});
+
+test("player history chart uses a small regular set of time ticks", async () => {
+  const { getPlayerHistoryChartTicks } = await import("../src/lib/servers/player-history-chart.ts");
+  const points = Array.from({ length: 96 }, (_, index) => ({
+    at: new Date(Date.UTC(2026, 7, 22, 1, 15 + index * 15)).toISOString(),
+  }));
+
+  assert.deepEqual(getPlayerHistoryChartTicks(points), [
+    "2026-08-22T01:15:00.000Z",
+    "2026-08-22T04:15:00.000Z",
+    "2026-08-22T07:15:00.000Z",
+    "2026-08-22T10:15:00.000Z",
+    "2026-08-22T13:15:00.000Z",
+    "2026-08-22T16:15:00.000Z",
+    "2026-08-22T19:15:00.000Z",
+    "2026-08-22T22:15:00.000Z",
+    "2026-08-23T01:00:00.000Z",
+  ]);
+});
+
+test("player history chart formats axis ticks as local time only", async () => {
+  const { formatLocalizedDate } = await import("../src/lib/time/localized.ts");
+
+  assert.equal(
+    formatLocalizedDate("2026-08-22T01:15:00.000Z", "es-ES", "time", new Date("2026-08-23T00:00:00.000Z"), "Europe/Madrid"),
+    "03:15",
+  );
+});
+
 test("player history tooltip separates the metric label from its numeric value", async () => {
   const { chartTooltipValueRowClassName } = await import("../src/lib/charts/tooltip.ts");
   assert.match(chartTooltipValueRowClassName, /(?:^|\s)gap-2(?:\s|$)/);
