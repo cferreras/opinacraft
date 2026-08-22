@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+
+import { buildHistorySourceQuery } from "../scripts/backfill-monitor-queries.mjs";
 
 import {
   createServerInputSchema,
@@ -15,6 +18,21 @@ import {
 } from "../src/lib/servers/player-history.ts";
 
 const secret = "a".repeat(32);
+const backfillSource = readFileSync(new URL("../scripts/backfill-monitor.mjs", import.meta.url), "utf8");
+
+test("backfill scopes Neon history to target IDs from Monitor DB", () => {
+  const query = buildHistorySourceQuery({
+    table: "server_player_snapshots",
+    alias: "s",
+    columns: ["s.server_id", "s.scheduled_at"],
+    orderBy: "s.server_id, s.scheduled_at",
+  });
+
+  assert.match(query, /s\.server_id = any\(\$1::uuid\[\]\)/i);
+  assert.doesNotMatch(query, /monitor_targets/i);
+  assert.match(backfillSource, /backfill-monitor-queries\.mjs/);
+  assert.match(backfillSource, /buildHistorySourceQuery/);
+});
 
 test("normalizes one shared host with optional edition ports", () => {
   const normalized = normalizeCreateServerInput({
