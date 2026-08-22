@@ -269,7 +269,7 @@ export function buildMonitorHistory({
   const raw = baseWindow.raw && resolutionMinutes === 15 && rows.raw;
   const resolutionMs = resolutionMinutes * 60_000;
   const currentInterval = alignToResolution(now, resolutionMs);
-  const includeCurrentInterval = rows.rows.some((row) => {
+  const includeCurrentInterval = raw || rows.rows.some((row) => {
     const at = raw ? asDate(row.scheduled_at) : asDate(row.bucket_start);
     if (!at || at < currentInterval || at.getTime() >= currentInterval.getTime() + resolutionMs) return false;
     return raw || (asNumber(row.sample_count) ?? 0) > 0;
@@ -332,15 +332,33 @@ export function buildMonitorHistory({
     buckets,
     (slot) => getExpectedSamplesForSlot(slot, resolutionMinutes, cadenceHistory, cadenceMinutes ?? PUBLIC_MONITOR_CADENCE_MINUTES),
   );
+  const resolvedFreshness = freshness ?? (cadenceMinutes ? getMonitorFreshness(lastUpdatedAt, cadenceMinutes, now) : "never");
+  const currentPoint = series.points.at(-1);
+  const previousStatus = [...series.points.slice(0, -1)]
+    .reverse()
+    .find((point) => point.sampleCount > 0)?.status;
+  const availabilitySeries = raw
+    && resolvedFreshness === "fresh"
+    && currentPoint?.sampleCount === 0
+    && previousStatus
+    && previousStatus !== "no_data"
+    ? {
+        ...series,
+        points: [
+          ...series.points.slice(0, -1),
+          { ...currentPoint, status: previousStatus },
+        ],
+      }
+    : series;
   return {
     period,
     edition: "all",
     resolutionMinutes,
     cadenceMinutes,
     lastUpdatedAt: lastUpdatedAt?.toISOString() ?? null,
-    freshness: freshness ?? (cadenceMinutes ? getMonitorFreshness(lastUpdatedAt, cadenceMinutes, now) : "never"),
+    freshness: resolvedFreshness,
     probeEdition,
     generatedAt: now.toISOString(),
-    series: [series],
+    series: [availabilitySeries],
   };
 }
