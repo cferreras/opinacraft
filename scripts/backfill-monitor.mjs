@@ -3,6 +3,8 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 import pg from "pg";
 
+import { buildHistorySourceQuery } from "./backfill-monitor-queries.mjs";
+
 const neonUrl = process.env.DATABASE_URL?.trim();
 const monitorUrl = process.env.MONITOR_DATABASE_URL?.trim();
 if (!neonUrl) throw new Error("DATABASE_URL is required for the Neon backfill source.");
@@ -117,11 +119,17 @@ async function migrateTargets(neonClient, monitorClient) {
   return migrated;
 }
 
-async function migrateHistory(neonClient, monitorClient, tableName, selectSql, insertSql, valuesForRow) {
-  if (!(await tableExists(neonClient, tableName))) return 0;
-  const result = await neonClient.query(selectSql);
-  for (const row of result.rows) {
-    await monitorClient.query(insertSql, valuesForRow(row));
+async function migrateHistory(neonClient, monitorClient, targetIds, tableName, selectSql, buildInsertSql, valuesForRow) {
+  if (!targetIds.length || !(await tableExists(neonClient, tableName))) return 0;
+  const result = await neonClient.query(selectSql, [targetIds]);
+  const rowValues = result.rows.map(valuesForRow);
+  const batchSize = 500;
+
+  for (let offset = 0; offset < rowValues.length; offset += batchSize) {
+    const batch = rowValues.slice(offset, offset + batchSize);
+    const columnCount = batch[0].length;
+    const placeholders = batch.map((values, rowIndex) => `(${values.map((_, columnIndex) => `$${rowIndex * columnCount + columnIndex + 1}`).join(", ")})`).join(", ");
+    await monitorClient.query(buildInsertSql(placeholders), batch.flat());
   }
   return result.rows.length;
 }
@@ -212,16 +220,29 @@ async function migrate() {
     await monitorClient.query("begin");
 
     const targets = await migrateTargets(neonClient, monitorClient);
+    const targetIds = (await monitorClient.query(
+      "select server_id from monitor_targets order by server_id asc",
+    )).rows.map((row) => row.server_id);
 
     const snapshots = await migrateHistory(
       neonClient,
       monitorClient,
+      targetIds,
       "server_player_snapshots",
-      "select s.server_id, s.scheduled_at, s.observed_at, s.probe_edition, s.status, s.failure_code, s.players_current, s.players_max, s.version, s.latency_ms, s.job_id from server_player_snapshots s where exists (select 1 from monitor_targets t where t.server_id = s.server_id) order by s.server_id, s.scheduled_at",
-      `insert into monitor_player_snapshots (
+      buildHistorySourceQuery({
+        table: "server_player_snapshots",
+        alias: "s",
+        columns: [
+          "s.server_id", "s.scheduled_at", "s.observed_at", "s.probe_edition",
+          "s.status", "s.failure_code", "s.players_current", "s.players_max",
+          "s.version", "s.latency_ms", "s.job_id",
+        ],
+        orderBy: "s.server_id, s.scheduled_at",
+      }),
+      (placeholders) => `insert into monitor_player_snapshots (
         server_id, scheduled_at, observed_at, probe_edition, status, failure_code,
         players_current, players_max, version, latency_ms, job_id
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) values ${placeholders}
       on conflict (server_id, scheduled_at) do nothing`,
       (row) => [row.server_id, row.scheduled_at, row.observed_at, row.probe_edition, row.status, row.failure_code, row.players_current, row.players_max, row.version, row.latency_ms, row.job_id],
     );
@@ -229,14 +250,26 @@ async function migrate() {
     const hourly = await migrateHistory(
       neonClient,
       monitorClient,
+      targetIds,
       "server_player_hourly",
-      "select h.server_id, h.bucket_start, h.last_probe_edition, h.source_changed, h.sample_count, h.online_count, h.unknown_count, h.player_data_count, h.players_total, h.players_peak, h.capacity_data_count, h.capacity_total, h.capacity_latest, h.occupancy_data_count, h.occupancy_basis_points_total, h.last_observed_at from server_player_hourly h where exists (select 1 from monitor_targets t where t.server_id = h.server_id) order by h.server_id, h.bucket_start",
-      `insert into monitor_player_hourly (
+      buildHistorySourceQuery({
+        table: "server_player_hourly",
+        alias: "h",
+        columns: [
+          "h.server_id", "h.bucket_start", "h.last_probe_edition", "h.source_changed",
+          "h.sample_count", "h.online_count", "h.unknown_count", "h.player_data_count",
+          "h.players_total", "h.players_peak", "h.capacity_data_count", "h.capacity_total",
+          "h.capacity_latest", "h.occupancy_data_count", "h.occupancy_basis_points_total",
+          "h.last_observed_at",
+        ],
+        orderBy: "h.server_id, h.bucket_start",
+      }),
+      (placeholders) => `insert into monitor_player_hourly (
         server_id, bucket_start, last_probe_edition, source_changed, sample_count,
         online_count, unknown_count, player_data_count, players_total, players_peak,
         capacity_data_count, capacity_total, capacity_latest, occupancy_data_count,
         occupancy_basis_points_total, last_observed_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ) values ${placeholders}
       on conflict (server_id, bucket_start) do nothing`,
       (row) => [row.server_id, row.bucket_start, row.last_probe_edition, row.source_changed, row.sample_count, row.online_count, row.unknown_count, row.player_data_count, row.players_total, row.players_peak, row.capacity_data_count, row.capacity_total, row.capacity_latest, row.occupancy_data_count, row.occupancy_basis_points_total, row.last_observed_at],
     );
