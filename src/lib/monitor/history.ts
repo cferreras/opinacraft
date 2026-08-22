@@ -136,9 +136,10 @@ function alignToResolution(value: Date, resolutionMs: number) {
   return new Date(Math.floor(value.getTime() / resolutionMs) * resolutionMs);
 }
 
-function buildSlots(durationMs: number, resolutionMinutes: number, now: Date) {
+function buildSlots(durationMs: number, resolutionMinutes: number, now: Date, includeCurrentInterval: boolean) {
   const resolutionMs = resolutionMinutes * 60_000;
-  const end = alignToResolution(now, resolutionMs);
+  const currentInterval = alignToResolution(now, resolutionMs);
+  const end = includeCurrentInterval ? currentInterval : new Date(currentInterval.getTime() - resolutionMs);
   const count = Math.min(180, Math.floor(durationMs / resolutionMs));
   const start = new Date(end.getTime() - (count - 1) * resolutionMs);
   return Array.from({ length: count }, (_, index) => new Date(start.getTime() + index * resolutionMs));
@@ -266,8 +267,14 @@ export function buildMonitorHistory({
   const baseWindow = windows[period];
   const resolutionMinutes = Math.max(baseWindow.resolutionMinutes, cadenceMinutes ?? baseWindow.resolutionMinutes);
   const raw = baseWindow.raw && resolutionMinutes === 15 && rows.raw;
-  const slots = buildSlots(baseWindow.durationMs, resolutionMinutes, now);
   const resolutionMs = resolutionMinutes * 60_000;
+  const currentInterval = alignToResolution(now, resolutionMs);
+  const includeCurrentInterval = rows.rows.some((row) => {
+    const at = raw ? asDate(row.scheduled_at) : asDate(row.bucket_start);
+    if (!at || at < currentInterval || at.getTime() >= currentInterval.getTime() + resolutionMs) return false;
+    return raw || (asNumber(row.sample_count) ?? 0) > 0;
+  });
+  const slots = buildSlots(baseWindow.durationMs, resolutionMinutes, now, includeCurrentInterval);
   const first = slots[0] ?? alignToResolution(now, resolutionMs);
   const buckets = slots.map(() => [] as Array<BucketRow>);
   const cadenceHistory: MonitorCadencePeriod[] = cadenceMinutes

@@ -1,6 +1,58 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { buildMonitorHistory } from "../src/lib/monitor/history.ts";
 import { mergeLegacySnapshotsBySlot } from "../src/lib/servers/monitor-history.ts";
+
+test("monitor history omits an empty open interval but keeps the last completed gap", () => {
+  const history = buildMonitorHistory({
+    period: "24h",
+    now: new Date("2026-08-22T10:07:00.000Z"),
+    cadenceMinutes: 15,
+    lastUpdatedAt: new Date("2026-08-22T09:31:00.000Z"),
+    probeEdition: "java",
+    rows: {
+      raw: true,
+      rows: [{
+        scheduled_at: "2026-08-22T09:30:00.000Z",
+        observed_at: "2026-08-22T09:31:00.000Z",
+        probe_edition: "java",
+        status: "online",
+        players_current: 3,
+        players_max: 20,
+      }],
+    },
+  });
+
+  const points = history.series[0]?.points ?? [];
+  assert.equal(points.at(-1)?.at, "2026-08-22T09:45:00.000Z");
+  assert.equal(points.at(-1)?.status, "no_data");
+  assert.equal(points.at(-2)?.at, "2026-08-22T09:30:00.000Z");
+  assert.equal(points.at(-2)?.status, "online");
+});
+
+test("monitor history includes a jittered sample from the current interval immediately", () => {
+  const history = buildMonitorHistory({
+    period: "24h",
+    now: new Date("2026-08-22T10:07:00.000Z"),
+    cadenceMinutes: 15,
+    lastUpdatedAt: new Date("2026-08-22T10:04:00.000Z"),
+    probeEdition: "java",
+    rows: {
+      raw: true,
+      rows: [{
+        scheduled_at: "2026-08-22T10:03:00.000Z",
+        observed_at: "2026-08-22T10:04:00.000Z",
+        probe_edition: "java",
+        status: "online",
+        players_current: 4,
+        players_max: 20,
+      }],
+    },
+  });
+
+  assert.equal(history.series[0]?.points.at(-1)?.at, "2026-08-22T10:00:00.000Z");
+  assert.equal(history.series[0]?.points.at(-1)?.status, "online");
+});
 
 test("legacy Java and Bedrock snapshots merge to one canonical interval without summing players", () => {
   const merged = mergeLegacySnapshotsBySlot([
