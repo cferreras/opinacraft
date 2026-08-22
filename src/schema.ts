@@ -251,6 +251,29 @@ export const serverEndpoints = pgTable(
   ],
 );
 
+export const monitorSyncOutbox = pgTable(
+  "server_monitor_sync_outbox",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    dedupeKey: varchar("dedupe_key", { length: 255 }).notNull().unique(),
+    serverId: uuid("server_id").notNull(),
+    operation: varchar("operation", { length: 20 }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    attempts: smallint("attempts").default(0).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("server_monitor_sync_outbox_queue_idx").on(table.status, table.nextAttemptAt),
+    index("server_monitor_sync_outbox_server_idx").on(table.serverId),
+    check("server_monitor_sync_outbox_operation_check", sql`${table.operation} in ('upsert', 'delete')`),
+    check("server_monitor_sync_outbox_status_check", sql`${table.status} in ('pending', 'processing', 'done', 'failed')`),
+  ],
+);
+
 export const serverMembers = pgTable(
   "server_members",
   {

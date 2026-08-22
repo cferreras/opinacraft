@@ -41,6 +41,8 @@ import {
 import { parseEnabledPort } from "@/lib/servers/endpoint-fields";
 import { serverValidationField } from "@/lib/servers/form-validation";
 import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
+import { processMonitorSyncOutbox } from "@/lib/servers/monitor-sync";
+import { invalidatePublicServerCache } from "@/lib/servers/cache-tags";
 
 export type ManageState = {
   formError?: string;
@@ -131,6 +133,10 @@ export async function updateServerAction(
     return { formError: "Unable to update the server right now." };
   }
 
+  await processMonitorSyncOutbox({ serverId, limit: 1 }).catch((error) => {
+    console.error("Failed to dispatch monitor target sync", error instanceof Error ? error.name : "unknown");
+  });
+  invalidatePublicServerCache(serverId, slug);
   revalidatePath("/servers");
   revalidatePath("/dashboard/servers");
   revalidatePath(`/servers/${slug}`);
@@ -147,6 +153,10 @@ export async function deleteServerAction(formData: FormData) {
   } catch (error) {
     redirect(`/servers/${formValue(formData, "slug") ?? ""}/manage?deleteError=${encodeURIComponent(error instanceof Error ? error.message : "Unable to delete server.")}`);
   }
+  await processMonitorSyncOutbox({ serverId, limit: 1 }).catch((error) => {
+    console.error("Failed to dispatch monitor target deletion", error instanceof Error ? error.name : "unknown");
+  });
+  invalidatePublicServerCache(serverId, formValue(formData, "slug") ?? undefined);
   revalidatePath("/servers");
   revalidatePath("/dashboard/servers");
   redirect("/dashboard/servers?deleted=1");

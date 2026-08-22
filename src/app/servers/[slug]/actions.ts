@@ -24,6 +24,7 @@ import {
   updateReview,
 } from "@/lib/servers/reviews";
 import { reviewContentSchema, reviewInputSchema } from "@/lib/servers/review-validation";
+import { invalidateReviewCache } from "@/lib/servers/cache-tags";
 
 export type ReviewActionState = {
   formError?: string;
@@ -102,12 +103,13 @@ export async function createReviewAction(
   const session = await getServerSession();
   const slug = formSlug(formData);
   if (!session) redirect(`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}`)}`);
+  const serverId = formValue(formData, "serverId");
 
   const parsed = reviewFields(formData);
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
   try {
-    await createReview(session.user.id, formValue(formData, "serverId"), parsed.data);
+    await createReview(session.user.id, serverId, parsed.data);
   } catch (error) {
     const message = serverError(error);
     if (message) return { formError: message };
@@ -115,6 +117,7 @@ export async function createReviewAction(
     return { formError: "No se pudo publicar la opinión. Inténtalo de nuevo." };
   }
 
+  invalidateReviewCache(serverId);
   revalidatePath(`/servers/${slug}`);
   revalidatePath("/servers");
   redirect(`/servers/${slug}?review=created#reviews`);
@@ -132,7 +135,8 @@ export async function updateReviewAction(
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
   try {
-    await updateReview(session.user.id, formValue(formData, "reviewId"), parsed.data);
+    const result = await updateReview(session.user.id, formValue(formData, "reviewId"), parsed.data);
+    invalidateReviewCache(result.serverId);
   } catch (error) {
     const message = serverError(error);
     if (message) return { formError: message };
@@ -151,7 +155,8 @@ export async function deleteReviewAction(formData: FormData) {
   if (!session) redirect(`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}`)}`);
 
   try {
-    await deleteReview(session.user.id, formValue(formData, "reviewId"));
+    const result = await deleteReview(session.user.id, formValue(formData, "reviewId"));
+    invalidateReviewCache(result.serverId);
   } catch (error) {
     if (serverError(error)) redirect(`/servers/${slug}?reviewError=${reviewErrorCode(error)}#reviews`);
     console.error("Failed to delete review", error instanceof Error ? error.name : "unknown");
@@ -175,7 +180,8 @@ export async function createOfficialReplyAction(
   if (!content.success) return { fieldErrors: { content: content.error.issues[0]?.message ?? "Escribe una respuesta." } };
 
   try {
-    await createOfficialReply(session.user.id, formValue(formData, "reviewId"), content.data);
+    const result = await createOfficialReply(session.user.id, formValue(formData, "reviewId"), content.data);
+    if (result) invalidateReviewCache(result.serverId);
   } catch (error) {
     return { formError: replyStateError(error) };
   }
@@ -193,7 +199,8 @@ export async function updateOfficialReplyAction(formData: FormData) {
   if (!content.success) redirect(`/servers/${slug}?replyError=invalid#reviews`);
 
   try {
-    await updateOfficialReply(session.user.id, formValue(formData, "replyId"), content.data);
+    const result = await updateOfficialReply(session.user.id, formValue(formData, "replyId"), content.data);
+    invalidateReviewCache(result.serverId);
   } catch (error) {
     redirect(`/servers/${slug}?replyError=${replyErrorCode(error)}#reviews`);
   }
@@ -208,7 +215,8 @@ export async function deleteOfficialReplyAction(formData: FormData) {
   if (!session) redirect(`/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}`)}`);
 
   try {
-    await deleteOfficialReply(session.user.id, formValue(formData, "replyId"));
+    const result = await deleteOfficialReply(session.user.id, formValue(formData, "replyId"));
+    invalidateReviewCache(result.serverId);
   } catch (error) {
     redirect(`/servers/${slug}?replyError=${replyErrorCode(error)}#reviews`);
   }

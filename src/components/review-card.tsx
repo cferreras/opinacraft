@@ -9,6 +9,7 @@ import { OfficialReplyEditor } from "@/components/official-reply-editor";
 import { OfficialReplyForm } from "@/components/official-reply-form";
 import { ReviewReportForm } from "@/components/review-report-form";
 import type { ReviewView } from "@/lib/servers/reviews";
+import { LocalizedTimestamp } from "@/components/localized-timestamp";
 
 function Rating({ rating }: { rating: number }) {
   return (
@@ -40,7 +41,7 @@ export function ReviewCard({ review, serverId, slug, canReport, canReply, canMan
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
               <div>
                 <p className="text-sm font-semibold">{review.authorName}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{review.createdAt.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground"><LocalizedTimestamp value={review.createdAt} mode="datetime" /></p>
               </div>
               <Rating rating={review.rating} />
             </div>
@@ -53,7 +54,7 @@ export function ReviewCard({ review, serverId, slug, canReport, canReply, canMan
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold text-primary">Respuesta oficial</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{review.reply.authorName} · {review.reply.createdAt.toLocaleDateString("es-ES")}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{review.reply.authorName} · <LocalizedTimestamp value={review.reply.createdAt} mode="datetime" /></p>
               </div>
               {canManageReplies ? <div className="flex flex-wrap items-center gap-2"><OfficialReplyEditor replyId={review.reply.id} slug={slug} content={review.reply.content} /><form action={deleteOfficialReplyAction}><input type="hidden" name="replyId" value={review.reply.id} /><input type="hidden" name="slug" value={slug} /><Button type="submit" variant="link" size="sm" className="h-auto p-0 text-xs text-primary">Eliminar</Button></form></div> : null}
             </div>

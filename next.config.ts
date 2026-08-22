@@ -13,6 +13,7 @@ const discordEnabled = Boolean(
 
 const nextConfig: NextConfig = {
   /* config options here */
+  cacheComponents: true,
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   reactCompiler: true,
   experimental: {

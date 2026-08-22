@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { ExternalLink, Plus } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,6 +16,7 @@ function countLabel(count: number) { return `${count} ${count === 1 ? "servidor"
 function SummaryMetric({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="p-4"><dt className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</dt><dd className="mt-1 flex items-baseline gap-2"><span className="text-2xl font-semibold tracking-tight tabular-nums">{value}</span><span className="text-xs text-muted-foreground">{detail}</span></dd></div>; }
 
 export default async function ManagedServersPage({ searchParams }: Props) {
+  await connection();
   const session = await requireServerSession("/dashboard/servers");
   const [servers, query] = await Promise.all([listManagedServers(session.user.id), searchParams ?? Promise.resolve<{ deleted?: string }>({})]);
   const onlineCount = servers.filter((server) => server.aggregateStatus === "online").length;

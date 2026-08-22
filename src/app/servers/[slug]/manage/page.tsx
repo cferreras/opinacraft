@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { type ReactNode } from "react";
 import { Activity, ArrowLeft, Check, ChevronRight, ExternalLink, Eye, FileText, Image as ImageIcon, ShieldCheck, Users } from "lucide-react";
 
@@ -30,9 +31,8 @@ type Props = {
   searchParams: Promise<Record<string, string | undefined>>;
 };
 
-export const runtime = "nodejs";
-
 export default async function ManageServerPage({ params, searchParams }: Props) {
+  await connection();
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const session = await requireServerSession(`/servers/${slug}/manage`);
   const server = await getManagedServerBySlug(slug, session.user.id);

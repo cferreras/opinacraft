@@ -7,8 +7,6 @@ import { db } from "@/db";
 import { mediaCleanupJobs } from "@/schema";
 import { getPlatformRole } from "@/lib/admin";
 
-export const runtime = "nodejs";
-
 export async function POST(request: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session || (await getPlatformRole(session.user.id)) !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });

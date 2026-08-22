@@ -12,8 +12,6 @@ import { MediaValidationError, optimizeImage } from "@/lib/media/optimize";
 import { getMediaQuota, MediaQuotaExceededError, releaseMediaQuota, reserveMediaQuota } from "@/lib/media/quota";
 import { mediaStorage, MediaStorageNotConfiguredError } from "@/lib/media/storage";
 
-export const runtime = "nodejs";
-
 const MAX_AVATAR_FILE_BYTES = 4_000_000;
 const MAX_AVATAR_REQUEST_BYTES = MAX_AVATAR_FILE_BYTES + 128_000;
 

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { AlertCircle, CheckCircle2, Tag as TagIcon } from "lucide-react";
 
 import { moderateReportAction, moderateReviewReportAction, moderateTagAction, grantRoleAction } from "@/app/admin/actions";
@@ -15,9 +16,8 @@ import { getPlatformRole, listOpenReports, listOpenReviewReports } from "@/lib/a
 import { listModerationTags } from "@/lib/servers/tags";
 import { getServerSession } from "@/lib/session";
 
-export const dynamic = "force-dynamic";
-
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string; updated?: string; status?: string }> }) {
+  await connection();
   const session = await getServerSession();
   if (!session) redirect("/sign-in?callbackURL=/admin");
   const role = await getPlatformRole(session.user.id);

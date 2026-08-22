@@ -8,6 +8,8 @@ import { grantPlatformRole, moderateReport, moderateReviewReport } from "@/lib/a
 import { ReportAlreadyOpenError } from "@/lib/servers/reports";
 import { blockTag, mergeTags, renameTag } from "@/lib/servers/tags";
 import { ReviewReportAlreadyOpenError } from "@/lib/servers/reviews";
+import { getServerIdBySlug } from "@/lib/servers/queries";
+import { invalidateReviewCache } from "@/lib/servers/cache-tags";
 
 export async function moderateReportAction(formData: FormData) {
   const session = await getServerSession();
@@ -43,6 +45,10 @@ export async function moderateReviewReportAction(formData: FormData) {
     redirect("/admin?error=forbidden");
   }
   if (!transitioned) redirect("/admin?error=transition");
+  if (slug) {
+    const serverId = await getServerIdBySlug(slug);
+    if (serverId) invalidateReviewCache(serverId);
+  }
   revalidatePath("/admin");
   revalidatePath("/servers");
   if (slug) revalidatePath(`/servers/${slug}`);

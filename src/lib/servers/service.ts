@@ -10,6 +10,7 @@ import {
   serverMembers,
   serverVerifications,
   serverMedia,
+  monitorSyncOutbox,
   servers,
 } from "@/schema";
 import {
@@ -31,6 +32,47 @@ import { releaseMediaQuota } from "@/lib/media/quota";
 const RESERVED_SLUGS = new Set(["new"]);
 const MAX_SLUG_ATTEMPTS = 8;
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function enqueueMonitorSync(
+  tx: DatabaseTransaction,
+  serverId: string,
+  operation: "upsert" | "delete",
+  payload: Record<string, unknown> = {},
+) {
+  await tx.insert(monitorSyncOutbox).values({
+    dedupeKey: `server:${serverId}`,
+    serverId,
+    operation,
+    payload,
+    status: "pending",
+    attempts: 0,
+    nextAttemptAt: new Date(),
+    lastError: null,
+    processedAt: null,
+  }).onConflictDoUpdate({
+    target: monitorSyncOutbox.dedupeKey,
+    set: {
+      operation,
+      payload,
+      status: "pending",
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      lastError: null,
+      processedAt: null,
+    },
+  });
+}
+
+async function tryFlushMonitorSync(serverId: string) {
+  try {
+    const { processMonitorSyncOutbox } = await import("./monitor-sync");
+    await processMonitorSyncOutbox({ serverId, limit: 1 });
+  } catch (error) {
+    // The Neon transaction is already durable; the outbox cron remains the
+    // recovery path when Monitor API is temporarily unavailable.
+    console.error("[monitor] immediate sync attempt failed", serverId, error instanceof Error ? error.name : "unknown");
+  }
+}
 
 export class UnverifiedEmailError extends Error {
   constructor() {
@@ -163,6 +205,7 @@ async function insertServerBundle(
     role: "owner",
   });
   await replaceServerTagsForServer(tx, serverId, input.tags, { allowCreate: true });
+  await enqueueMonitorSync(tx, serverId, "upsert");
 
   return { id: serverId, slug };
 }
@@ -177,10 +220,12 @@ export async function createServer(userId: string, rawInput: CreateServerInput) 
     const slug = slugCandidate(baseSlug, attempt);
 
     try {
-      return await db.transaction(async (tx) => {
+      const result = await db.transaction(async (tx) => {
         await assertEndpointAvailability(tx, input);
         return insertServerBundle(tx, userId, input, slug);
       });
+      await tryFlushMonitorSync(result.id);
+      return result;
     } catch (error) {
       if (
         databaseErrorCode(error) === "23505" &&
@@ -213,7 +258,7 @@ export async function updateServer(
 ) {
   const input = normalizeUpdateServerInput(rawInput);
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [server] = await tx
       .select({
         id: servers.id,
@@ -411,8 +456,12 @@ export async function updateServer(
 
     await tx.update(servers).set(verifiedEndpoint ? { verificationStatus: "verified", verifiedAt: sql`coalesce(${servers.verifiedAt}, now())` } : { verificationStatus: "unverified", verifiedAt: null }).where(eq(servers.id, serverId));
 
+    await enqueueMonitorSync(tx, serverId, "upsert");
+
     return { role, javaChanged };
   });
+  await tryFlushMonitorSync(serverId);
+  return result;
 }
 
 export async function deleteServer(userId: string, serverId: string, confirmation: string) {
@@ -423,12 +472,14 @@ export async function deleteServer(userId: string, serverId: string, confirmatio
       .select({ blobKey: serverMedia.blobKey, bytes: serverMedia.bytes })
       .from(serverMedia)
       .where(eq(serverMedia.serverId, serverId));
+    await enqueueMonitorSync(tx, serverId, "delete");
     await tx.delete(servers).where(eq(servers.id, serverId));
     return {
       rows,
       mediaBytes: rows.reduce((total, row) => total + row.bytes, 0),
     };
   });
+  await tryFlushMonitorSync(serverId);
   if (media.mediaBytes > 0) await releaseMediaQuota(media.mediaBytes).catch(() => undefined);
   await Promise.all(
     media.rows.map(({ blobKey }) =>

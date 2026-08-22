@@ -13,8 +13,6 @@ import { mediaStorage, MediaStorageNotConfiguredError } from "@/lib/media/storag
 import { enqueueMediaCleanup } from "@/lib/media/cleanup";
 import { getMediaQuota, MediaQuotaExceededError, releaseMediaQuota, reserveMediaQuota } from "@/lib/media/quota";
 
-export const runtime = "nodejs";
-
 export async function GET(_request: Request, { params }: { params: Promise<{ serverId: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Authentication required." }, { status: 401 });

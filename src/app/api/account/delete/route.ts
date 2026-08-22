@@ -9,8 +9,6 @@ import { user } from "@/auth-schema";
 import { removeMediaOrEnqueue } from "@/lib/media/cleanup";
 import { releaseMediaQuota } from "@/lib/media/quota";
 
-export const runtime = "nodejs";
-
 export async function POST(request: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
