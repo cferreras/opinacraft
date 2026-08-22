@@ -18,6 +18,8 @@ import {
 import { parseEnabledPort } from "@/lib/servers/endpoint-fields";
 import { serverValidationField } from "@/lib/servers/form-validation";
 import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
+import { processMonitorSyncOutbox } from "@/lib/servers/monitor-sync";
+import { invalidatePublicServerCache } from "@/lib/servers/cache-tags";
 
 export type CreateServerState = {
   formError?: string;
@@ -112,6 +114,10 @@ export async function createServerAction(
     return { formError: "Unable to create the server right now." };
   }
 
+  await processMonitorSyncOutbox({ serverId: result.id, limit: 1 }).catch((error) => {
+    console.error("Failed to dispatch monitor target sync", error instanceof Error ? error.name : "unknown");
+  });
+  invalidatePublicServerCache(result.id, result.slug);
   revalidatePath("/dashboard/servers");
   return { created: result };
 }

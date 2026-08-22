@@ -10,6 +10,7 @@ import {
   servers,
 } from "@/schema";
 import { getMonitorCadenceMinutes, getMonitorFreshness, PUBLIC_MONITOR_CADENCE_MINUTES, type MonitorFreshness } from "./monitor-scheduling";
+import { fetchMonitorHistory, isMonitorApiConfigured } from "./monitor-api-client";
 
 export const historyPeriods = ["24h", "7d", "30d", "90d"] as const;
 export const historyEditionFilters = ["all", "java", "bedrock"] as const;
@@ -60,6 +61,20 @@ export type PlayerHistoryResponse = {
   generatedAt: string;
   series: HistorySeries[];
 };
+
+export function emptyPlayerHistoryResponse(period: HistoryPeriod, now = new Date()): PlayerHistoryResponse {
+  return {
+    period,
+    edition: "all",
+    resolutionMinutes: 15,
+    cadenceMinutes: null,
+    lastUpdatedAt: null,
+    freshness: "never",
+    probeEdition: null,
+    generatedAt: now.toISOString(),
+    series: [],
+  };
+}
 
 type HistoryWindow = {
   durationMs: number;
@@ -373,6 +388,10 @@ async function publicServerExists(serverId: string) {
 }
 
 export async function getPublicPlayerHistory(serverId: string, period: HistoryPeriod, edition: HistoryEditionFilter = "all", now = new Date()) {
+  if (isMonitorApiConfigured()) {
+    // Once the Monitor API is configured, public history never falls back to Neon.
+    return fetchMonitorHistory(serverId, period);
+  }
   if (!(await publicServerExists(serverId))) return null;
   return queryPlayerHistory(serverId, period, edition, now);
 }

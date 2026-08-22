@@ -11,9 +11,7 @@ import {
   type HistoryEditionFilter,
   type HistoryPeriod,
 } from "@/lib/servers/player-history";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
 
 type Props = { params: Promise<{ serverId: string }> };
 
@@ -28,8 +26,16 @@ export async function GET(request: Request, { params }: Props) {
   const period = periodValue as HistoryPeriod;
   const edition = editionValue as HistoryEditionFilter;
   const session = await getServerSession();
-  const publicData = await getPublicPlayerHistory(serverId, period, edition);
-  const data = publicData ?? (session ? await getManagedPlayerHistory(serverId, session.user.id, period, edition) : null);
+  let publicData;
+  try {
+    publicData = await getPublicPlayerHistory(serverId, period, edition);
+  } catch (error) {
+    if (isMonitorApiConfigured()) {
+      return NextResponse.json({ error: "Monitor history is temporarily unavailable." }, { status: 503, headers: { "retry-after": "60" } });
+    }
+    throw error;
+  }
+  const data = publicData ?? (!isMonitorApiConfigured() && session ? await getManagedPlayerHistory(serverId, session.user.id, period, edition) : null);
   if (!data) return NextResponse.json({ error: "Server not found." }, { status: 404 });
 
   const body = JSON.stringify(data);

@@ -12,6 +12,8 @@ import {
   tags,
 } from "@/schema";
 import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } from "./monitor-scheduling";
+import { fetchMonitorStatuses, isMonitorApiConfigured, queryMonitorCatalog } from "./monitor-api-client";
+import type { MonitorStatusView } from "@/lib/monitor/repository";
 
 type ServerBase = {
   id: string;
@@ -42,6 +44,9 @@ export type ServerMonitor = {
   latencyMs: number | null;
   lastUpdatedAt: Date | null;
   lastOnlineAt: Date | null;
+  offlineSince: Date | null;
+  lastRecoveredAt: Date | null;
+  lastStateChangeAt: Date | null;
   consecutiveFailures: number;
   probeEdition: "java" | "bedrock" | null;
   cadenceMinutes: number | null;
@@ -237,11 +242,67 @@ function buildMonitorSummary(row: {
     latencyMs: row.monitorLatencyMs,
     lastUpdatedAt: row.monitorLastCheckedAt,
     lastOnlineAt: row.monitorLastOnlineAt,
+    offlineSince: null,
+    lastRecoveredAt: null,
+    lastStateChangeAt: null,
     consecutiveFailures: row.monitorConsecutiveFailures,
     probeEdition: row.monitorProbeEdition,
     cadenceMinutes,
     freshness: cadenceMinutes ? getMonitorFreshness(row.monitorLastCheckedAt, cadenceMinutes) : "never",
   };
+}
+
+export function monitorFromApi<T extends PublicServer>(server: T, state: MonitorStatusView | null): T {
+  if (!state) {
+    return {
+      ...server,
+      aggregateStatus: "unknown",
+      monitor: {
+        ...server.monitor,
+        healthStatus: "unknown",
+        playersCurrent: null,
+        playersMax: null,
+        version: null,
+        latencyMs: null,
+        lastUpdatedAt: null,
+        lastOnlineAt: null,
+        offlineSince: null,
+        lastRecoveredAt: null,
+        lastStateChangeAt: null,
+        freshness: "never",
+      },
+    } as T;
+  }
+  const monitor = {
+    ...server.monitor,
+    healthStatus: state.healthStatus,
+    playersCurrent: state.playersCurrent,
+    playersMax: state.playersMax,
+    version: state.version,
+    latencyMs: state.latencyMs,
+    lastUpdatedAt: state.lastCheckedAt ? new Date(state.lastCheckedAt) : null,
+    lastOnlineAt: state.lastOnlineAt ? new Date(state.lastOnlineAt) : null,
+    offlineSince: state.offlineSince ? new Date(state.offlineSince) : null,
+    lastRecoveredAt: state.lastRecoveredAt ? new Date(state.lastRecoveredAt) : null,
+    lastStateChangeAt: state.lastStateChangeAt ? new Date(state.lastStateChangeAt) : null,
+    consecutiveFailures: state.consecutiveFailures,
+    probeEdition: state.probeEdition,
+    cadenceMinutes: state.cadenceMinutes,
+    freshness: state.freshness,
+  } satisfies ServerMonitor;
+  return { ...server, monitor, aggregateStatus: state.freshness === "fresh" ? state.healthStatus : "unknown" } as T;
+}
+
+export async function attachMonitorApiStatuses<T extends PublicServer>(items: T[], options: Pick<RequestInit, "cache"> = {}) {
+  if (!items.length || !isMonitorApiConfigured()) return items;
+  let states: MonitorStatusView[] = [];
+  try {
+    states = await fetchMonitorStatuses(items.map((item) => item.id), options) ?? [];
+  } catch (error) {
+    console.error("[monitor] status batch unavailable", error instanceof Error ? error.name : "unknown");
+  }
+  const byId = new Map(states.map((state) => [state.serverId, state]));
+  return items.map((item) => monitorFromApi(item, byId.get(item.id) ?? null));
 }
 
 async function attachCatalogData<T extends { id: string; tags: ServerTag[]; media: ServerMedia[] }>(items: T[]) {
@@ -395,7 +456,142 @@ export async function countPublishedServers(): Promise<number> {
   return row?.total ?? 0;
 }
 
-export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating", tableSort, tableDirection = "asc" }: { page?: number; query?: string; tagSlugs?: string[]; edition?: "java" | "bedrock"; status?: AggregateHealthStatus; sort?: PublicServerSort; tableSort?: PublicServerTableSort; tableDirection?: PublicServerSortDirection } = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; page: number }> {
+export async function getServerIdBySlug(slug: string) {
+  const [row] = await db.select({ id: servers.id }).from(servers).where(eq(servers.slug, slug)).limit(1);
+  return row?.id ?? null;
+}
+
+export function isMonitorDependentCatalogQuery({ status, sort, tableSort }: { status?: AggregateHealthStatus; sort: PublicServerSort; tableSort?: PublicServerTableSort }) {
+  return Boolean(status || sort === "players" || tableSort === "players" || tableSort === "version" || tableSort === "latency");
+}
+
+async function hydratePublishedCatalogServers(ids: string[], edition?: "java" | "bedrock"): Promise<CatalogServer[]> {
+  if (!ids.length) return [] as CatalogServer[];
+  const rows = await db
+    .select({
+      server: {
+        id: servers.id,
+        name: servers.name,
+        slug: servers.slug,
+        description: servers.description,
+        websiteUrl: servers.websiteUrl,
+        storeUrl: servers.storeUrl,
+        discordUrl: servers.discordUrl,
+        accessType: servers.accessType,
+        accessFormUrl: servers.accessFormUrl,
+        accountMode: servers.accountMode,
+        authMode: servers.authMode,
+        publicationStatus: servers.publicationStatus,
+        verificationStatus: servers.verificationStatus,
+        createdAt: servers.createdAt,
+        updatedAt: servers.updatedAt,
+        availabilityHiddenAt: servers.availabilityHiddenAt,
+        moderationStatus: servers.moderationStatus,
+        ...monitorColumns,
+      },
+      endpoint: {
+        edition: serverEndpoints.edition,
+        host: serverEndpoints.host,
+        port: serverEndpoints.port,
+        verificationStatus: serverEndpoints.verificationStatus,
+        healthStatus: serverEndpoints.healthStatus,
+        playersCurrent: serverEndpoints.playersCurrent,
+        playersMax: serverEndpoints.playersMax,
+        version: serverEndpoints.version,
+        latencyMs: serverEndpoints.latencyMs,
+        lastCheckedAt: serverEndpoints.lastCheckedAt,
+        consecutiveFailures: serverEndpoints.consecutiveFailures,
+      },
+    })
+    .from(servers)
+    .leftJoin(serverEndpoints, eq(serverEndpoints.serverId, servers.id))
+    .where(and(
+      inArray(servers.id, ids),
+      eq(servers.publicationStatus, "published"),
+      eq(servers.moderationStatus, "active"),
+      eq(servers.verificationStatus, "verified"),
+      isNull(servers.availabilityHiddenAt),
+      eq(serverEndpoints.verificationStatus, "verified"),
+      edition ? eq(serverEndpoints.edition, edition) : undefined,
+    ))
+    .orderBy(desc(servers.createdAt), desc(servers.id), asc(serverEndpoints.edition));
+  const rank = new Map(ids.map((id, index) => [id, index]));
+  const ordered = groupServerRows(rows).sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+  const catalog: CatalogServer[] = await attachReviewSummaries(await attachCatalogData(ordered));
+  return catalog;
+}
+
+export type PublishedServerListArgs = {
+  page?: number;
+  query?: string;
+  tagSlugs?: string[];
+  edition?: "java" | "bedrock";
+  status?: AggregateHealthStatus;
+  sort?: PublicServerSort;
+  tableSort?: PublicServerTableSort;
+  tableDirection?: PublicServerSortDirection;
+};
+
+export async function listPublishedServersWithMonitor({
+  page,
+  query,
+  tagSlugs,
+  edition,
+  status,
+  sort,
+  tableSort,
+  tableDirection,
+  monitorCache = "no-store",
+}: {
+  page: number;
+  query: string;
+  tagSlugs: string[];
+  edition?: "java" | "bedrock";
+  status?: AggregateHealthStatus;
+  sort: PublicServerSort;
+  tableSort?: PublicServerTableSort;
+  tableDirection: PublicServerSortDirection;
+  monitorCache?: RequestCache;
+}) {
+  const queryText = query.trim();
+  const catalogOrder = tableSort && tableSort !== "players" && tableSort !== "version" && tableSort !== "latency"
+    ? [tableSortOrder(tableSort, tableDirection)]
+    : queryText
+      ? [desc(sql`greatest(similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) * 3, coalesce((select max(similarity(lower(t.slug), lower(${queryText.slice(0, 80)}))) * 2 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})))`)]
+      : sort === "recent"
+        ? [desc(servers.createdAt)]
+        : [desc(sql`coalesce((select avg(sr.rating) from server_reviews sr where sr.server_id = ${servers.id} and sr.status = 'published'), 0)`)];
+  const candidates = await db
+    .select({ id: servers.id })
+    .from(servers)
+    .where(and(
+      eq(servers.publicationStatus, "published"),
+      eq(servers.moderationStatus, "active"),
+      eq(servers.verificationStatus, "verified"),
+      isNull(servers.availabilityHiddenAt),
+      queryText ? sql`(${ilike(servers.name, `%${queryText.slice(0, 80)}%`)} or ${ilike(servers.description, `%${queryText.slice(0, 80)}%`)} or similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) > 0.2 or similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})) > 0.2 or exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.status = 'active' and (t.slug like ${`%${queryText.slice(0, 80).toLowerCase()}%`} or similarity(lower(t.slug), lower(${queryText.slice(0, 80)})) > 0.2)))` : undefined,
+      edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition} and se.verification_status = 'verified')` : undefined,
+      sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
+      ...tagSlugs.slice(0, 8).map((slug) => sql`exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.slug = ${slug} and t.status = 'active')`),
+    ))
+    .orderBy(...catalogOrder, desc(servers.createdAt), desc(servers.id));
+  const monitorSort = tableSort === "players" || sort === "players" ? "players" : tableSort === "latency" ? "latency" : tableSort === "version" ? "version" : "catalog";
+  const result = await queryMonitorCatalog({
+    candidateIds: candidates.map((candidate) => candidate.id),
+    status,
+    sort: monitorSort,
+    direction: tableDirection,
+    page,
+    pageSize: PUBLIC_SERVER_PAGE_SIZE,
+  }, { cache: monitorCache });
+  if (!result) throw new Error("Monitor API is not configured for catalog queries.");
+  const hydrated = await hydratePublishedCatalogServers(result.ids, edition);
+  const statesById = new Map(result.states.map((state) => [state.serverId, state]));
+  const monitored = hydrated.map((server) => monitorFromApi(server, statesById.get(server.id) ?? null));
+  return { servers: monitored, hasNextPage: result.totalCount > page * PUBLIC_SERVER_PAGE_SIZE, totalCount: result.totalCount, page };
+}
+
+export async function listPublishedServersFromNeon({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating", tableSort, tableDirection = "asc" }: PublishedServerListArgs = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number }> {
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
     : 1;
@@ -430,64 +626,26 @@ export async function listPublishedServers({ page = 1, query = "", tagSlugs = []
   const ids = serverIds.slice(0, PUBLIC_SERVER_PAGE_SIZE).map(({ id }) => id);
   if (ids.length === 0) {
     const emptyServers: CatalogServer[] = [];
-    return { servers: emptyServers, hasNextPage: false, page: safePage };
+    return { servers: emptyServers, hasNextPage: false, totalCount: 0, page: safePage };
   }
 
-  const rows = await db
-    .select({
-      server: {
-        id: servers.id,
-        name: servers.name,
-        slug: servers.slug,
-        description: servers.description,
-        websiteUrl: servers.websiteUrl,
-        storeUrl: servers.storeUrl,
-        discordUrl: servers.discordUrl,
-        accessType: servers.accessType,
-        accessFormUrl: servers.accessFormUrl,
-        accountMode: servers.accountMode,
-        authMode: servers.authMode,
-        publicationStatus: servers.publicationStatus,
-        verificationStatus: servers.verificationStatus,
-        createdAt: servers.createdAt,
-        updatedAt: servers.updatedAt,
-        availabilityHiddenAt: servers.availabilityHiddenAt,
-        moderationStatus: servers.moderationStatus,
-         ...monitorColumns,
-      },
-      endpoint: {
-        edition: serverEndpoints.edition,
-        host: serverEndpoints.host,
-        port: serverEndpoints.port,
-        verificationStatus: serverEndpoints.verificationStatus,
-        healthStatus: serverEndpoints.healthStatus,
-        playersCurrent: serverEndpoints.playersCurrent,
-        playersMax: serverEndpoints.playersMax,
-        version: serverEndpoints.version,
-        latencyMs: serverEndpoints.latencyMs,
-        lastCheckedAt: serverEndpoints.lastCheckedAt,
-        consecutiveFailures: serverEndpoints.consecutiveFailures,
-      },
-    })
-    .from(servers)
-    .leftJoin(serverEndpoints, eq(serverEndpoints.serverId, servers.id))
-    .where(and(
-      inArray(servers.id, ids),
-      eq(servers.moderationStatus, "active"),
-      eq(serverEndpoints.verificationStatus, "verified"),
-      edition ? eq(serverEndpoints.edition, edition) : undefined,
-    ))
-    .orderBy(desc(servers.createdAt), desc(servers.id), asc(serverEndpoints.edition));
-
-  const rank = new Map(ids.map((id, index) => [id, index]));
-  const orderedServers = groupServerRows(rows).sort(
-    (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0),
-  );
-  const catalogServers = await attachCatalogData(orderedServers);
-  return { servers: await attachReviewSummaries(catalogServers), hasNextPage, page: safePage };
+  const catalogServers = await hydratePublishedCatalogServers(ids, edition);
+  return { servers: catalogServers, hasNextPage, totalCount: (safePage - 1) * PUBLIC_SERVER_PAGE_SIZE + ids.length + (hasNextPage ? 1 : 0), page: safePage };
 }
 
-export async function getPublishedServerBySlug(slug: string) {
+export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating", tableSort, tableDirection = "asc" }: PublishedServerListArgs = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number }> {
+  const safePage = Number.isSafeInteger(page) && page > 0
+    ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
+    : 1;
+  if (isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, sort, tableSort })) {
+    return listPublishedServersWithMonitor({ page: safePage, query, tagSlugs, edition, status, sort, tableSort, tableDirection });
+  }
+  const result = await listPublishedServersFromNeon({ page: safePage, query, tagSlugs, edition, status, sort, tableSort, tableDirection });
+  if (!isMonitorApiConfigured()) return result;
+  return { ...result, servers: await attachMonitorApiStatuses(result.servers) };
+}
+
+export async function getPublishedServerCoreBySlug(slug: string) {
   const rows = await db
     .select({
       server: {
@@ -535,7 +693,15 @@ export async function getPublishedServerBySlug(slug: string) {
     return null;
   }
 
-  return (await attachCatalogData(groupServerRows(rows)))[0] ?? null;
+  const [catalog] = await attachCatalogData(groupServerRows(rows));
+  if (!catalog) return null;
+  return catalog;
+}
+
+export async function getPublishedServerBySlug(slug: string) {
+  const server = await getPublishedServerCoreBySlug(slug);
+  if (!server) return null;
+  return (await attachMonitorApiStatuses([server]))[0] ?? null;
 }
 
 export async function getManagedServerBySlug(slug: string, userId: string) {

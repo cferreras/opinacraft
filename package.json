@@ -8,8 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/branding.test.ts tests/validation.test.ts tests/verification.test.ts tests/reviews.test.ts tests/player-history.test.ts tests/react-best-practices.test.ts tests/brainstorming-scripts.test.ts tests/monitor-route.test.ts tests/monitor-rearchitecture.test.ts tests/monitor-worker-core.test.ts tests/monitor-history.test.ts tests/monitor-jobs.test.ts tests/monitor-worker-engine.test.ts tests/monitor-health.test.ts tests/monitor-legacy-compat.test.ts tests/monitor-availability.test.ts tests/monitor-review-fixes.test.ts tests/monitor-docker.test.ts tests/monitor-queue-locking.test.ts tests/monitor-worker-errors.test.ts tests/monitor-queue-cadence.test.ts",
-    "test:monitor": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/monitor-route.test.ts tests/monitor-rearchitecture.test.ts tests/monitor-worker-core.test.ts tests/monitor-history.test.ts tests/monitor-jobs.test.ts tests/monitor-worker-engine.test.ts tests/monitor-health.test.ts tests/monitor-legacy-compat.test.ts tests/monitor-availability.test.ts tests/monitor-review-fixes.test.ts tests/monitor-docker.test.ts tests/monitor-queue-locking.test.ts tests/monitor-worker-errors.test.ts tests/monitor-queue-cadence.test.ts",
+    "test": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/branding.test.ts tests/validation.test.ts tests/verification.test.ts tests/reviews.test.ts tests/player-history.test.ts tests/react-best-practices.test.ts tests/brainstorming-scripts.test.ts tests/monitor-route.test.ts tests/monitor-rearchitecture.test.ts tests/monitor-worker-core.test.ts tests/monitor-history.test.ts tests/monitor-jobs.test.ts tests/monitor-worker-engine.test.ts tests/monitor-health.test.ts tests/monitor-legacy-compat.test.ts tests/monitor-availability.test.ts tests/monitor-review-fixes.test.ts tests/monitor-docker.test.ts tests/monitor-queue-locking.test.ts tests/monitor-worker-errors.test.ts tests/monitor-queue-cadence.test.ts tests/monitor-boundary.test.ts tests/monitor-worker-isolation.test.ts",
+    "test:monitor": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/monitor-route.test.ts tests/monitor-rearchitecture.test.ts tests/monitor-worker-core.test.ts tests/monitor-history.test.ts tests/monitor-jobs.test.ts tests/monitor-worker-engine.test.ts tests/monitor-health.test.ts tests/monitor-legacy-compat.test.ts tests/monitor-availability.test.ts tests/monitor-review-fixes.test.ts tests/monitor-docker.test.ts tests/monitor-queue-locking.test.ts tests/monitor-worker-errors.test.ts tests/monitor-queue-cadence.test.ts tests/monitor-boundary.test.ts tests/monitor-worker-isolation.test.ts",
     "test:integration": "node scripts/bootstrap-test-database.mjs && node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs --test tests/integration.test.ts",
     "test:e2e": "playwright test",
     "db:inspect": "node scripts/inspect-database.mjs",
@@ -20,7 +20,10 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "admin:grant": "node scripts/grant-admin.mjs",
-    "monitor:worker": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs src/workers/monitor-worker.ts"
+    "monitor:worker": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs src/workers/monitor-worker.ts",
+    "monitor:api": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs src/workers/monitor-api.ts",
+    "monitor:db:migrate": "node scripts/migrate-monitor.mjs",
+    "monitor:db:backfill": "node scripts/backfill-monitor.mjs"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.0-beta.10",
@@ -39,6 +42,7 @@
     "next": "16.2.12",
     "next-themes": "^0.4.6",
     "pg": "^8.22.0",
+    "pg-boss": "^12.27.0",
     "radix-ui": "^1.6.7",
     "react": "19.2.4",
     "react-dom": "19.2.4",

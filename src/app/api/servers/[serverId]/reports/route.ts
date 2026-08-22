@@ -4,8 +4,6 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { createServerReport, ReportAlreadyOpenError, ReportValidationError } from "@/lib/servers/reports";
 
-export const runtime = "nodejs";
-
 export async function POST(request: Request, { params }: { params: Promise<{ serverId: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Sign in to report a server." }, { status: 401 });

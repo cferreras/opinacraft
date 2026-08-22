@@ -15,3 +15,16 @@ test("monitor worker Dockerfile copies pnpm build approval config before install
   assert.notEqual(installIndex, -1);
   assert.ok(copyIndex < installIndex);
 });
+
+test("monitor worker is isolated from the Neon database boundary", () => {
+  const worker = readFileSync(resolve(repositoryRoot, "src/workers/monitor-worker.ts"), "utf8");
+  assert.doesNotMatch(worker, /@\/db|(?<!MONITOR_)DATABASE_URL/);
+  assert.match(worker, /MONITOR_DATABASE_URL/);
+  assert.match(worker, /pg-boss|createMonitorBoss/);
+});
+
+test("Monitor API has its own Dokploy service definition", () => {
+  const dockerfile = readFileSync(resolve(repositoryRoot, "Dockerfile.monitor-api"), "utf8");
+  assert.match(dockerfile, /monitor:api/);
+  assert.match(dockerfile, /3002/);
+});

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cache, type ReactNode } from "react";
+import { connection } from "next/server";
+import { type ReactNode } from "react";
 import {
   Activity,
   Check,
@@ -22,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyAddressButton } from "@/components/copy-address-button";
+import { LocalizedTimestamp } from "@/components/localized-timestamp";
 import { PlayerHistoryCard } from "@/components/player-history-card";
 import { ReportForm } from "@/components/report-form";
 import { ReviewSection } from "@/components/review-section";
@@ -31,20 +33,17 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getServerSession } from "@/lib/session";
 import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
-import { formatServerDateTime } from "@/lib/servers/display";
 import { editionLabel, formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
-import { getPublishedServerBySlug, type ManagedServer } from "@/lib/servers/queries";
-import { queryPlayerHistory } from "@/lib/servers/player-history";
-import { getReviewSummary, getReviewViewerState, listServerReviews } from "@/lib/servers/reviews";
+import { getCachedMonitorHistory, getCachedMonitorStatuses, getCachedPublicReviews, getCachedPublishedServer, getCachedReviewSummary } from "@/lib/servers/cached-queries";
+import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
+import { monitorFromApi, type ManagedServer } from "@/lib/servers/queries";
+import { emptyPlayerHistoryResponse, getPublicPlayerHistory } from "@/lib/servers/player-history";
+import { getReviewViewerState } from "@/lib/servers/reviews";
 
 type PublicServerPageProps = {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ reviewPage?: string; review?: string; reviewError?: string; reply?: string; replyError?: string }>;
 };
-
-export const dynamic = "force-dynamic";
-
-const getPublishedServer = cache(getPublishedServerBySlug);
 
 const reviewNotices: Record<string, string> = {
   created: "Opinión publicada.",
@@ -75,11 +74,6 @@ const replyErrors: Record<string, string> = {
   "rate-limit": "Has alcanzado el límite temporal. Inténtalo más tarde.",
   unknown: "No se pudo completar la acción sobre la respuesta oficial.",
 };
-
-function dateLabel(date: Date | null) {
-  if (!date) return "Aún no comprobado";
-  return date.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
-}
 
 function Metric({ label, value, detail, tone = "text-foreground" }: { label: string; value: ReactNode; detail?: string; tone?: string }) {
   return (
@@ -133,7 +127,7 @@ function SummaryRow({ label, value }: { label: ReactNode; value: ReactNode }) {
 
 export async function generateMetadata({ params }: PublicServerPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const server = await getPublishedServer(slug);
+  const server = await getCachedPublishedServer(slug);
   const socialMedia = server?.media.find((media) => media.kind === "banner" || media.kind === "logo");
   return server
     ? {
@@ -146,18 +140,42 @@ export async function generateMetadata({ params }: PublicServerPageProps): Promi
 }
 
 export default async function PublicServerPage({ params, searchParams }: PublicServerPageProps) {
+  await connection();
   const { slug } = await params;
-  const server = await getPublishedServer(slug);
-  if (!server) notFound();
+  const serverCore = await getCachedPublishedServer(slug);
+  if (!serverCore) notFound();
+  let server = serverCore;
+  try {
+    const monitorStates = await getCachedMonitorStatuses([serverCore.id]);
+    if (monitorStates) {
+      server = monitorFromApi(serverCore, monitorStates.find((state) => state.serverId === serverCore.id) ?? null);
+    }
+  } catch (error) {
+    console.error("[monitor] detail status unavailable", error instanceof Error ? error.name : "unknown");
+  }
   const [query, session] = await Promise.all([searchParams, getServerSession()]);
   const requestedReviewPage = Number.parseInt(query.reviewPage ?? "1", 10);
   const viewerPromise = session ? getReviewViewerState(server.id, session.user.id) : Promise.resolve(null);
-  const [reviewSummary, reviewPage, history, viewer] = await Promise.all([
-    getReviewSummary(server.id),
-    listServerReviews(server.id, Number.isFinite(requestedReviewPage) ? requestedReviewPage : 1, session?.user.id),
-    queryPlayerHistory(server.id, "24h", "all"),
+  const historyPromise = isMonitorApiConfigured()
+    ? getCachedMonitorHistory(server.id, "24h").catch((error) => {
+      console.error("[monitor] detail history unavailable", error instanceof Error ? error.name : "unknown");
+      return null;
+    })
+    : getPublicPlayerHistory(server.id, "24h", "all");
+  const [reviewSummary, cachedReviewPage, historyResult, viewer] = await Promise.all([
+    getCachedReviewSummary(server.id),
+    getCachedPublicReviews(server.id, Number.isFinite(requestedReviewPage) ? requestedReviewPage : 1),
+    historyPromise,
     viewerPromise,
   ]);
+  const history = historyResult ?? emptyPlayerHistoryResponse("24h");
+  const reviewPage = {
+    ...cachedReviewPage,
+    reviews: cachedReviewPage.reviews.map((review) => ({
+      ...review,
+      isMine: Boolean(viewer?.review?.id === review.id),
+    })),
+  };
   const notice = (query.review ? reviewNotices[query.review] : undefined) ?? (query.reply ? replyNotices[query.reply] : undefined);
   const errorNotice = query.reviewError ? reviewErrors[query.reviewError] : query.replyError ? replyErrors[query.replyError] : undefined;
   const endpoint = primaryEndpoint(server);
@@ -191,7 +209,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                     <span className="font-semibold text-foreground/80">{editions || "Sin edición"}</span>
                     {server.monitor.version ? <><span aria-hidden="true">·</span><span className="tabular-nums">{server.monitor.version}</span></> : null}
                     <span aria-hidden="true">·</span>
-                    <span>En OpinaCraft desde el {dateLabel(server.createdAt)}</span>
+                    <span>En OpinaCraft desde el <LocalizedTimestamp value={server.createdAt} mode="datetime" /></span>
                   </div>
                   {server.tags.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-1.5">
@@ -240,7 +258,10 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
             <Card aria-labelledby="availability-heading">
               <CardHeader><CardTitle id="availability-heading" className="flex items-center gap-2"><Activity aria-hidden="true" className="size-4 text-primary" />Disponibilidad</CardTitle></CardHeader>
               <CardContent className="grid gap-2.5">
-                <SummaryRow label="Última comprobación" value={formatServerDateTime(server.monitor.lastUpdatedAt)} />
+                <SummaryRow label="Última comprobación" value={<LocalizedTimestamp value={server.monitor.lastUpdatedAt} />} />
+                {server.monitor.offlineSince ? <SummaryRow label="Fuera de línea desde" value={<LocalizedTimestamp value={server.monitor.offlineSince} />} /> : null}
+                {server.monitor.lastRecoveredAt ? <SummaryRow label="Última recuperación" value={<LocalizedTimestamp value={server.monitor.lastRecoveredAt} />} /> : null}
+                {server.monitor.lastStateChangeAt ? <SummaryRow label="Último cambio de estado" value={<LocalizedTimestamp value={server.monitor.lastStateChangeAt} />} /> : null}
                 <SummaryRow label="Cadencia objetivo" value={server.monitor.cadenceMinutes ? `cada ${server.monitor.cadenceMinutes} min` : "Pendiente"} />
                 {server.monitor.freshness === "stale" ? <p className="text-xs leading-5 text-warning">La última comprobación va con retraso; los datos pueden no estar al día.</p> : null}
               </CardContent>

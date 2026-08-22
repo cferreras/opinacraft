@@ -306,7 +306,7 @@ export async function createOfficialReply(userId: string, reviewId: string, cont
           })
           .onConflictDoNothing({ target: notificationJobs.dedupeKey });
       }
-      return reply;
+      return reply ? { ...reply, serverId: review.serverId } : null;
     } catch (error) {
       if (isUniqueViolation(error, "review_replies_one_per_review")) {
         throw new OfficialReplyAlreadyExistsError();

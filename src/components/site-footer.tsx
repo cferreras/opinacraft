@@ -54,7 +54,7 @@ function CompactFooter() {
       <div className="mx-auto grid min-h-14 w-full max-w-6xl gap-2 px-4 py-3 text-xs text-muted-foreground sm:grid-cols-[auto_auto_1fr] sm:items-center sm:gap-x-6 sm:px-6">
         <div className="flex min-w-0 items-center gap-x-5">
           <BrandLink size={22} />
-          <span>© {new Date().getFullYear()}</span>
+          <span>© OpinaCraft</span>
         </div>
         <nav aria-label="Enlaces legales" className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <Link href="/contact" className="transition-colors hover:text-foreground">Contacto</Link>
@@ -104,7 +104,7 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "compact" 
         </div>
 
         <div className="flex flex-col gap-2 border-t py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-          <span>© {new Date().getFullYear()} OpinaCraft. Proyecto independiente, sin relación con Mojang ni Microsoft.</span>
+          <span>© OpinaCraft. Proyecto independiente, sin relación con Mojang ni Microsoft.</span>
           <MadeByPlayers />
         </div>
       </div>

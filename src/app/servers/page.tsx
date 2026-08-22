@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { FilterSelect } from "@/components/filter-select";
@@ -11,9 +13,12 @@ import { ServerSearchInput } from "@/components/server-search-input";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { TagCombobox } from "@/components/tag-combobox";
+import { getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
+import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
 import {
+  isMonitorDependentCatalogQuery,
   isPublicServerTableSort,
-  listPublishedServers,
+  monitorFromApi,
   type PublicServerSort,
   type PublicServerSortDirection,
   type PublicServerTableSort,
@@ -21,8 +26,6 @@ import {
 import { normalizeTagSlug } from "@/lib/servers/tags";
 
 export const metadata: Metadata = { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", alternates: { canonical: "/servers" }, openGraph: { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", type: "website" } };
-export const dynamic = "force-dynamic";
-
 export const tableGridTemplate = "lg:grid-cols-[minmax(0,1fr)_5rem_5.75rem_4.75rem_4rem_6rem_9.5rem]";
 
 const sortOptions: Array<{ value: PublicServerSort; label: string }> = [
@@ -88,6 +91,7 @@ function SortableColumnHeader({
 function countLabel(count: number) { return `${count} ${count === 1 ? "servidor" : "servidores"}`; }
 
 export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; tags?: string; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
+  await connection();
   const query = await searchParams;
   const requestedPage = Number.parseInt(query.page ?? "1", 10);
   const hasQuery = Boolean(query.q?.trim());
@@ -101,7 +105,28 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const activeTableSort = tableSort ?? presetTableSort;
   const activeTableDirection: PublicServerSortDirection = tableSort ? tableDirection : "desc";
   const tagSlugs = (query.tags ?? "").split(",").map((tag) => normalizeTagSlug(tag)).filter(Boolean);
-  const { servers, hasNextPage, page } = await listPublishedServers({ page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", tagSlugs, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection });
+  const listArgs = { page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", tagSlugs, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection } as const;
+  const monitorDependent = isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, sort, tableSort: activeTableSort });
+  const monitorResult = monitorDependent
+    ? await getCachedMonitorCatalogPage(listArgs).catch((error) => {
+      console.error("[monitor] catalog query unavailable", error instanceof Error ? error.name : "unknown");
+      return null;
+    })
+    : null;
+  const monitorUnavailable = monitorDependent && monitorResult === null;
+  const result = monitorResult ?? (monitorDependent ? { servers: [], hasNextPage: false, totalCount: 0, page: listArgs.page ?? 1 } : await getCachedPublishedServerPage(listArgs));
+  let servers = result.servers;
+  if (isMonitorApiConfigured() && !monitorDependent) {
+    try {
+      const states = await getCachedMonitorStatuses(servers.map((server) => server.id)) ?? [];
+      const statesById = new Map(states.map((state) => [state.serverId, state]));
+      servers = servers.map((server) => monitorFromApi(server, statesById.get(server.id) ?? null));
+    } catch (error) {
+      console.error("[monitor] catalog status cache unavailable", error instanceof Error ? error.name : "unknown");
+      servers = servers.map((server) => monitorFromApi(server, null));
+    }
+  }
+  const { hasNextPage, page } = result;
   const searchParamsForPage = new URLSearchParams();
   if (query.q) searchParamsForPage.set("q", query.q);
   if (query.tags) searchParamsForPage.set("tags", query.tags);
@@ -159,7 +184,11 @@ export default async function PublicServersPage({ searchParams }: { searchParams
           </form>
         </section>
 
-        {servers.length === 0 ? (
+        {monitorUnavailable ? (
+          <Alert className="mt-4 border-warning/40 bg-warning/10">
+            <AlertDescription>No se pudo consultar el estado del monitor para aplicar estos filtros. Inténtalo de nuevo en unos instantes.</AlertDescription>
+          </Alert>
+        ) : servers.length === 0 ? (
           <Empty className="mt-4 rounded-xl border">
             <EmptyHeader>
               <EmptyMedia variant="icon"><Search /></EmptyMedia>

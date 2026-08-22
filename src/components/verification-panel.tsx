@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LocalizedTimestamp } from "@/components/localized-timestamp";
 
 type VerificationEdition = "java" | "bedrock";
 type Display = {
@@ -55,7 +56,7 @@ export function VerificationPanel({ serverId, slug, verification, targetEdition,
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.1em] text-primary">Código MOTD temporal</p>
               <code className="mt-2 block text-2xl font-semibold tracking-[0.16em] text-primary">{verification.code}</code>
-              <p className="mt-2 text-sm leading-5 text-muted-foreground">Caduca el {verification.expiresAt.toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Madrid" })}. Intentos usados: {verification.attemptCount}/5.</p>
+              <p className="mt-2 text-sm leading-5 text-muted-foreground">Caduca el <LocalizedTimestamp value={verification.expiresAt} mode="datetime" />. Intentos usados: {verification.attemptCount}/5.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <form action={checkVerificationAction}>

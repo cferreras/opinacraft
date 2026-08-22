@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Activity, ArrowRight, Blocks, CheckCircle2, Code2, Search, ShieldCheck, Star, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -12,11 +13,11 @@ import { StatusPill } from "@/components/server-status-pill";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { editionLabel, playersLabel, primaryEndpoint } from "@/lib/servers/format";
-import { countPublishedServers, listPublishedServers, type CatalogServer } from "@/lib/servers/queries";
+import { getCachedMonitorStatuses, getCachedPublishedServerCount, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
+import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
+import { monitorFromApi, type CatalogServer } from "@/lib/servers/queries";
 
 export const metadata: Metadata = { title: "Encuentra tu servidor de Minecraft | OpinaCraft", description: "Descubre, compara y comparte comunidades de Minecraft en OpinaCraft.", alternates: { canonical: "/" }, openGraph: { title: "Encuentra tu servidor de Minecraft | OpinaCraft", description: "Descubre, compara y comparte comunidades de Minecraft en OpinaCraft.", type: "website" } };
-export const dynamic = "force-dynamic";
-
 const popularTags = [
   { label: "Supervivencia", slug: "supervivencia" },
   { label: "Crossplay", slug: "crossplay" },
@@ -143,10 +144,22 @@ function ServerPick({ server }: { server: CatalogServer }) {
 }
 
 export default async function Home() {
-  const [{ servers }, publishedCount] = await Promise.all([
-    listPublishedServers({ page: 1, sort: "rating" }),
-    countPublishedServers(),
+  await connection();
+  const [{ servers: neonServers }, publishedCount] = await Promise.all([
+    getCachedPublishedServerPage({ page: 1, sort: "rating" }),
+    getCachedPublishedServerCount(),
   ]);
+  let servers = neonServers;
+  if (isMonitorApiConfigured()) {
+    try {
+      const states = await getCachedMonitorStatuses(servers.map((server) => server.id)) ?? [];
+      const statesById = new Map(states.map((state) => [state.serverId, state]));
+      servers = servers.map((server) => monitorFromApi(server, statesById.get(server.id) ?? null));
+    } catch (error) {
+      console.error("[monitor] home status cache unavailable", error instanceof Error ? error.name : "unknown");
+      servers = servers.map((server) => monitorFromApi(server, null));
+    }
+  }
   const picks = servers.slice(0, 3);
 
   return (
