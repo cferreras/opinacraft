@@ -6,9 +6,16 @@ import {
   assertUtcTimestamp,
   serializeUtcTimestamp,
 } from "../src/lib/monitor/contracts.ts";
+import { runMonitorBusinessEventsBatch } from "../src/lib/monitor/business-events-runner.ts";
 import { processPendingMonitorEvents } from "../src/lib/monitor/events.ts";
 import { buildMonitorHistory } from "../src/lib/monitor/history.ts";
-import { getMonitorBossConnectionString, getMonitorJobKey, getNextMonitorDate, sendMonitorCheck } from "../src/lib/monitor/queue.ts";
+import {
+  getMonitorBossConnectionString,
+  getMonitorJobKey,
+  getNextMonitorDate,
+  scheduleMonitorBusinessEvents,
+  sendMonitorCheck,
+} from "../src/lib/monitor/queue.ts";
 import { orderMonitorCandidates } from "../src/lib/servers/catalog-monitor.ts";
 import { formatRelativeTime } from "../src/lib/time/localized.ts";
 import { recoverDueMonitorSchedules } from "../src/lib/monitor/sweeper.ts";
@@ -38,6 +45,50 @@ test("hourly event processor does not open Neon when Monitor API has no events",
   assert.deepEqual(result, { claimed: 0, processed: 0, failed: 0 });
   assert.equal(neonCalls, 0);
   assert.equal(processed, 0);
+});
+
+test("Dokploy business-event processor does not open Neon when Monitor API is empty", async () => {
+  let neonCalls = 0;
+
+  const result = await runMonitorBusinessEventsBatch({
+    workerId: "monitor-events-1",
+    claim: async () => [],
+    processInNeon: async () => {
+      neonCalls += 1;
+    },
+    ack: async () => undefined,
+    fail: async () => undefined,
+  });
+
+  assert.deepEqual(result, {
+    available: true,
+    claimed: 0,
+    processed: 0,
+    failed: 0,
+  });
+  assert.equal(neonCalls, 0);
+});
+
+test("Dokploy business-event processor does not open Neon when Monitor API is unavailable", async () => {
+  let neonCalls = 0;
+
+  const result = await runMonitorBusinessEventsBatch({
+    workerId: "monitor-events-1",
+    claim: async () => null,
+    processInNeon: async () => {
+      neonCalls += 1;
+    },
+    ack: async () => undefined,
+    fail: async () => undefined,
+  });
+
+  assert.deepEqual(result, {
+    available: false,
+    claimed: 0,
+    processed: 0,
+    failed: 0,
+  });
+  assert.equal(neonCalls, 0);
 });
 
 test("catalog monitor ordering paginates the global candidate set", () => {
@@ -85,6 +136,29 @@ test("scheduled monitor jobs use a slot-specific singleton key and bounded jitte
   assert.equal(captured.name, "monitor-checks");
   assert.equal((captured.options as { singletonKey?: string }).singletonKey, getMonitorJobKey({ serverId: "server-1", scheduledAt: scheduledAt.toISOString() }));
   assert.equal((captured.options as { startAfter?: Date }).startAfter?.toISOString(), scheduledAt.toISOString());
+});
+
+test("business-event processing is scheduled hourly in UTC through pg-boss", async () => {
+  const calls: unknown[][] = [];
+  await scheduleMonitorBusinessEvents({
+    schedule: async (...args: unknown[]) => {
+      calls.push(args);
+    },
+  } as never);
+
+  assert.deepEqual(calls, [[
+    "monitor-business-events",
+    "0 * * * *",
+    null,
+    {
+      key: "monitor-business-events-hourly",
+      tz: "UTC",
+      retryLimit: 3,
+      retryDelay: 60,
+      retryBackoff: true,
+      deleteAfterSeconds: 3_600,
+    },
+  ]]);
 });
 
 test("pg-boss connections request a UTC session and optional TLS", () => {
@@ -149,4 +223,15 @@ test("hourly business-event route only loads Neon after a non-empty Monitor clai
 test("all public review pages share the server review-list cache tag", () => {
   const source = readFileSync("src/lib/servers/cached-queries.ts", "utf8");
   assert.match(source, /cacheTag\(reviewListTag\(serverId\)\)/);
+});
+
+test("Vercel keeps only the daily reconciliation cron", () => {
+  const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as {
+    crons?: Array<{ path: string; schedule: string }>;
+  };
+
+  assert.deepEqual(vercel.crons, [{
+    path: "/api/internal/monitor/reconcile",
+    schedule: "30 3 * * *",
+  }]);
 });

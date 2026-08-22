@@ -1,5 +1,5 @@
 import { serverEnv } from "@/env/server";
-import { processPendingMonitorEvents } from "@/lib/monitor/events";
+import { runMonitorBusinessEventsBatch } from "@/lib/monitor/business-events-runner";
 import { acknowledgeMonitorBusinessEvent, claimMonitorBusinessEvents, failMonitorBusinessEvent } from "@/lib/servers/monitor-api-client";
 import { isValidMonitorAuthorization } from "@/lib/servers/monitor-route";
 
@@ -9,20 +9,23 @@ export async function POST(request: Request) {
   }
 
   const workerId = `vercel-monitor-events:${process.env.VERCEL_REGION ?? "default"}`;
-  const claimed = await claimMonitorBusinessEvents(workerId, 100);
-  if (claimed === null) {
-    return Response.json({ error: "Monitor API unavailable." }, { status: 503, headers: { "retry-after": "60" } });
+  try {
+    const result = await runMonitorBusinessEventsBatch({
+      workerId,
+      claim: claimMonitorBusinessEvents,
+      processInNeon: async (events) => {
+        // This import is deliberately after the Monitor API claim. An empty batch never loads Neon.
+        const { processMonitorBusinessEventsInNeon } = await import("@/lib/monitor/neon-events");
+        await processMonitorBusinessEventsInNeon(events);
+      },
+      ack: (eventId, claimedWorkerId) => acknowledgeMonitorBusinessEvent(eventId, claimedWorkerId).then(() => undefined),
+      fail: (eventId, claimedWorkerId, error) => failMonitorBusinessEvent(eventId, claimedWorkerId, error).then(() => undefined),
+    });
+    if (!result.available) {
+      return Response.json({ error: "Monitor API unavailable." }, { status: 503, headers: { "retry-after": "60" } });
+    }
+    return Response.json({ ok: true, claimed: result.claimed, processed: result.processed, failed: result.failed });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Monitor event processing failed." }, { status: 503, headers: { "retry-after": "60" } });
   }
-
-  const result = await processPendingMonitorEvents({
-    claim: async () => claimed,
-    processInNeon: async (events) => {
-      // This import is deliberately after the Monitor API claim. An empty batch never loads Neon.
-      const { processMonitorBusinessEventsInNeon } = await import("@/lib/monitor/neon-events");
-      await processMonitorBusinessEventsInNeon(events);
-    },
-    ack: (eventId) => acknowledgeMonitorBusinessEvent(eventId, workerId).then(() => undefined),
-    fail: (eventId, error) => failMonitorBusinessEvent(eventId, workerId, error).then(() => undefined),
-  });
-  return Response.json({ ok: true, ...result });
 }

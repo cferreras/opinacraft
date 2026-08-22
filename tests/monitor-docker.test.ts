@@ -28,3 +28,15 @@ test("Monitor API has its own Dokploy service definition", () => {
   assert.match(dockerfile, /monitor:api/);
   assert.match(dockerfile, /3002/);
 });
+
+test("business-event processor has a separate Dokploy service and lazy Neon import", () => {
+  const dockerfile = readFileSync(resolve(repositoryRoot, "Dockerfile.monitor-events"), "utf8");
+  const worker = readFileSync(resolve(repositoryRoot, "src/workers/monitor-business-events.ts"), "utf8");
+  const packageJson = JSON.parse(readFileSync(resolve(repositoryRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
+
+  assert.match(dockerfile, /monitor:events/);
+  assert.equal(packageJson.scripts?.["monitor:events"], "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs src/workers/monitor-business-events.ts");
+  assert.match(worker, /import\("@\/lib\/monitor\/neon-events"\)/);
+  assert.doesNotMatch(worker, /from ["']@\/lib\/monitor\/neon-events["']/);
+  assert.doesNotMatch(worker, /from ["']@\/db["']/);
+});

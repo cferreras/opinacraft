@@ -3,6 +3,8 @@ import { PgBoss, type SendOptions } from "pg-boss";
 import { serializeUtcTimestamp } from "./contracts";
 
 export const MONITOR_QUEUE_NAME = "monitor-checks";
+export const MONITOR_BUSINESS_EVENTS_QUEUE_NAME = "monitor-business-events";
+export const MONITOR_BUSINESS_EVENTS_SCHEDULE_KEY = "monitor-business-events-hourly";
 export const MONITOR_SWEEPER_INTERVAL_MS = 5 * 60_000;
 
 export type MonitorCheckJob = {
@@ -73,4 +75,22 @@ export async function sendMonitorCheck(
     deleteAfterSeconds: 300,
   };
   return boss.send(MONITOR_QUEUE_NAME, data, sendOptions);
+}
+
+export async function scheduleMonitorBusinessEvents(
+  boss: Pick<PgBoss, "schedule">,
+) {
+  await boss.schedule(
+    MONITOR_BUSINESS_EVENTS_QUEUE_NAME,
+    "0 * * * *",
+    null,
+    {
+      key: MONITOR_BUSINESS_EVENTS_SCHEDULE_KEY,
+      tz: "UTC",
+      retryLimit: 3,
+      retryDelay: 60,
+      retryBackoff: true,
+      deleteAfterSeconds: 3_600,
+    },
+  );
 }

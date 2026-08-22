@@ -3,8 +3,6 @@
   "buildCommand": "pnpm build",
   "regions": ["lhr1"],
   "crons": [
-    { "path": "/api/internal/monitor/sync", "schedule": "*/5 * * * *" },
-    { "path": "/api/internal/monitor/events", "schedule": "0 * * * *" },
     { "path": "/api/internal/monitor/reconcile", "schedule": "30 3 * * *" }
   ]
 }

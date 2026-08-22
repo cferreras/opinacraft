@@ -61,6 +61,26 @@ acepta `PUT/DELETE /v1/targets/:serverId`, inventario de targets, estados batch,
 catálogo, eventos pendientes e histórico. Todas las fechas de entrada y salida
 son ISO 8601 UTC terminadas en `Z`.
 
+### Monitor business-events processor
+
+Usa `Dockerfile.monitor-events` como un servicio separado del worker de checks y
+configura:
+
+- `DATABASE_URL`: conexión de Neon para operaciones de negocio poco frecuentes;
+  este proceso no abre Neon mientras Monitor API no devuelva eventos.
+- `MONITOR_DATABASE_URL`: conexión de PostgreSQL Monitor, usada por pg-boss para
+  scheduling y reintentos.
+- `MONITOR_API_URL` y `MONITOR_API_SECRET`: endpoint y secreto de Monitor API.
+- `MONITOR_BUSINESS_EVENTS_WORKER_ID`: identificador estable del procesador.
+- `MONITOR_BUSINESS_EVENTS_BATCH_SIZE`: tamaño máximo del lote, por defecto 100.
+
+El servicio registra en pg-boss la cola `monitor-business-events` con el
+schedule `0 * * * *` y zona `UTC`. Cada job reclama primero el lote mediante
+Monitor API; si está vacío termina sin importar ni abrir Neon. Si Monitor API no
+está disponible, el job falla y pg-boss lo reintenta. Solo un lote no vacío
+importa dinámicamente la lógica de Neon y procesa auto-ocultados y
+notificaciones en una transacción agrupada.
+
 ## Vercel
 
 Configura:
@@ -71,16 +91,16 @@ Configura:
 
 Las acciones de crear, editar o eliminar un servidor escriben un outbox en la
 misma transacción de Neon. Después intentan entregarlo inmediatamente; la ruta
-`/api/internal/monitor/sync` reintenta cada cinco minutos y la reconciliación
-`/api/internal/monitor/reconcile` vuelve a comparar el catálogo una vez al día.
+`/api/internal/monitor/sync` queda disponible para reintentos manuales y la
+reconciliación `/api/internal/monitor/reconcile` vuelve a comparar el catálogo
+una vez al día. Vercel solo programa esta reconciliación diaria para mantener la
+compatibilidad con el plan Hobby.
 
-El procesador horario de `/api/internal/monitor/events` reclama primero un lote
-en Monitor API. Si el lote está vacío, termina sin importar ni abrir Neon. Solo
-cuando existe un lote dinámico importa el procesador Neon, aplica en una
-transacción idempotente auto-ocultados y notificaciones, y confirma cada evento
-con su lease. Las notificaciones se agrupan aproximadamente cada hora; el
-auto-ocultado se genera en Monitor DB después de siete días offline y se procesa
-por lote.
+El endpoint `/api/internal/monitor/events` conserva la misma barrera como
+compatibilidad o ejecución manual, pero ya no tiene un cron de Vercel. El
+procesador de Dokploy ejecuta esa misma lógica aproximadamente cada hora: las
+notificaciones se agrupan por lote y el auto-ocultado se genera en Monitor DB
+después de siete días offline.
 
 ## Catálogo y caché
 
@@ -112,12 +132,15 @@ histórico y cualquier fecha visible del monitor.
 2. Despliega Monitor API y valida `/healthz`.
 3. Despliega el worker sin `DATABASE_URL` de Neon y observa health, jobs y
    leases.
-4. Ejecuta `pnpm monitor:db:backfill` con acceso temporal de solo lectura a Neon
+4. Despliega `Dockerfile.monitor-events` con acceso a `DATABASE_URL` de Neon y
+   las credenciales de Monitor API/Monitor DB. Comprueba primero un lote vacío:
+   no debe crear conexiones a Neon.
+5. Ejecuta `pnpm monitor:db:backfill` con acceso temporal de solo lectura a Neon
    y escritura a Monitor DB para trasladar targets, estado actual y el histórico
    canónico existente. El script es idempotente y no forma parte del worker.
-5. Activa `MONITOR_API_URL` en Vercel y compara estados, histórico y paginación.
-6. Mantén temporalmente las columnas/tablas antiguas de monitorización en Neon.
-7. Retíralas solo después de validar sincronización, reconciliación, outbox y
+6. Activa `MONITOR_API_URL` en Vercel y compara estados, histórico y paginación.
+7. Mantén temporalmente las columnas/tablas antiguas de monitorización en Neon.
+8. Retíralas solo después de validar sincronización, reconciliación, outbox y
    tráfico público.
 
 No se añade Redis.

@@ -22,6 +22,7 @@
     "admin:grant": "node scripts/grant-admin.mjs",
     "monitor:worker": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs src/workers/monitor-worker.ts",
     "monitor:api": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs src/workers/monitor-api.ts",
+    "monitor:events": "node --experimental-strip-types --experimental-loader ./scripts/ts-paths-loader.mjs src/workers/monitor-business-events.ts",
     "monitor:db:migrate": "node scripts/migrate-monitor.mjs",
     "monitor:db:backfill": "node scripts/backfill-monitor.mjs"
   },
