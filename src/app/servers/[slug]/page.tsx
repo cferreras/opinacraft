@@ -34,10 +34,9 @@ import { SiteHeader } from "@/components/site-header";
 import { getServerSession } from "@/lib/session";
 import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
 import { editionLabel, formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
-import { getCachedMonitorHistory, getCachedMonitorStatuses, getCachedPublicReviews, getCachedPublishedServer, getCachedReviewSummary } from "@/lib/servers/cached-queries";
-import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
+import { getCachedMonitorStatuses, getCachedPublicReviews, getCachedPublishedServer, getCachedReviewSummary } from "@/lib/servers/cached-queries";
 import { monitorFromApi, type ManagedServer } from "@/lib/servers/queries";
-import { emptyPlayerHistoryResponse, getPublicPlayerHistory } from "@/lib/servers/player-history";
+import { emptyPlayerHistoryResponse } from "@/lib/servers/player-history";
 import { getReviewViewerState } from "@/lib/servers/reviews";
 
 type PublicServerPageProps = {
@@ -156,19 +155,12 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
   const [query, session] = await Promise.all([searchParams, getServerSession()]);
   const requestedReviewPage = Number.parseInt(query.reviewPage ?? "1", 10);
   const viewerPromise = session ? getReviewViewerState(server.id, session.user.id) : Promise.resolve(null);
-  const historyPromise = isMonitorApiConfigured()
-    ? getCachedMonitorHistory(server.id, "24h").catch((error) => {
-      console.error("[monitor] detail history unavailable", error instanceof Error ? error.name : "unknown");
-      return null;
-    })
-    : getPublicPlayerHistory(server.id, "24h", "all");
-  const [reviewSummary, cachedReviewPage, historyResult, viewer] = await Promise.all([
+  const [reviewSummary, cachedReviewPage, viewer] = await Promise.all([
     getCachedReviewSummary(server.id),
     getCachedPublicReviews(server.id, Number.isFinite(requestedReviewPage) ? requestedReviewPage : 1),
-    historyPromise,
     viewerPromise,
   ]);
-  const history = historyResult ?? emptyPlayerHistoryResponse("24h");
+  const history = emptyPlayerHistoryResponse("24h");
   const reviewPage = {
     ...cachedReviewPage,
     reviews: cachedReviewPage.reviews.map((review) => ({
