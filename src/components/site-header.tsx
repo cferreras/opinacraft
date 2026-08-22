@@ -246,7 +246,7 @@ export function SiteHeader() {
           </SheetContent>
         </Sheet>
 
-        <Link href="/" aria-label="OpinaCraft, inicio" className="shrink-0"><Brand compact={false} /></Link>
+        <Link href="/" aria-label="OpinaCraft, inicio" className="inline-flex shrink-0 items-center"><Brand compact={false} /></Link>
         <div className="hidden lg:block"><NavigationLinks pathname={pathname} /></div>
 
         <form onSubmit={submitSearch} className="relative ml-auto hidden w-full max-w-xs lg:block">
