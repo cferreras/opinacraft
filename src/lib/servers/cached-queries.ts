@@ -38,7 +38,6 @@ export async function getCachedMonitorCatalogPage(args: PublishedServerListArgs)
     sort: args.sort ?? "rating",
     tableSort: args.tableSort,
     tableDirection: args.tableDirection ?? "asc",
-    monitorCache: "force-cache",
   });
 }
 
@@ -69,12 +68,12 @@ export async function getCachedMonitorStatuses(serverIds: readonly string[]) {
   "use cache";
   cacheLife({ stale: 30, revalidate: 45, expire: 120 });
   cacheTag("monitor:statuses");
-  return fetchMonitorStatuses([...serverIds], { cache: "force-cache" });
+  return fetchMonitorStatuses([...serverIds]);
 }
 
 export async function getCachedMonitorHistory(serverId: string, period: "24h" | "7d" | "30d" | "90d") {
   "use cache";
   cacheLife({ stale: 30, revalidate: 45, expire: 120 });
   cacheTag(`monitor:history:${serverId}`);
-  return fetchMonitorHistory(serverId, period, { cache: "force-cache" });
+  return fetchMonitorHistory(serverId, period);
 }
