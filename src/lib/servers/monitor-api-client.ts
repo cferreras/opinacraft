@@ -22,7 +22,9 @@ async function monitorFetch<T>(path: string, init: RequestInit = {}) {
       authorization: `Bearer ${secret}`,
       ...init.headers,
     },
-    cache: init.cache ?? "no-store",
+    // Cache Components owns the bounded cache lifetime. Never let this fetch
+    // create a second, independently persistent Data Cache entry.
+    cache: "no-store",
   });
   if (!response.ok) throw new Error(`Monitor API returned ${response.status}.`);
   return await response.json() as T;

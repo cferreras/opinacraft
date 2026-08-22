@@ -20,6 +20,40 @@ import { orderMonitorCandidates } from "../src/lib/servers/catalog-monitor.ts";
 import { formatRelativeTime } from "../src/lib/time/localized.ts";
 import { recoverDueMonitorSchedules } from "../src/lib/monitor/sweeper.ts";
 
+test("Monitor API requests never enter the persistent fetch Data Cache", async () => {
+  const previousUrl = process.env.MONITOR_API_URL;
+  const previousSecret = process.env.MONITOR_API_SECRET;
+  const originalFetch = globalThis.fetch;
+  const requests: RequestInit[] = [];
+  process.env.MONITOR_API_URL = "https://monitor-api.example.test";
+  process.env.MONITOR_API_SECRET = "test-secret";
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    requests.push(init ?? {});
+    const url = String(input);
+    const body = url.endsWith("/v1/status/batch")
+      ? { states: [] }
+      : url.endsWith("/v1/catalog/query")
+        ? { ids: [], totalCount: 0, states: [] }
+        : { period: "24h", series: [] };
+    return Response.json(body);
+  }) as typeof fetch;
+
+  try {
+    const { fetchMonitorHistory, fetchMonitorStatuses, queryMonitorCatalog } = await import("../src/lib/servers/monitor-api-client.ts");
+    await fetchMonitorStatuses(["00000000-0000-0000-0000-000000000001"], { cache: "force-cache" });
+    await queryMonitorCatalog({ candidateIds: [], sort: "catalog", direction: "desc", page: 1, pageSize: 24 }, { cache: "force-cache" });
+    await fetchMonitorHistory("00000000-0000-0000-0000-000000000001", "24h", { cache: "force-cache" });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousUrl === undefined) delete process.env.MONITOR_API_URL;
+    else process.env.MONITOR_API_URL = previousUrl;
+    if (previousSecret === undefined) delete process.env.MONITOR_API_SECRET;
+    else process.env.MONITOR_API_SECRET = previousSecret;
+  }
+
+  assert.deepEqual(requests.map((request) => request.cache), ["no-store", "no-store", "no-store"]);
+});
+
 test("monitor timestamps are accepted and serialized only as canonical UTC", () => {
   const value = new Date("2026-08-22T10:15:00.000Z");
 

@@ -541,7 +541,6 @@ export async function listPublishedServersWithMonitor({
   sort,
   tableSort,
   tableDirection,
-  monitorCache = "no-store",
 }: {
   page: number;
   query: string;
@@ -551,7 +550,6 @@ export async function listPublishedServersWithMonitor({
   sort: PublicServerSort;
   tableSort?: PublicServerTableSort;
   tableDirection: PublicServerSortDirection;
-  monitorCache?: RequestCache;
 }) {
   const queryText = query.trim();
   const catalogOrder = tableSort && tableSort !== "players" && tableSort !== "version" && tableSort !== "latency"
@@ -583,7 +581,7 @@ export async function listPublishedServersWithMonitor({
     direction: tableDirection,
     page,
     pageSize: PUBLIC_SERVER_PAGE_SIZE,
-  }, { cache: monitorCache });
+  });
   if (!result) throw new Error("Monitor API is not configured for catalog queries.");
   const hydrated = await hydratePublishedCatalogServers(result.ids, edition);
   const statesById = new Map(result.states.map((state) => [state.serverId, state]));
