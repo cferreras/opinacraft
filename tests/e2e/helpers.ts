@@ -111,7 +111,7 @@ export async function createServer(
   if (options.javaPort !== undefined) await page.locator('input[name="javaPort"]').fill(String(options.javaPort));
 
   if (options.bedrockHost) {
-    await page.getByRole("checkbox", { name: "Activar Bedrock" }).check();
+    await page.getByRole("switch", { name: "Bedrock" }).click();
     await page.locator('input[name="bedrockHost"]').fill(options.bedrockHost);
     if (options.bedrockPort !== undefined) await page.locator('input[name="bedrockPort"]').fill(String(options.bedrockPort));
   }
