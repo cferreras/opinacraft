@@ -58,7 +58,6 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
           <div className="mt-2 flex max-w-full flex-wrap items-center gap-1.5 overflow-hidden lg:mt-1.5">
             {restrictedAccess ? <SystemBadge icon={<ClipboardCheck aria-hidden="true" className="size-3" />}>{accessTypeLabel(server.accessType)}</SystemBadge> : null}
             {openAccounts ? <SystemBadge icon={<Users aria-hidden="true" className="size-3" />}>{accountModeLabel(server.accountMode)}</SystemBadge> : null}
-            {restrictedAccess && server.accessFormUrl ? <a href={server.accessFormUrl} target="_blank" rel="noopener noreferrer" className="text-[0.625rem] font-semibold text-primary hover:underline">Solicitar acceso</a> : null}
             {server.tags.slice(0, 2).map((tag) => <Badge key={tag.slug} variant="outline" className="text-[0.625rem]">{tag.label}</Badge>)}
           </div>
         </div>

@@ -20,3 +20,10 @@ test("keeps system catalog pills icon-led while user tags stay text-only", () =>
   assert.doesNotMatch(source, /<Badge className="text-\[0\.625rem\]">/);
   assert.doesNotMatch(source, /bg-success-soft/);
 });
+
+test("keeps access requests on the server page instead of catalog rows", () => {
+  const source = readFileSync(path.resolve("src/components/public-server-row.tsx"), "utf8");
+
+  assert.doesNotMatch(source, /Solicitar acceso/);
+  assert.doesNotMatch(source, /server\.accessFormUrl/);
+});
