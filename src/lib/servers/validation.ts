@@ -17,6 +17,10 @@ import {
   type ServerAccountMode,
   type ServerAuthMode,
 } from "./access.ts";
+import {
+  normalizeServerDescription,
+  SERVER_DESCRIPTION_MAX_LENGTH,
+} from "./description.ts";
 
 export const minecraftEditions = ["java", "bedrock"] as const;
 export type MinecraftEdition = (typeof minecraftEditions)[number];
@@ -81,7 +85,7 @@ const endpointSchema = z
 export const createServerInputSchema = z
   .object({
     name: z.string().trim().min(3).max(80),
-    description: z.string().trim().max(2_000).optional(),
+    description: z.string().transform((value) => normalizeServerDescription(value) ?? "").pipe(z.string().max(SERVER_DESCRIPTION_MAX_LENGTH)).optional(),
     websiteUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     storeUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     discordUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
@@ -303,7 +307,7 @@ export function normalizeCreateServerInput(
 ): NormalizedCreateServerInput {
   const parsed = createServerInputSchema.parse({
     ...input,
-    description: emptyToUndefined(input.description),
+    description: normalizeServerDescription(input.description) ?? undefined,
     websiteUrl: emptyToUndefined(input.websiteUrl),
     storeUrl: emptyToUndefined(input.storeUrl),
     discordUrl: emptyToUndefined(input.discordUrl),

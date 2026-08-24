@@ -9,7 +9,7 @@ import {
   type PublicServer,
 } from "./queries";
 import { getReviewSummary, listServerReviews } from "./reviews";
-import { publicServerSlugTag, publicServersTag, reviewListTag, reviewSummaryTag } from "./cache-tags";
+import { publicServerSlugTag, publicServersTag, reviewListTag, reviewSummaryTag, userAvatarsTag } from "./cache-tags";
 
 export async function getCachedPublishedServer(slug: string): Promise<PublicServer | null> {
   "use cache";
@@ -61,6 +61,7 @@ export async function getCachedPublicReviews(serverId: string, page: number) {
   cacheLife({ stale: 60, revalidate: 180, expire: 900 });
   // Deliberately use one tag for every page so a mutation cannot leave a stale page behind.
   cacheTag(reviewListTag(serverId));
+  cacheTag(userAvatarsTag());
   return listServerReviews(serverId, page);
 }
 

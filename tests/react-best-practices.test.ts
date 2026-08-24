@@ -24,6 +24,19 @@ test("starts public server viewer data with the other page queries", () => {
   assert.doesNotMatch(source, /const viewer = session \? await getReviewViewerState/);
 });
 
+test("uses an overflow-aware preview for long public server descriptions", () => {
+  const previewPath = path.resolve("src/components/server-description-preview.tsx");
+  const previewSource = existsSync(previewPath) ? readFileSync(previewPath, "utf8") : "";
+  const homeSource = readProjectFile("src/app/page.tsx");
+  const cardSource = readProjectFile("src/components/public-server-card.tsx");
+
+  assert.equal(existsSync(previewPath), true, "the description preview should be a dedicated component");
+  assert.match(previewSource, /ResizeObserver/);
+  assert.match(previewSource, /Ver más/);
+  assert.match(homeSource, /<ServerDescriptionPreview/);
+  assert.match(cardSource, /<ServerDescriptionPreview/);
+});
+
 test("passes a shaped payload to the server manage client boundary", () => {
   const source = readProjectFile("src/app/servers/[slug]/manage/page.tsx");
 

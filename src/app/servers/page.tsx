@@ -19,10 +19,12 @@ import {
   isMonitorDependentCatalogQuery,
   isPublicServerTableSort,
   monitorFromApi,
+  PUBLIC_SERVER_PAGE_SIZE,
   type PublicServerSort,
   type PublicServerSortDirection,
   type PublicServerTableSort,
 } from "@/lib/servers/queries";
+import { getServerResultsSummary } from "@/lib/servers/result-summary";
 import { normalizeTagSlug } from "@/lib/servers/tags";
 
 export const metadata: Metadata = { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", alternates: { canonical: "/servers" }, openGraph: { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", type: "website" } };
@@ -88,8 +90,6 @@ function SortableColumnHeader({
   );
 }
 
-function countLabel(count: number) { return `${count} ${count === 1 ? "servidor" : "servidores"}`; }
-
 export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; tags?: string; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
   await connection();
   const query = await searchParams;
@@ -126,7 +126,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
       servers = servers.map((server) => monitorFromApi(server, null));
     }
   }
-  const { hasNextPage, page } = result;
+  const { hasNextPage, page, totalCount } = result;
   const searchParamsForPage = new URLSearchParams();
   if (query.q) searchParamsForPage.set("q", query.q);
   if (query.tags) searchParamsForPage.set("tags", query.tags);
@@ -149,6 +149,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   };
   const initialTags = (query.tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean);
   const hasActiveFilters = Boolean(hasQuery || query.tags || query.edition || query.status || (query.sort && query.sort !== "rating") || tableSort);
+  const serverResultsSummary = getServerResultsSummary({ page, pageSize: PUBLIC_SERVER_PAGE_SIZE, visibleCount: servers.length, totalCount });
 
   return (
     <div className="min-h-screen bg-background">
@@ -175,7 +176,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.05fr_1.2fr_1.35fr_1.16fr]">
                   <FilterSelect id="edition-filter" name="edition" label="Edición" defaultValue={query.edition ?? ""} submitOnChange><option value="">Todas</option><option value="java">Java</option><option value="bedrock">Bedrock</option></FilterSelect>
                   <FilterSelect id="status-filter" name="status" label="Estado" defaultValue={query.status ?? ""} submitOnChange><option value="">Todos</option><option value="online">En línea</option><option value="offline">Fuera de línea</option><option value="unknown">Desconocido</option></FilterSelect>
-                  <TagCombobox name="tags" initialTags={initialTags} compact label="Etiquetas" submitOnChange resetPagination />
+                  <TagCombobox key={query.tags ?? ""} name="tags" initialTags={initialTags} compact label="Etiquetas" submitOnChange resetPagination />
                   <FilterSelect id="sort-filter" name="sort" label="Ordenar" defaultValue={tableSort ? "table" : sort} submitOnChange clearFieldsOnChange={tableSort ? ["tableSort", "tableDirection"] : undefined}>{tableSort ? <option value="table" disabled>{tableSortLabel(tableSort, tableDirection)}</option> : null}{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect>
                 </div>
               </CardContent>
@@ -200,15 +201,17 @@ export default async function PublicServersPage({ searchParams }: { searchParams
         ) : (
           <section className="mt-4" aria-labelledby="server-results-heading">
             <h2 id="server-results-heading" className="sr-only">Resultados de servidores</h2>
-            <Card className="gap-0 overflow-hidden py-0">
+            <Card className="gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0 lg:border lg:bg-card lg:shadow-sm lg:ring-1">
               <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-3">
-                <p className="text-sm text-muted-foreground"><strong className="font-bold tabular-nums text-foreground">{countLabel(servers.length)}</strong> en esta página</p>
+                <p className="text-sm tabular-nums text-muted-foreground">
+                  Mostrando <strong className="font-semibold text-foreground">{serverResultsSummary.rangeLabel}</strong> de <strong className="font-semibold text-foreground">{serverResultsSummary.totalCount}</strong> {serverResultsSummary.serverLabel}
+                </p>
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   <span>{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span>
                   {hasActiveFilters ? <Button variant="link" asChild size="sm" className="h-auto p-0 text-xs font-semibold"><Link href="/servers">Limpiar filtros</Link></Button> : null}
                 </div>
               </div>
-              <CardContent className="p-0">
+              <CardContent className="flex flex-col gap-2 p-2 lg:block lg:p-0">
                 <div role="row" aria-label="Ordenar resultados" className={`hidden h-10 items-center border-y bg-muted/30 px-4 text-muted-foreground lg:grid ${tableGridTemplate} lg:items-center lg:gap-3`}>
                   {tableColumns.map((column) => <SortableColumnHeader key={column.key} column={column} activeSort={activeTableSort} direction={activeTableDirection} href={tableSortHref(column.key)} />)}
                 </div>

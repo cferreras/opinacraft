@@ -604,7 +604,7 @@ export async function listPublishedServersFromNeon({ page = 1, query = "", tagSl
           ? [desc(servers.createdAt)]
           : [desc(sql`coalesce((select avg(sr.rating) from server_reviews sr where sr.server_id = ${servers.id} and sr.status = 'published'), 0)`)];
   const serverIds = await db
-    .select({ id: servers.id })
+    .select({ id: servers.id, totalCount: sql<number>`count(*) over()::int` })
     .from(servers)
     .where(and(
       eq(servers.publicationStatus, "published"),
@@ -622,13 +622,14 @@ export async function listPublishedServersFromNeon({ page = 1, query = "", tagSl
     .offset((safePage - 1) * PUBLIC_SERVER_PAGE_SIZE);
   const hasNextPage = serverIds.length > PUBLIC_SERVER_PAGE_SIZE;
   const ids = serverIds.slice(0, PUBLIC_SERVER_PAGE_SIZE).map(({ id }) => id);
+  const totalCount = serverIds[0]?.totalCount ?? 0;
   if (ids.length === 0) {
     const emptyServers: CatalogServer[] = [];
     return { servers: emptyServers, hasNextPage: false, totalCount: 0, page: safePage };
   }
 
   const catalogServers = await hydratePublishedCatalogServers(ids, edition);
-  return { servers: catalogServers, hasNextPage, totalCount: (safePage - 1) * PUBLIC_SERVER_PAGE_SIZE + ids.length + (hasNextPage ? 1 : 0), page: safePage };
+  return { servers: catalogServers, hasNextPage, totalCount, page: safePage };
 }
 
 export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating", tableSort, tableDirection = "asc" }: PublishedServerListArgs = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number }> {
