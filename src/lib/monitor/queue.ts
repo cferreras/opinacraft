@@ -49,9 +49,11 @@ export function getNextMonitorDate(
   cadenceMinutes: 15 | 60,
   random = Math.random(),
 ) {
+  const cadenceMs = cadenceMinutes * 60_000;
   const boundedRandom = Math.max(0, Math.min(1, random));
   const jitterMs = Math.round(boundedRandom * 120_000);
-  return new Date(now.getTime() + cadenceMinutes * 60_000 + jitterMs);
+  const nextSlotStart = Math.floor(now.getTime() / cadenceMs + 1) * cadenceMs;
+  return new Date(nextSlotStart + jitterMs);
 }
 
 export async function sendMonitorCheck(
