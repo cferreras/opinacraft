@@ -14,9 +14,9 @@ type Suggestion = { label: string; slug: string; usageCount: number };
 function isSuggestion(value: unknown): value is Suggestion { if (typeof value !== "object" || value === null) return false; const suggestion = value as { label?: unknown; slug?: unknown; usageCount?: unknown }; return typeof suggestion.label === "string" && typeof suggestion.slug === "string" && typeof suggestion.usageCount === "number" && Number.isFinite(suggestion.usageCount); }
 function parseSuggestions(value: unknown): Suggestion[] { if (typeof value !== "object" || value === null) return []; const tags = (value as { tags?: unknown }).tags; return Array.isArray(tags) && tags.every(isSuggestion) ? tags : []; }
 
-type TagComboboxProps = { name: string; initialTags?: string[]; allowCreate?: boolean; compact?: boolean; label?: string; ariaLabel?: string; submitOnChange?: boolean; resetPagination?: boolean };
+type TagComboboxProps = { name: string; initialTags?: string[]; allowCreate?: boolean; compact?: boolean; label?: string; ariaLabel?: string; submitOnChange?: boolean; resetPagination?: boolean; onSelectedChange?: (tags: string[]) => void; meta?: React.ReactNode };
 
-export function TagCombobox({ name, initialTags = [], allowCreate = true, compact = false, label, submitOnChange = false, resetPagination = false, ariaLabel = "Añadir etiqueta" }: TagComboboxProps) {
+export function TagCombobox({ name, initialTags = [], allowCreate = true, compact = false, label, submitOnChange = false, resetPagination = false, ariaLabel = "Añadir etiqueta", onSelectedChange, meta }: TagComboboxProps) {
   const [selected, setSelected] = useState<string[]>(initialTags);
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -52,17 +52,18 @@ export function TagCombobox({ name, initialTags = [], allowCreate = true, compac
     return () => { if (timer.current) clearTimeout(timer.current); controller.abort(); };
   }, [query]);
 
+  function commit(next: string[]) { shouldSubmitRef.current = true; setSelected(next); onSelectedChange?.(next); }
   function add(labelToAdd: string) {
     const clean = labelToAdd.trim().replace(/\s+/g, " ");
     if (!clean || selected.length >= 8 || selected.some((item) => item.toLocaleLowerCase() === clean.toLocaleLowerCase())) return;
-    shouldSubmitRef.current = true; setSelected((current) => [...current, clean]); setQuery(""); setSuggestions([]);
+    commit([...selected, clean]); setQuery(""); setSuggestions([]);
   }
-  function remove(labelToRemove: string) { shouldSubmitRef.current = true; setSelected((current) => current.filter((item) => item !== labelToRemove)); }
+  function remove(labelToRemove: string) { commit(selected.filter((item) => item !== labelToRemove)); }
 
   const placeholder = selected.length ? (compact ? "Añadir otra…" : "Añadir…") : compact ? "Escribe una etiqueta…" : "Buscar etiquetas…";
   return (
     <Field className={compact ? "gap-1.5" : "gap-1"}>
-      {label ? <FieldLabel htmlFor={inputId} className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</FieldLabel> : null}
+      {label ? <div className="flex items-baseline justify-between gap-3"><FieldLabel htmlFor={inputId} className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</FieldLabel>{meta ? <span className="shrink-0 text-xs font-medium text-muted-foreground">{meta}</span> : null}</div> : null}
       <Popover open={Boolean(query && suggestions.length)}>
         <PopoverAnchor asChild>
           <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-input bg-transparent px-2.5 py-1 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
