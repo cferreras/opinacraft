@@ -172,6 +172,20 @@ test("scheduled monitor jobs use a slot-specific singleton key and bounded jitte
   assert.equal((captured.options as { startAfter?: Date }).startAfter?.toISOString(), scheduledAt.toISOString());
 });
 
+test("monitor jitter stays inside consecutive cadence slots without accumulating drift", () => {
+  let scheduledAt = new Date("2026-08-22T10:00:00.000Z");
+  const sequence: string[] = [];
+
+  for (let check = 0; check < 16; check += 1) {
+    scheduledAt = getNextMonitorDate(scheduledAt, 15, 0.5);
+    sequence.push(scheduledAt.toISOString());
+  }
+
+  assert.equal(sequence[0], "2026-08-22T10:16:00.000Z");
+  assert.equal(sequence[14], "2026-08-22T13:46:00.000Z");
+  assert.equal(sequence[15], "2026-08-22T14:01:00.000Z");
+});
+
 test("business-event processing is scheduled hourly in UTC through pg-boss", async () => {
   const calls: unknown[][] = [];
   await scheduleMonitorBusinessEvents({
