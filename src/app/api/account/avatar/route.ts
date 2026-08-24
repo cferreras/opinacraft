@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
+import { revalidateTag } from "next/cache";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -11,6 +12,7 @@ import { removeMediaOrEnqueue } from "@/lib/media/cleanup";
 import { MediaValidationError, optimizeImage } from "@/lib/media/optimize";
 import { getMediaQuota, MediaQuotaExceededError, releaseMediaQuota, reserveMediaQuota } from "@/lib/media/quota";
 import { mediaStorage, MediaStorageNotConfiguredError } from "@/lib/media/storage";
+import { userAvatarsTag } from "@/lib/servers/cache-tags";
 
 const MAX_AVATAR_FILE_BYTES = 4_000_000;
 const MAX_AVATAR_REQUEST_BYTES = MAX_AVATAR_FILE_BYTES + 128_000;
@@ -79,6 +81,8 @@ export async function POST(request: Request) {
       });
     }
 
+    revalidateTag(userAvatarsTag(), "max");
+
     return NextResponse.json({ ok: true, url: stored.url, quota: await getMediaQuota() });
   } catch (error) {
     if (!committed && reservedBytes > 0) await releaseMediaQuota(reservedBytes).catch(() => undefined);
@@ -120,6 +124,8 @@ export async function DELETE() {
         console.error("Failed to release avatar media quota", error instanceof Error ? error.name : "unknown");
       });
     }
+
+    revalidateTag(userAvatarsTag(), "max");
 
     return NextResponse.json({ ok: true, quota: await getMediaQuota() });
   } catch (error) {

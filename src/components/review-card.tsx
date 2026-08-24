@@ -1,7 +1,7 @@
 import { Star } from "lucide-react";
 
 import { deleteOfficialReplyAction } from "@/app/servers/[slug]/actions";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -36,7 +36,7 @@ export function ReviewCard({ review, serverId, slug, canReport, canReply, canMan
     <Card id={`review-${review.id}`}>
       <CardContent className="p-4 sm:p-5">
         <div className="flex items-start gap-3">
-          <Avatar className="size-8 shrink-0"><AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">{initials(review.authorName)}</AvatarFallback></Avatar>
+          <Avatar className="size-8 shrink-0"><AvatarImage src={review.authorImage ?? undefined} alt="" /><AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">{initials(review.authorName)}</AvatarFallback></Avatar>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
               <div>

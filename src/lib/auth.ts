@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { after } from "next/server";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 
@@ -34,6 +35,26 @@ export const auth = betterAuth({
   secret: serverEnv.BETTER_AUTH_SECRET,
   baseURL: serverEnv.BETTER_AUTH_URL,
   trustedOrigins,
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-up/email") return;
+
+      const email = typeof ctx.body?.email === "string" ? ctx.body.email.trim().toLowerCase() : "";
+      if (!email) return;
+
+      const existingUser = await ctx.context.adapter.findOne({
+        model: "user",
+        where: [{ field: "email", value: email }],
+      });
+
+      if (!existingUser) return;
+
+      throw new APIError("CONFLICT", {
+        code: "USER_ALREADY_EXISTS",
+        message: "Ya existe una cuenta con ese correo.",
+      });
+    }),
+  },
   rateLimit: {
     enabled: true,
     storage: "database",

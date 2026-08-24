@@ -495,6 +495,7 @@ export type ReviewView = {
   createdAt: Date;
   updatedAt: Date;
   authorName: string;
+  authorImage: string | null;
   isAnonymous: boolean;
   isMine: boolean;
   reply: ReviewReplyView | null;
@@ -512,6 +513,7 @@ export async function listServerReviews(serverId: string, page = 1, currentUserI
       updatedAt: serverReviews.updatedAt,
       authorId: serverReviews.userId,
       authorName: user.name,
+      authorImage: user.image,
     })
     .from(serverReviews)
     .leftJoin(user, eq(serverReviews.userId, user.id))
@@ -551,6 +553,7 @@ export async function listServerReviews(serverId: string, page = 1, currentUserI
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         authorName: row.authorName ?? "Usuario anónimo",
+        authorImage: row.authorImage,
         isAnonymous: !row.authorId,
         isMine: Boolean(currentUserId && row.authorId === currentUserId),
         reply: reply

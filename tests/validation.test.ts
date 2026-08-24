@@ -175,6 +175,24 @@ test("normalizes omitted and blank store URLs to null", () => {
   assert.equal(normalizeCreateServerInput({ ...baseInput, storeUrl: "   " }).storeUrl, null);
 });
 
+test("compacts repeated whitespace in server descriptions", () => {
+  const input = normalizeCreateServerInput({
+    name: "A Minecraft Community",
+    description: "  Una comunidad\n\n\npara\t\t jugar.  ",
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  });
+
+  assert.equal(input.description, "Una comunidad para jugar.");
+});
+
+test("keeps the server description within the two-thousand-character limit", () => {
+  assert.throws(() => normalizeCreateServerInput({
+    name: "A Minecraft Community",
+    description: "a".repeat(2_001),
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  }));
+});
+
 test("trims server tags and enforces the eight-tag limit", () => {
   const input = normalizeCreateServerInput({
     name: "A Minecraft Community",

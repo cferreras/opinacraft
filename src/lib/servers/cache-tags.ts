@@ -20,6 +20,10 @@ export function reviewSummaryTag(serverId: string) {
   return `reviews:summary:${serverId}`;
 }
 
+export function userAvatarsTag() {
+  return "users:avatars";
+}
+
 export function invalidateReviewCache(serverId: string) {
   updateTag(reviewListTag(serverId));
   updateTag(reviewSummaryTag(serverId));

@@ -31,6 +31,7 @@ import { ServerLogo } from "@/components/server-logo";
 import { ServerUtilityActions } from "@/components/server-utility-actions";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { normalizeServerDescription } from "@/lib/servers/description";
 import { getServerSession } from "@/lib/session";
 import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
 import { editionLabel, formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
@@ -131,9 +132,9 @@ export async function generateMetadata({ params }: PublicServerPageProps): Promi
   return server
     ? {
         title: `${server.name} | OpinaCraft`,
-        description: server.description ?? `Descubre ${server.name} en OpinaCraft.`,
+        description: normalizeServerDescription(server.description) ?? `Descubre ${server.name} en OpinaCraft.`,
         alternates: { canonical: `/servers/${server.slug}` },
-        openGraph: { title: server.name, description: server.description ?? undefined, type: "website", images: socialMedia ? [{ url: socialMedia.url }] : undefined },
+        openGraph: { title: server.name, description: normalizeServerDescription(server.description) ?? undefined, type: "website", images: socialMedia ? [{ url: socialMedia.url }] : undefined },
       }
     : { title: "Servidor no encontrado | OpinaCraft" };
 }
@@ -174,6 +175,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
   const copyAddress = endpoint ? formatEndpoint(endpoint) : server.slug;
   const rating = reviewSummary.average === null ? "—" : reviewSummary.average.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const editions = editionLabel(server);
+  const description = normalizeServerDescription(server.description) ?? "Esta comunidad de Minecraft está preparada para recibirte. Consulta sus canales oficiales para conocer sus normas y novedades.";
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -210,8 +212,8 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                   ) : null}
                 </div>
               </div>
-              <p className="mt-5 max-w-[41.25rem] whitespace-pre-wrap text-[0.9375rem] leading-7 text-muted-foreground">
-                {server.description ?? "Esta comunidad de Minecraft está preparada para recibirte. Consulta sus canales oficiales para conocer sus normas y novedades."}
+              <p className="mt-5 max-w-[41.25rem] text-[0.9375rem] leading-7 text-muted-foreground">
+                {description}
               </p>
               <Card size="sm" className="mt-6 grid grid-cols-2 gap-0 overflow-hidden py-0 sm:grid-cols-5">
                 <Metric

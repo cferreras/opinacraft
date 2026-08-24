@@ -61,6 +61,27 @@ test("public catalog searches and filters by text, tags, edition and health", as
   await expect(page.getByRole("heading", { name: alphaName })).toHaveCount(0);
 });
 
+test("syncs the selected tag pill after client-side catalog navigation", async ({ page }) => {
+  const owner = await createAccount(page, "catalog-tag-pill");
+  createdEmails.push(owner.email);
+
+  const stamp = Date.now();
+  const server = await createServer(page, {
+    name: `E2E Tag Pill ${stamp}`,
+    javaHost: `tag-pill-${stamp}.example.invalid`,
+    tags: ["supervivencia"],
+  });
+  await markServerVerified(server.slug);
+  await publishServer(page, server.slug);
+
+  await page.goto("/servers?tags=supervivencia");
+  await expect(page.getByRole("button", { name: "Eliminar supervivencia" })).toBeVisible();
+
+  await page.getByRole("link", { name: "Limpiar filtros", exact: true }).click();
+  await expect(page).toHaveURL(/\/servers$/);
+  await expect(page.getByRole("button", { name: "Eliminar supervivencia" })).toHaveCount(0);
+});
+
 test("public catalog headers sort the visible columns and toggle direction", async ({ page }) => {
   const owner = await createAccount(page, "catalog-sort");
   createdEmails.push(owner.email);
@@ -120,6 +141,35 @@ test("public catalog headers sort the visible columns and toggle direction", asy
   await expect(page).not.toHaveURL(/tableSort=/);
   await expect(page.getByLabel("Ordenar", { exact: true })).toHaveValue("players");
   await expect(page.getByRole("columnheader", { name: "Jugadores" })).toHaveAttribute("aria-sort", "descending");
+});
+
+test("mobile catalog presents each server as a compact card", async ({ page }) => {
+  const owner = await createAccount(page, "catalog-mobile-card");
+  createdEmails.push(owner.email);
+
+  const stamp = Date.now();
+  const serverName = `E2E Mobile Card ${stamp}`;
+  const description = "Esta descripción sirve para comprobar que el listado móvil prioriza los datos útiles.";
+  const server = await createServer(page, {
+    name: serverName,
+    description,
+    javaHost: `mobile-card-${stamp}.example.invalid`,
+    tags: ["survival", "community"],
+  });
+  await markServerVerified(server.slug);
+  await publishServer(page, server.slug);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/servers?q=${encodeURIComponent(serverName)}`);
+
+  const row = page.locator("article").filter({ has: page.getByRole("heading", { name: serverName }) });
+  await expect(row).toBeVisible();
+  await expect(row.getByText(description)).toBeHidden();
+  await expect(row).toHaveCSS("border-top-style", "none");
+  await expect(row).not.toHaveCSS("border-radius", "0px");
+  await expect(row).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const resultsSurface = row.locator("xpath=../..");
+  expect(await resultsSurface.evaluate((element) => getComputedStyle(element).boxShadow)).not.toContain("0px 0px 0px 1px");
 });
 
 test("a public server page exposes a controlled not-found state", async ({ page }) => {

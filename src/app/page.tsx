@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { ServerLogo } from "@/components/server-logo";
+import { ServerDescriptionPreview } from "@/components/server-description-preview";
 import { StatusPill } from "@/components/server-status-pill";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -110,9 +111,12 @@ function ServerPick({ server }: { server: CatalogServer }) {
         </div>
       </div>
 
-      <p className="line-clamp-2 min-h-10 px-4 text-[0.8125rem] leading-5 text-muted-foreground">
-        {server.description ?? "Una comunidad de Minecraft lista para recibirte."}
-      </p>
+      <ServerDescriptionPreview
+        description={server.description ?? "Una comunidad de Minecraft lista para recibirte."}
+        href={`/servers/${server.slug}`}
+        lines={2}
+        className="min-h-10 px-4 text-[0.8125rem] [&>p]:text-[0.8125rem] [&>p]:leading-5"
+      />
 
       {server.tags.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5 px-4">

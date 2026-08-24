@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Star, Users } from "lucide-react";
+import type { ReactNode } from "react";
+import { ClipboardCheck, Star, Users } from "lucide-react";
 
 import { tableGridTemplate } from "@/app/servers/page";
 import { StatusPill } from "@/components/server-status-pill";
@@ -24,6 +25,10 @@ function Rating({ server, className }: { server: CatalogServer; className: strin
   return <div className={className}>{server.reviewAverage !== null ? <Star aria-hidden="true" className="size-3.5 fill-current text-warning" /> : null}<span className={server.reviewAverage !== null ? "font-medium tabular-nums text-foreground" : undefined}>{ratingLabel(server)}</span>{server.reviewCount > 0 ? <span className="tabular-nums text-muted-foreground">({server.reviewCount})</span> : null}</div>;
 }
 
+function SystemBadge({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return <Badge variant="outline" className="text-[0.625rem]">{icon}{children}</Badge>;
+}
+
 function AddressField({ value, className = "" }: { value: string; className?: string }) {
   return (
     <div className={`flex h-8 min-w-0 items-center gap-1 rounded-md border bg-muted/40 pl-2.5 pr-1 ${className}`}>
@@ -41,7 +46,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
   const openAccounts = server.accountMode !== "premium_only";
 
   return (
-    <article className={`grid gap-3 border-t px-3 py-3.5 transition-colors first:border-t-0 hover:bg-muted/30 sm:px-4 ${tableGridTemplate} lg:items-center lg:gap-3`}>
+    <article className={`grid gap-2.5 rounded-xl border-none bg-muted/35 p-3.5 transition-colors hover:bg-muted/55 sm:p-4 ${tableGridTemplate} lg:items-center lg:gap-3 lg:rounded-none lg:border-t lg:border-solid lg:bg-transparent lg:px-4 lg:py-3.5 lg:first:border-t-0 lg:hover:bg-muted/30`}>
       <div className="flex min-w-0 items-start gap-3">
         <ServerLogo name={server.name} media={server.media} className="size-10 rounded-lg" />
         <div className="min-w-0 flex-1">
@@ -49,10 +54,10 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
             <h3 className="truncate text-sm font-semibold"><Link href={`/servers/${server.slug}`} className="hover:text-primary">{server.name}</Link></h3>
             <StatusPill status={server.aggregateStatus} className="text-[0.625rem]" />
           </div>
-          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{server.description ?? "Una comunidad de Minecraft lista para recibirte."}</p>
-          <div className="mt-1.5 flex max-w-full flex-wrap items-center gap-1.5 overflow-hidden">
-            {restrictedAccess ? <Badge className="text-[0.625rem]">{accessTypeLabel(server.accessType)}</Badge> : null}
-            {openAccounts ? <Badge variant="outline" className="border-primary/30 bg-success-soft text-[0.625rem] text-success">{accountModeLabel(server.accountMode)}</Badge> : null}
+          <p className="hidden text-xs text-muted-foreground lg:mt-0.5 lg:line-clamp-1">{server.description ?? "Una comunidad de Minecraft lista para recibirte."}</p>
+          <div className="mt-2 flex max-w-full flex-wrap items-center gap-1.5 overflow-hidden lg:mt-1.5">
+            {restrictedAccess ? <SystemBadge icon={<ClipboardCheck aria-hidden="true" className="size-3" />}>{accessTypeLabel(server.accessType)}</SystemBadge> : null}
+            {openAccounts ? <SystemBadge icon={<Users aria-hidden="true" className="size-3" />}>{accountModeLabel(server.accountMode)}</SystemBadge> : null}
             {restrictedAccess && server.accessFormUrl ? <a href={server.accessFormUrl} target="_blank" rel="noopener noreferrer" className="text-[0.625rem] font-semibold text-primary hover:underline">Solicitar acceso</a> : null}
             {server.tags.slice(0, 2).map((tag) => <Badge key={tag.slug} variant="outline" className="text-[0.625rem]">{tag.label}</Badge>)}
           </div>
@@ -66,16 +71,16 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
       <Rating server={server} className="hidden items-center gap-1 text-xs text-muted-foreground lg:flex" />
       <AddressField value={endpointAddress} className="hidden lg:flex" />
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t pt-3 text-xs text-muted-foreground lg:hidden">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-lg bg-background/55 px-2.5 py-2 text-[0.6875rem] text-muted-foreground lg:hidden">
         <div className="flex min-w-0 items-center gap-1.5"><Users aria-hidden="true" className="size-3.5" /><span className="tabular-nums">{playersLabel(server.monitor)}</span></div>
-        <div className={`flex min-w-0 items-center justify-end gap-1.5 tabular-nums ${latencyClass(server.monitor.latencyMs)}`}>{server.monitor.latencyMs !== null ? `${server.monitor.latencyMs} ms` : "Sin latencia"}</div>
-        <div className="flex min-w-0 items-center gap-1.5"><span className="truncate">{editions}</span><span aria-hidden="true">·</span><span className="truncate tabular-nums">{server.monitor.version ?? "—"}</span></div>
-        <Rating server={server} className="flex items-center justify-end gap-1 text-xs" />
+        <div className="flex min-w-0 items-center gap-1"><span className="truncate">{editions}</span><span aria-hidden="true">·</span><span className="truncate tabular-nums">{server.monitor.version ?? "—"}</span></div>
+        <div className={`min-w-0 tabular-nums ${latencyClass(server.monitor.latencyMs)}`}>{server.monitor.latencyMs !== null ? `${server.monitor.latencyMs} ms` : "Sin latencia"}</div>
+        <Rating server={server} className="flex items-center gap-1 text-[0.6875rem]" />
       </div>
 
       <div className="flex items-center gap-2 lg:hidden">
-        <AddressField value={endpointAddress} className="flex-1" />
-        <Button asChild variant="outline" size="sm" className="h-8 shrink-0"><Link href={`/servers/${server.slug}`}>Ver ficha</Link></Button>
+        <AddressField value={endpointAddress} className="h-10 flex-1 bg-background/55" />
+        <Button asChild variant="outline" size="sm" className="h-10 shrink-0 px-3"><Link href={`/servers/${server.slug}`}>Ver ficha</Link></Button>
       </div>
     </article>
   );

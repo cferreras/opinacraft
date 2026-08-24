@@ -64,6 +64,21 @@ test("an account can verify its email without sending a real message", async ({ 
   await signIn(page, account.email, E2E_PASSWORD);
 });
 
+test("a duplicate registration explains that the email already has an account", async ({ page }) => {
+  const account = await createAccount(page, "duplicate-sign-up");
+  createdEmails.push(account.email);
+  await page.context().clearCookies();
+
+  await page.goto("/sign-up");
+  await page.getByLabel("Nombre").fill("E2E Duplicate");
+  await page.getByLabel("Email").fill(account.email);
+  await page.getByLabel("Contraseña").fill(E2E_PASSWORD);
+  await page.getByRole("button", { name: "Crear cuenta" }).click();
+
+  await expect(page.getByRole("alert").filter({ hasText: "Ya existe una cuenta con ese correo." })).toBeVisible();
+  await expect(page.getByText("Cuenta creada")).toHaveCount(0);
+});
+
 test("password reset and password change work without Resend", async ({ page }) => {
   const account = await createAccount(page, "password-flow");
   createdEmails.push(account.email);

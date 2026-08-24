@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -228,7 +228,7 @@ export function SiteHeader() {
               {session ? (
                 <Button variant="ghost" asChild className="mb-3 h-auto w-full justify-start gap-3 px-2 py-2">
                   <Link href="/profile" onClick={() => setMenuOpen(false)}>
-                    <Avatar className="size-9"><AvatarFallback className="bg-accent font-semibold text-accent-foreground">{avatarLabel(session)}</AvatarFallback></Avatar>
+                    <Avatar className="size-9"><AvatarImage src={session.user.image ?? undefined} alt="" /><AvatarFallback className="bg-accent font-semibold text-accent-foreground">{avatarLabel(session)}</AvatarFallback></Avatar>
                     <span className="min-w-0 flex-1 text-left">
                       <span className="block truncate text-sm font-semibold">{displayName}</span>
                       <span className="block truncate text-xs font-normal text-muted-foreground">Cuenta y preferencias</span>
@@ -265,7 +265,7 @@ export function SiteHeader() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-9 gap-2 px-1.5" aria-label="Abrir mi perfil">
-                  <Avatar className="size-7"><AvatarFallback>{avatarLabel(session)}</AvatarFallback></Avatar>
+                  <Avatar className="size-7"><AvatarImage src={session.user.image ?? undefined} alt="" /><AvatarFallback>{avatarLabel(session)}</AvatarFallback></Avatar>
                   <span className="hidden max-w-28 truncate text-sm font-medium md:inline">{displayName}</span>
                 </Button>
               </DropdownMenuTrigger>
