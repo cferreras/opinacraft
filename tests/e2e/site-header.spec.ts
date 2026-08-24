@@ -19,3 +19,10 @@ test("keeps the wordmark text vertically aligned with the primary navigation", a
 
   expect(Math.abs(brandCenter - homeCenter)).toBeLessThanOrEqual(1);
 });
+
+test("uses the system color scheme when no theme preference is saved", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+
+  await expect(page.locator("html")).toHaveClass(/dark/);
+});
