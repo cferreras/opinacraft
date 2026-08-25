@@ -1,5 +1,5 @@
 export type RelativeTimeUnit = "second" | "minute" | "hour" | "day";
-export type LocalizedTimestampMode = "relative" | "datetime" | "time";
+export type LocalizedTimestampMode = "relative" | "datetime" | "time" | "date";
 
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60_000;
 
@@ -27,6 +27,9 @@ export function formatLocalizedDate(value: string, locale: string, mode: Localiz
   }
   if (mode === "time") {
     return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hour12: false, timeZone }).format(date);
+  }
+  if (mode === "date") {
+    return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", timeZone }).format(date);
   }
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone }).format(date);
 }

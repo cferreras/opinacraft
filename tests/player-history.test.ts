@@ -157,12 +157,48 @@ test("player history chart uses a small regular set of time ticks", async () => 
   ]);
 });
 
+test("player history chart removes duplicate calendar-day ticks while keeping the endpoint", async () => {
+  const historyChart = await import("../src/lib/servers/player-history-chart.ts");
+  const getPlayerHistoryChartTicks = Reflect.get(historyChart, "getPlayerHistoryChartTicks") as undefined | ((points: ReadonlyArray<{ at: string }>, maximumIntervals?: number, getTickKey?: (point: { at: string }) => string) => string[]);
+  const points = [
+    { at: "2026-08-22T00:00:00.000Z" },
+    { at: "2026-08-22T01:00:00.000Z" },
+    { at: "2026-08-22T02:00:00.000Z" },
+    { at: "2026-08-22T03:00:00.000Z" },
+    { at: "2026-08-23T00:00:00.000Z" },
+  ];
+
+  assert.deepEqual(getPlayerHistoryChartTicks?.(points, 2, (point) => point.at.slice(0, 10)), [
+    "2026-08-22T02:00:00.000Z",
+    "2026-08-23T00:00:00.000Z",
+  ]);
+});
+
 test("player history chart formats axis ticks as local time only", async () => {
   const { formatLocalizedDate } = await import("../src/lib/time/localized.ts");
 
   assert.equal(
     formatLocalizedDate("2026-08-22T01:15:00.000Z", "es-ES", "time", new Date("2026-08-23T00:00:00.000Z"), "Europe/Madrid"),
     "03:15",
+  );
+});
+
+test("player history chart switches from hours to calendar days for wider periods", async () => {
+  const historyChart = await import("../src/lib/servers/player-history-chart.ts");
+  const getPlayerHistoryChartTickMode = Reflect.get(historyChart, "getPlayerHistoryChartTickMode") as undefined | ((period: string) => string);
+
+  assert.equal(getPlayerHistoryChartTickMode?.("24h"), "time");
+  assert.equal(getPlayerHistoryChartTickMode?.("7d"), "date");
+  assert.equal(getPlayerHistoryChartTickMode?.("30d"), "date");
+  assert.equal(getPlayerHistoryChartTickMode?.("90d"), "date");
+});
+
+test("localized player history date labels omit the time", async () => {
+  const { formatLocalizedDate } = await import("../src/lib/time/localized.ts");
+
+  assert.equal(
+    formatLocalizedDate("2026-08-22T01:15:00.000Z", "es-ES", "date", new Date("2026-08-23T00:00:00.000Z"), "Europe/Madrid"),
+    "22 ago",
   );
 });
 
