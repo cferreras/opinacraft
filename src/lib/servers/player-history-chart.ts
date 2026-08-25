@@ -1,4 +1,4 @@
-import type { HistoryPoint, HistoryPointStatus, HistorySeries } from "./player-history";
+import type { HistoryPeriod, HistoryPoint, HistoryPointStatus, HistorySeries } from "./player-history";
 
 const availabilityLegend: ReadonlyArray<{ status: HistoryPointStatus; label: string }> = [
   { status: "online", label: "En línea" },
@@ -16,6 +16,10 @@ export type PlayerHistoryChartPoint = HistoryPoint & {
   javaPeak?: number | null;
   bedrockPeak?: number | null;
 };
+
+export function getPlayerHistoryChartTickMode(period: HistoryPeriod): "time" | "date" {
+  return period === "24h" ? "time" : "date";
+}
 
 export function mergeHistoryChartData(seriesList: HistorySeries[]): PlayerHistoryChartPoint[] {
   const byAt = new Map<string, PlayerHistoryChartPoint>();

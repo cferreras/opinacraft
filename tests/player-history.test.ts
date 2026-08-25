@@ -166,6 +166,25 @@ test("player history chart formats axis ticks as local time only", async () => {
   );
 });
 
+test("player history chart switches from hours to calendar days for wider periods", async () => {
+  const historyChart = await import("../src/lib/servers/player-history-chart.ts");
+  const getPlayerHistoryChartTickMode = Reflect.get(historyChart, "getPlayerHistoryChartTickMode") as undefined | ((period: string) => string);
+
+  assert.equal(getPlayerHistoryChartTickMode?.("24h"), "time");
+  assert.equal(getPlayerHistoryChartTickMode?.("7d"), "date");
+  assert.equal(getPlayerHistoryChartTickMode?.("30d"), "date");
+  assert.equal(getPlayerHistoryChartTickMode?.("90d"), "date");
+});
+
+test("localized player history date labels omit the time", async () => {
+  const { formatLocalizedDate } = await import("../src/lib/time/localized.ts");
+
+  assert.equal(
+    formatLocalizedDate("2026-08-22T01:15:00.000Z", "es-ES", "date", new Date("2026-08-23T00:00:00.000Z"), "Europe/Madrid"),
+    "22 ago",
+  );
+});
+
 test("player history tooltip separates the metric label from its numeric value", async () => {
   const { chartTooltipValueRowClassName } = await import("../src/lib/charts/tooltip.ts");
   assert.match(chartTooltipValueRowClassName, /(?:^|\s)gap-2(?:\s|$)/);
