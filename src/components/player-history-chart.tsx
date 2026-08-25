@@ -12,7 +12,7 @@ const chartConfig = { serverPeak: { label: "Máximo observado", color: "var(--hi
 export function PlayerHistoryChart({ data, period }: { data: PlayerHistoryChartPoint[]; period: HistoryPeriod }) {
   const dateFormatter = useBrowserDateFormatter();
   const visibleData = trimTrailingEmptyChartPoints(data);
-  const ticks = getPlayerHistoryChartTicks(visibleData);
   const tickMode = getPlayerHistoryChartTickMode(period);
+  const ticks = getPlayerHistoryChartTicks(visibleData, 8, tickMode === "date" ? (point) => new Date(point.at).toDateString() : undefined);
   return <ChartContainer config={chartConfig} className="h-[276px] w-full aspect-auto"><LineChart data={visibleData} margin={{ top: 10, right: 12, left: 2, bottom: 0 }} accessibilityLayer desc="Máximo de jugadores conectados observado en el servidor"><CartesianGrid stroke="var(--history-grid)" vertical={false} /><XAxis dataKey="at" ticks={ticks} interval={0} tickFormatter={(value) => dateFormatter.format(String(value), tickMode)} tick={{ fill: "var(--history-muted)", fontSize: "0.625rem" }} tickLine={false} axisLine={false} tickMargin={10} minTickGap={28} /><YAxis allowDecimals={false} tick={{ fill: "var(--history-muted)", fontSize: "0.625rem" }} tickLine={false} axisLine={false} tickMargin={8} width={42} /><Tooltip cursor={{ stroke: "var(--history-grid)", strokeDasharray: "4 4" }} content={<ChartTooltipContent labelFormatter={(value) => dateFormatter.format(String(value), "datetime")} />} /><Line type="monotone" dataKey="serverPeak" name="Máximo observado" connectNulls={false} stroke="var(--color-serverPeak)" strokeWidth={2.75} strokeLinecap="round" dot={false} activeDot={{ r: 4, strokeWidth: 2 }} isAnimationActive={false} /></LineChart></ChartContainer>;
 }

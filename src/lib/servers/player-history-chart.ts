@@ -47,11 +47,27 @@ export function trimTrailingEmptyChartPoints(points: PlayerHistoryChartPoint[]) 
   return lastObservedIndex < 0 ? points : points.slice(0, lastObservedIndex + 1);
 }
 
-export function getPlayerHistoryChartTicks(points: ReadonlyArray<Pick<PlayerHistoryChartPoint, "at">>, maximumIntervals = 8) {
-  if (points.length <= maximumIntervals + 1) return points.map((point) => point.at);
-  const step = Math.ceil((points.length - 1) / maximumIntervals);
-  const ticks = points.filter((_, index) => index % step === 0).map((point) => point.at);
-  const last = points.at(-1)?.at;
-  if (last && ticks.at(-1) !== last) ticks.push(last);
-  return ticks;
+export function getPlayerHistoryChartTicks(
+  points: ReadonlyArray<Pick<PlayerHistoryChartPoint, "at">>,
+  maximumIntervals = 8,
+  getTickKey?: (point: Pick<PlayerHistoryChartPoint, "at">) => string,
+) {
+  let candidatePoints = points;
+  if (points.length > maximumIntervals + 1) {
+    const step = Math.ceil((points.length - 1) / maximumIntervals);
+    const ticks = points.filter((_, index) => index % step === 0);
+    const last = points.at(-1);
+    if (last && ticks.at(-1) !== last) ticks.push(last);
+    candidatePoints = ticks;
+  }
+
+  if (!getTickKey) return candidatePoints.map((point) => point.at);
+
+  const seen = new Set<string>();
+  return [...candidatePoints].reverse().filter((point) => {
+    const key = getTickKey(point);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).reverse().map((point) => point.at);
 }
