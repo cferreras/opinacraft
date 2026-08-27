@@ -235,6 +235,16 @@ test("code-splits the Recharts history visualization", () => {
   assert.match(chartSource, /from ["']recharts["']/);
 });
 
+test("renders player history as interval bars", () => {
+  const chartSource = readProjectFile("src/components/player-history-chart.tsx");
+
+  assert.match(chartSource, /\bBarChart\b/);
+  assert.match(chartSource, /\bBar\b/);
+  assert.match(chartSource, /<Bar[\s\S]*dataKey="serverPeak"/);
+  assert.doesNotMatch(chartSource, /\bLineChart\b/);
+  assert.doesNotMatch(chartSource, /\bLine\b/);
+});
+
 test("loads public player history after hydration instead of embedding the monitor cache", () => {
   const pageSource = readProjectFile("src/app/servers/[slug]/page.tsx");
   const cardSource = readProjectFile("src/components/player-history-card.tsx");
