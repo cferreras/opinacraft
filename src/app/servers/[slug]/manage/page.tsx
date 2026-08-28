@@ -21,7 +21,7 @@ import { formatEndpoint } from "@/lib/servers/format";
 import { listServerMembers } from "@/lib/servers/members";
 import { toServerManageFormData } from "@/lib/servers/manage-form-data";
 import { getManagedServerBySlug } from "@/lib/servers/queries";
-import { queryPlayerHistory } from "@/lib/servers/player-history";
+import { emptyPlayerHistoryResponse } from "@/lib/servers/player-history";
 import { getVerificationDisplay } from "@/lib/servers/verification";
 import { selectIdentityVerificationTarget } from "@/lib/servers/verification-target";
 import { requireServerSession } from "@/lib/session";
@@ -39,12 +39,12 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
   if (!server) notFound();
   const verificationTarget = selectIdentityVerificationTarget(server.endpoints);
 
-  const [members, identityVerification, history] = await Promise.all([
+  const [members, identityVerification] = await Promise.all([
     server.role === "owner" || server.role === "admin" ? listServerMembers(server.id, session.user.id) : Promise.resolve([]),
     server.role === "owner" && verificationTarget ? getVerificationDisplay(server.id, session.user.id, verificationTarget.edition) : Promise.resolve(null),
-    queryPlayerHistory(server.id, "24h", "all"),
   ]);
   const serverFormData = toServerManageFormData(server);
+  const history = emptyPlayerHistoryResponse("24h");
 
   return (
     <div className="min-h-screen bg-background">
@@ -100,7 +100,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
             {query.memberError ? <Notice tone="warning">La acción sobre el miembro falló: {query.memberError.replaceAll("-", " ")}.</Notice> : null}
           </div>
 
-          <div id="activity" className="mt-5 scroll-mt-5"><PlayerHistoryCard serverId={server.id} initialData={history} mode="managed" /></div>
+          <div id="activity" className="mt-5 scroll-mt-5"><PlayerHistoryCard serverId={server.id} initialData={history} mode="managed" loadOnMount /></div>
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
             <div className="min-w-0 space-y-5">

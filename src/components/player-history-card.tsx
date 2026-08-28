@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type Props = { serverId: string; initialData: PlayerHistoryResponse; mode?: "public" | "managed" };
+type Props = { serverId: string; initialData: PlayerHistoryResponse; mode?: "public" | "managed"; loadOnMount?: boolean };
 const periodLabels = { "24h": "24 h", "7d": "7 días", "30d": "30 días", "90d": "90 días" } as const;
 const availabilityLegend = getAvailabilityLegend();
 const PlayerHistoryChart = dynamic(
@@ -44,12 +44,13 @@ function AvailabilityRail({ data, formatDate }: { data: PlayerHistoryResponse; f
   return <div className="grid gap-2" aria-label="Disponibilidad por intervalo"><div className="flex items-center justify-between gap-3 text-xs text-muted-foreground"><span className="font-medium text-foreground/80">Disponibilidad</span><span>puntos de {data.resolutionMinutes} min</span></div><div className="flex h-2.5 gap-px overflow-hidden rounded-full bg-muted" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(points.length, 1)}, minmax(2px, 1fr))` }}>{points.map((point, index) => <span key={`${point.at}-${index}`} className={statusClass(point.status)} title={`${formatDate(point.at)} · ${statusLabel(point.status)}`} />)}</div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">{availabilityLegend.map((entry) => <span key={entry.status} className="inline-flex items-center gap-1.5"><span className={`size-2 rounded-full ${statusClass(entry.status)}`} />{entry.label}</span>)}</div></div>;
 }
 
-export function PlayerHistoryCard({ serverId, initialData, mode = "public" }: Props) {
+export function PlayerHistoryCard({ serverId, initialData, mode = "public", loadOnMount = false }: Props) {
   const dateFormatter = useBrowserDateFormatter();
+  const shouldLoadOnMount = mode === "public" || loadOnMount;
   const [data, setData] = useState(initialData);
   const [period, setPeriod] = useState(initialData.period);
-  const [requestKey, setRequestKey] = useState(mode === "public" ? 1 : 0);
-  const [loading, setLoading] = useState(mode === "public");
+  const [requestKey, setRequestKey] = useState(shouldLoadOnMount ? 1 : 0);
+  const [loading, setLoading] = useState(shouldLoadOnMount);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

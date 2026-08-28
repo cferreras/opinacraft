@@ -251,8 +251,20 @@ test("loads public player history after hydration instead of embedding the monit
 
   assert.doesNotMatch(pageSource, /getCachedMonitorHistory/);
   assert.doesNotMatch(pageSource, /historyPromise/);
-  assert.match(cardSource, /useState\(mode === "public" \? 1 : 0\)/);
-  assert.match(cardSource, /useState\(mode === "public"\)/);
+  assert.match(cardSource, /const shouldLoadOnMount = mode === "public" \|\| loadOnMount/);
+  assert.match(cardSource, /useState\(shouldLoadOnMount \? 1 : 0\)/);
+  assert.match(cardSource, /useState\(shouldLoadOnMount\)/);
+});
+
+test("loads managed player history from the current API on initial hydration", () => {
+  const pageSource = readProjectFile("src/app/servers/[slug]/manage/page.tsx");
+  const cardSource = readProjectFile("src/components/player-history-card.tsx");
+
+  assert.doesNotMatch(pageSource, /queryPlayerHistory/);
+  assert.match(pageSource, /emptyPlayerHistoryResponse\("24h"\)/);
+  assert.match(pageSource, /<PlayerHistoryCard[^>]*loadOnMount/);
+  assert.match(cardSource, /loadOnMount\?: boolean/);
+  assert.match(cardSource, /mode === "public" \|\| loadOnMount/);
 });
 
 test("presents server verification as one generic identity check", () => {
