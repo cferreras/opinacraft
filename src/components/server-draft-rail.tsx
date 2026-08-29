@@ -4,6 +4,7 @@ import { Blocks, Check, ClipboardCheck, Eye, Users } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { gameModeLabel } from "@/lib/servers/game-modes";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyAddressButton } from "@/components/copy-address-button";
 import {
@@ -30,13 +31,13 @@ const sectionAnchors: Record<ServerDraftSectionId, string> = {
 type ServerDraftRailProps = {
   draft: ServerDraft;
   description: string;
-  tags: string[];
+  gameModes: string[];
   logoPreview: string | null;
   accessType: ServerAccessType;
   accountMode: ServerAccountMode;
 };
 
-export function ServerDraftRail({ draft, description, tags, logoPreview, accessType, accountMode }: ServerDraftRailProps) {
+export function ServerDraftRail({ draft, description, gameModes, logoPreview, accessType, accountMode }: ServerDraftRailProps) {
   const sections = serverDraftSections(draft);
   const progress = serverDraftRequiredProgress(draft);
   const [address] = serverDraftAddresses(draft);
@@ -91,7 +92,7 @@ export function ServerDraftRail({ draft, description, tags, logoPreview, accessT
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               {accessType === "whitelist" ? <Badge variant="outline" className="text-[0.625rem]"><ClipboardCheck aria-hidden="true" className="size-3" />{accessTypeLabel(accessType)}</Badge> : null}
               {accountMode !== "premium_only" ? <Badge variant="outline" className="text-[0.625rem]"><Users aria-hidden="true" className="size-3" />{accountModeLabel(accountMode)}</Badge> : null}
-              {tags.slice(0, 2).map((tag) => <Badge key={tag} variant="outline" className="text-[0.625rem]">{tag}</Badge>)}
+              {gameModes.slice(0, 2).map((mode) => <Badge key={mode} variant="outline" className="text-[0.625rem]">{gameModeLabel(mode)}</Badge>)}
             </div>
             <div className="mt-2.5 flex h-8 min-w-0 items-center gap-1 rounded-md border bg-background/60 pl-2.5 pr-1">
               {address

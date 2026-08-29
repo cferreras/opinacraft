@@ -23,7 +23,7 @@ import {
   minecraftEditions,
 } from "@/lib/servers/validation";
 import { requireServerCapability } from "@/lib/servers/permissions";
-import { replaceServerTagsForServer } from "@/lib/servers/tags";
+import { replaceServerGameModesForServer } from "@/lib/servers/server-game-modes";
 import { databaseConstraint, databaseErrorCode } from "@/lib/db-errors";
 import { mediaStorage } from "@/lib/media/storage";
 import { enqueueMediaCleanup } from "@/lib/media/cleanup";
@@ -181,6 +181,7 @@ async function insertServerBundle(
     websiteUrl: input.websiteUrl,
     storeUrl: input.storeUrl,
     discordUrl: input.discordUrl,
+    country: input.country,
     accessType: input.accessType,
     accessFormUrl: input.accessFormUrl,
     accountMode: input.accountMode,
@@ -204,7 +205,7 @@ async function insertServerBundle(
     userId,
     role: "owner",
   });
-  await replaceServerTagsForServer(tx, serverId, input.tags, { allowCreate: true });
+  await replaceServerGameModesForServer(tx, serverId, input.gameModes);
   await enqueueMonitorSync(tx, serverId, "upsert");
 
   return { id: serverId, slug };
@@ -339,6 +340,7 @@ export async function updateServer(
         websiteUrl: input.websiteUrl,
         storeUrl: input.storeUrl,
         discordUrl: input.discordUrl,
+        country: input.country,
         accessType: input.accessType,
         accessFormUrl: input.accessFormUrl,
         accountMode: input.accountMode,
@@ -449,9 +451,8 @@ export async function updateServer(
       throw new NoVerifiedEndpointError();
     }
 
-    if (input.tags !== undefined) {
-      if (role === "owner" && input.tags.length) await requireVerifiedEmail(userId, tx);
-      await replaceServerTagsForServer(tx, serverId, input.tags, { allowCreate: role === "owner" });
+    if (input.gameModes !== undefined) {
+      await replaceServerGameModesForServer(tx, serverId, input.gameModes);
     }
 
     await tx.update(servers).set(verifiedEndpoint ? { verificationStatus: "verified", verifiedAt: sql`coalesce(${servers.verifiedAt}, now())` } : { verificationStatus: "unverified", verifiedAt: null }).where(eq(servers.id, serverId));

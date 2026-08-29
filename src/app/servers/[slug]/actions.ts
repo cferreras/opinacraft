@@ -40,7 +40,7 @@ const serverSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function formSlug(formData: FormData) {
   const slug = formValue(formData, "slug");
-  if (slug.length > 100 || !serverSlugPattern.test(slug)) redirect("/servers");
+  if (slug.length > 100 || !serverSlugPattern.test(slug)) redirect("/");
   return slug;
 }
 
@@ -119,7 +119,7 @@ export async function createReviewAction(
 
   invalidateReviewCache(serverId);
   revalidatePath(`/servers/${slug}`);
-  revalidatePath("/servers");
+  revalidatePath("/");
   redirect(`/servers/${slug}?review=created#reviews`);
 }
 
@@ -145,7 +145,7 @@ export async function updateReviewAction(
   }
 
   revalidatePath(`/servers/${slug}`);
-  revalidatePath("/servers");
+  revalidatePath("/");
   redirect(`/servers/${slug}?review=updated#reviews`);
 }
 
@@ -164,7 +164,7 @@ export async function deleteReviewAction(formData: FormData) {
   }
 
   revalidatePath(`/servers/${slug}`);
-  revalidatePath("/servers");
+  revalidatePath("/");
   redirect(`/servers/${slug}?review=deleted#reviews`);
 }
 

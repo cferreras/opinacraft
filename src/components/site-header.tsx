@@ -7,7 +7,6 @@ import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } fro
 import {
   ChevronRight,
   CircleHelp,
-  LayoutDashboard,
   Menu,
   Plus,
   Search,
@@ -28,8 +27,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const navigation = [
-  { label: "Inicio", href: "/", icon: LayoutDashboard },
-  { label: "Explorar", href: "/servers", icon: Search },
   { label: "Mis servidores", href: "/dashboard/servers", icon: Server },
 ] as const;
 
@@ -61,10 +58,9 @@ function Brand({ compact = false }: { compact?: boolean }) {
 }
 
 function isNavigationActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
+  if (href === "/") return pathname === "/" || (pathname.startsWith("/servers/") && pathname !== "/servers/new" && !pathname.endsWith("/manage"));
   if (href === "/dashboard/servers") return pathname.startsWith("/dashboard") || pathname.endsWith("/manage");
   if (href === "/servers/new") return pathname === href;
-  if (href === "/servers") return pathname === href || (pathname.startsWith("/servers/") && pathname !== "/servers/new" && !pathname.endsWith("/manage"));
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -134,12 +130,11 @@ function MobileNavigationSection({
 
 function MobileNavigation({ pathname, canModerate, onNavigate }: { pathname: string; canModerate: boolean; onNavigate: () => void }) {
   const managementItems: readonly NavigationItem[] = canModerate
-    ? [navigation[2], moderationNavigation]
-    : [navigation[2]];
+    ? [navigation[0], moderationNavigation]
+    : [navigation[0]];
 
   return (
     <nav aria-label="Navegación móvil" className="space-y-5">
-      <MobileNavigationSection label="Descubrir" items={navigation.slice(0, 2)} pathname={pathname} onNavigate={onNavigate} />
       <MobileNavigationSection label="Gestionar" items={managementItems} pathname={pathname} onNavigate={onNavigate} />
     </nav>
   );
@@ -192,7 +187,7 @@ export function SiteHeader() {
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextQuery = query.trim();
-    router.push(nextQuery ? `/servers?q=${encodeURIComponent(nextQuery)}` : "/servers");
+    router.push(nextQuery ? `/?q=${encodeURIComponent(nextQuery)}` : "/");
     setSearchOpen(false);
     setMenuOpen(false);
   }

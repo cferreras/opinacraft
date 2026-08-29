@@ -1,28 +1,20 @@
 "use client";
 
 import type { KeyboardEvent } from "react";
-import { useRouter } from "next/navigation";
 
+import { useFilterFormNavigation } from "@/hooks/use-filter-form-navigation";
 import { Input } from "@/components/ui/input";
 
 export function ServerSearchInput({ defaultValue }: { defaultValue: string }) {
-  const router = useRouter();
+  const navigate = useFilterFormNavigation();
 
   function submitOnEnter(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-    event.preventDefault();
     const form = event.currentTarget.form;
     if (!form) return;
-    const formData = new FormData(form);
-    const params = new URLSearchParams();
-    for (const [key, value] of formData.entries()) if (typeof value === "string" && value) params.append(key, value);
-    const normalizedQuery = String(formData.get("q") ?? "").trim();
-    if (normalizedQuery) params.set("q", normalizedQuery); else params.delete("q");
-    params.delete("page");
-    const action = form.action || window.location.pathname;
-    const queryString = params.toString();
-    router.push(queryString ? `${action}?${queryString}` : action);
+    event.preventDefault();
+    navigate(form);
   }
 
-  return <Input id="server-search" name="q" defaultValue={defaultValue} onKeyDown={submitOnEnter} placeholder="Buscar por nombre, modalidad o dirección" className="h-10 min-w-0 flex-1 pl-8 text-sm" />;
+  return <Input id="server-search" name="q" defaultValue={defaultValue} onKeyDown={submitOnEnter} placeholder="Buscar por nombre, modalidad o dirección" className="h-10 min-w-0 flex-1 bg-card pl-8 text-sm" />;
 }

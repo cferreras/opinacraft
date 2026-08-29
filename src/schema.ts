@@ -15,7 +15,6 @@ import {
   uuid,
   varchar,
   jsonb,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -58,12 +57,6 @@ export const serverMemberRole = pgEnum("server_member_role", [
   "owner",
   "admin",
   "editor",
-]);
-
-export const serverTagStatus = pgEnum("server_tag_status", [
-  "active",
-  "blocked",
-  "merged",
 ]);
 
 export const serverMediaKind = pgEnum("server_media_kind", ["logo", "banner"]);
@@ -138,6 +131,7 @@ export const servers = pgTable(
     websiteUrl: text("website_url"),
     storeUrl: text("store_url"),
     discordUrl: text("discord_url"),
+    country: varchar("country", { length: 8 }),
     accessType: serverAccessType("access_type").default("open").notNull(),
     accessFormUrl: text("access_form_url"),
     accountMode: serverAccountMode("account_mode").default("premium_only").notNull(),
@@ -361,45 +355,26 @@ export const serverVerifications = pgTable(
   ],
 );
 
-export const serverTags = pgTable(
-  "server_tags",
+/**
+ * Modes are a closed vocabulary defined in `src/lib/servers/game-modes.ts`, so the row stores the
+ * slug and nothing else: there is no modes table to join, rename or moderate. `position` keeps the
+ * owner picking order so the badges read the same everywhere they are shown.
+ */
+export const serverGameModes = pgTable(
+  "server_game_modes",
   {
     serverId: uuid("server_id")
       .notNull()
       .references(() => servers.id, { onDelete: "cascade" }),
-    tagId: uuid("tag_id")
-      .notNull()
-      .references(() => tags.id, { onDelete: "restrict" }),
+    mode: varchar("mode", { length: 32 }).notNull(),
+    position: smallint("position").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.serverId, table.tagId] }),
-    index("server_tags_tag_id_idx").on(table.tagId),
-  ],
-);
-
-export const tags = pgTable(
-  "tags",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    label: varchar("label", { length: 40 }).notNull(),
-    slug: varchar("slug", { length: 64 }).notNull().unique(),
-    status: serverTagStatus("status").default("active").notNull(),
-    usageCount: integer("usage_count").default(0).notNull(),
-    aliasOf: uuid("alias_of").references((): AnyPgColumn => tags.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("tags_active_slug_idx").on(table.status, table.slug),
-    index("tags_usage_count_idx").on(table.status, table.usageCount),
+    primaryKey({ columns: [table.serverId, table.mode] }),
+    index("server_game_modes_mode_idx").on(table.mode),
   ],
 );
 
@@ -841,13 +816,4 @@ export const serverEndpointPlayerHourly = pgTable(
     check("server_endpoint_player_hourly_source_changed_check", sql`${table.sourceChanged} between 0 and 1`),
     check("server_endpoint_player_hourly_counts_check", sql`${table.sampleCount} >= 0 and ${table.onlineCount} >= 0 and ${table.unknownCount} >= 0`),
   ],
-);
-
-export const tagAliases = pgTable(
-  "tag_aliases",
-  {
-    aliasSlug: varchar("alias_slug", { length: 64 }).primaryKey(),
-    tagId: uuid("tag_id").notNull().references(() => tags.id, { onDelete: "cascade" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
 );

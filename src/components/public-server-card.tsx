@@ -7,6 +7,7 @@ import { CopyAddressButton } from "@/components/copy-address-button";
 import type { PublicServer } from "@/lib/servers/queries";
 import { formatEndpoint } from "@/lib/servers/format";
 import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
+import { gameModeLabel } from "@/lib/servers/game-modes";
 import { LocalizedTimestamp } from "@/components/localized-timestamp";
 import { ServerDescriptionPreview } from "@/components/server-description-preview";
 
@@ -22,7 +23,7 @@ export function PublicServerCard({ server }: { server: PublicServer }) {
         <div className="flex flex-wrap items-center gap-2"><Badge variant={server.accessType === "whitelist" ? "default" : "outline"}>{accessTypeLabel(server.accessType)}</Badge><Badge variant="outline">{accountModeLabel(server.accountMode)}</Badge><Badge variant="outline">{authModeLabel(server)}</Badge>{server.accessType === "whitelist" && server.accessFormUrl ? <a href={server.accessFormUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-primary hover:underline">Solicitar acceso</a> : null}</div>
         <div className="flex flex-wrap gap-2">{server.endpoints.map((endpoint) => <div key={endpoint.edition} className="flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs"><code>{endpoint.edition}: {formatEndpoint(endpoint)}</code><CopyAddressButton value={formatEndpoint(endpoint)} iconOnly className="size-6" /><span className="capitalize text-muted-foreground">{endpoint.verificationStatus === "verified" ? "verificado" : "no verificado"}</span></div>)}</div>
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground"><span className={server.aggregateStatus === "online" ? "text-success" : server.aggregateStatus === "offline" ? "text-destructive" : undefined}>{statusLabel}{server.monitor.playersCurrent !== null && server.monitor.playersMax !== null ? ` · ${server.monitor.playersCurrent}/${server.monitor.playersMax}` : ""}{server.monitor.version ? ` · ${server.monitor.version}` : ""}{server.monitor.latencyMs !== null ? ` · ${server.monitor.latencyMs} ms` : ""}{server.monitor.lastUpdatedAt ? <> · actualizada <LocalizedTimestamp value={server.monitor.lastUpdatedAt} /></> : ""}</span><span>Objetivo: {server.monitor.cadenceMinutes ? `cada ${server.monitor.cadenceMinutes} min` : "sin datos"}</span></div>
-        {server.tags.length > 0 ? <div className="flex flex-wrap gap-2">{server.tags.map((tag) => <Badge key={tag.slug} variant="outline">{tag.label}</Badge>)}</div> : null}
+        {server.gameModes.length > 0 ? <div className="flex flex-wrap gap-2">{server.gameModes.map((mode) => <Badge key={mode} variant="outline">{gameModeLabel(mode)}</Badge>)}</div> : null}
       </CardContent>
       <CardFooter><Button asChild variant="link" className="px-0"><Link href={`/servers/${server.slug}`}>Ver servidor</Link></Button></CardFooter>
     </Card>

@@ -144,10 +144,10 @@ test("drops the standalone publishing aside now that the rail carries that conte
 test("keeps the draft preview in sync with the identity and access fields", () => {
   const formSource = readProjectFile("src/components/server-form.tsx");
   const accessSource = readProjectFile("src/components/server-access-fields.tsx");
-  const tagsSource = readProjectFile("src/components/tag-combobox.tsx");
+  const modesSource = readProjectFile("src/components/game-mode-picker.tsx");
 
   assert.match(accessSource, /onAccessChange\?:/);
-  assert.match(tagsSource, /onSelectedChange\?:/);
+  assert.match(modesSource, /onSelectedChange\?:/);
   assert.match(formSource, /onAccessChange=/);
   assert.match(formSource, /onSelectedChange=/);
 });

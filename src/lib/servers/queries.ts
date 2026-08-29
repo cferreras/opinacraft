@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -7,11 +7,13 @@ import {
   serverVerifications,
   serverMedia,
   serverReviews,
-  serverTags,
+  serverGameModes,
   servers,
-  tags,
 } from "@/schema";
 import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } from "./monitor-scheduling";
+import { catalogAccessCondition, type CatalogAccessFilter } from "./catalog-filters";
+import { MINECRAFT_VERSION_SQL_PATTERN, minecraftVersionsIn, sortMinecraftVersions } from "./minecraft-version";
+import { normalizeGameModeInputs } from "./game-modes";
 import { fetchMonitorStatuses, isMonitorApiConfigured, queryMonitorCatalog } from "./monitor-api-client";
 import type { MonitorStatusView } from "@/lib/monitor/repository";
 
@@ -23,6 +25,7 @@ type ServerBase = {
   websiteUrl: string | null;
   storeUrl: string | null;
   discordUrl: string | null;
+  country: string | null;
   accessType: "open" | "whitelist";
   accessFormUrl: string | null;
   accountMode: "premium_only" | "premium_and_non_premium";
@@ -65,7 +68,8 @@ type RawServerBase = Omit<ServerBase, "monitor"> & {
   monitorProbeEdition: ServerMonitor["probeEdition"];
 };
 
-export type ServerTag = { label: string; slug: string };
+/** Mode slugs from the closed vocabulary in `game-modes.ts`, in the owner's picking order. */
+export type ServerGameModes = string[];
 export type ServerMedia = {
   kind: "logo" | "banner";
   url: string;
@@ -89,7 +93,7 @@ export type ManagedServer = ServerBase & {
     lastCheckedAt: Date | null;
     consecutiveFailures: number;
   }>;
-  tags: ServerTag[];
+  gameModes: ServerGameModes;
   media: ServerMedia[];
 };
 
@@ -184,7 +188,7 @@ function groupServerRows(rows: ServerRow[]): Array<ManagedServer | PublicServer>
          hasVerifiedEndpoint: Boolean(endpoint?.verificationStatus === "verified"),
        }),
       endpoints: endpoint ? [endpoint] : [],
-      tags: [],
+      gameModes: [],
       media: [],
        aggregateStatus: row.server.monitorHealthStatus as AggregateHealthStatus,
     };
@@ -305,16 +309,15 @@ export async function attachMonitorApiStatuses<T extends PublicServer>(items: T[
   return items.map((item) => monitorFromApi(item, byId.get(item.id) ?? null));
 }
 
-async function attachCatalogData<T extends { id: string; tags: ServerTag[]; media: ServerMedia[] }>(items: T[]) {
+async function attachCatalogData<T extends { id: string; gameModes: ServerGameModes; media: ServerMedia[] }>(items: T[]) {
   if (items.length === 0) return items;
   const ids = items.map((item) => item.id);
-  const [tagRows, mediaRows] = await Promise.all([
+  const [modeRows, mediaRows] = await Promise.all([
     db
-      .select({ serverId: serverTags.serverId, label: tags.label, slug: tags.slug })
-      .from(serverTags)
-      .innerJoin(tags, eq(serverTags.tagId, tags.id))
-      .where(and(inArray(serverTags.serverId, ids), eq(tags.status, "active")))
-      .orderBy(asc(serverTags.serverId), asc(tags.slug)),
+      .select({ serverId: serverGameModes.serverId, mode: serverGameModes.mode })
+      .from(serverGameModes)
+      .where(inArray(serverGameModes.serverId, ids))
+      .orderBy(asc(serverGameModes.serverId), asc(serverGameModes.position)),
     db
       .select({
         serverId: serverMedia.serverId,
@@ -327,14 +330,15 @@ async function attachCatalogData<T extends { id: string; tags: ServerTag[]; medi
       .where(and(inArray(serverMedia.serverId, ids), eq(serverMedia.status, "active")))
       .orderBy(asc(serverMedia.serverId), asc(serverMedia.kind)),
   ]);
-  const tagsByServer = new Map<string, ServerTag[]>();
-  for (const row of tagRows) tagsByServer.set(row.serverId, [...(tagsByServer.get(row.serverId) ?? []), row]);
+  const modesByServer = new Map<string, ServerGameModes>();
+  for (const row of modeRows) modesByServer.set(row.serverId, [...(modesByServer.get(row.serverId) ?? []), row.mode]);
   const mediaByServer = new Map<string, ServerMedia[]>();
   for (const row of mediaRows) {
     if (!row.url) continue;
     mediaByServer.set(row.serverId, [...(mediaByServer.get(row.serverId) ?? []), { kind: row.kind, url: row.url, width: row.width, height: row.height }]);
   }
-  return items.map((item) => ({ ...item, tags: tagsByServer.get(item.id) ?? [], media: mediaByServer.get(item.id) ?? [] }));
+  // A stored slug that has since left the vocabulary is dropped here instead of leaking as raw text.
+  return items.map((item) => ({ ...item, gameModes: normalizeGameModeInputs(modesByServer.get(item.id)), media: mediaByServer.get(item.id) ?? [] }));
 }
 
 async function attachReviewSummaries<T extends { id: string }>(items: T[]): Promise<Array<T & ReviewSummaryLite>> {
@@ -405,6 +409,7 @@ export async function listManagedServers(userId: string) {
         websiteUrl: servers.websiteUrl,
         storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
+        country: servers.country,
         accessType: servers.accessType,
         accessFormUrl: servers.accessFormUrl,
         accountMode: servers.accountMode,
@@ -456,6 +461,27 @@ export async function countPublishedServers(): Promise<number> {
   return row?.total ?? 0;
 }
 
+/**
+ * The versions the filter bar offers: whatever the monitor has actually seen on a visible server.
+ * A hardcoded list would keep offering versions nobody runs and would miss the next release the
+ * week it ships, and an option that matches nothing is worse than a missing one.
+ */
+export async function listCatalogVersions() {
+  const rows = await db
+    .selectDistinct({ version: servers.monitorVersion })
+    .from(servers)
+    .where(and(
+      eq(servers.publicationStatus, "published"),
+      eq(servers.moderationStatus, "active"),
+      eq(servers.verificationStatus, "verified"),
+      isNull(servers.availabilityHiddenAt),
+      isNotNull(servers.monitorVersion),
+      sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
+    ));
+
+  return sortMinecraftVersions(rows.flatMap((row) => minecraftVersionsIn(row.version)));
+}
+
 export async function getServerIdBySlug(slug: string) {
   const [row] = await db.select({ id: servers.id }).from(servers).where(eq(servers.slug, slug)).limit(1);
   return row?.id ?? null;
@@ -477,6 +503,7 @@ async function hydratePublishedCatalogServers(ids: string[], edition?: "java" | 
         websiteUrl: servers.websiteUrl,
         storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
+        country: servers.country,
         accessType: servers.accessType,
         accessFormUrl: servers.accessFormUrl,
         accountMode: servers.accountMode,
@@ -521,31 +548,63 @@ async function hydratePublishedCatalogServers(ids: string[], edition?: "java" | 
   return catalog;
 }
 
-export type PublishedServerListArgs = {
+/** What the visitor picks in the catalog filter bar, apart from the search box. */
+export type CatalogFacets = {
+  mode?: string;
+  country?: string;
+  version?: string;
+  access?: CatalogAccessFilter;
+  edition?: "java" | "bedrock";
+};
+
+export type PublishedServerListArgs = CatalogFacets & {
   page?: number;
   query?: string;
-  tagSlugs?: string[];
-  edition?: "java" | "bedrock";
   status?: AggregateHealthStatus;
   sort?: PublicServerSort;
   tableSort?: PublicServerTableSort;
   tableDirection?: PublicServerSortDirection;
 };
 
+/**
+ * Every facet is resolved in Postgres, including version: the monitor API only narrows by health,
+ * so the candidate ids it receives are already filtered against Neon's synced copy of the ping.
+ */
+function catalogFacetConditions({ mode, country, version, access, edition }: CatalogFacets) {
+  return [
+    mode ? sql`exists (select 1 from server_game_modes gm where gm.server_id = ${servers.id} and gm.mode = ${mode})` : undefined,
+    country ? eq(servers.country, country) : undefined,
+    access ? catalogAccessCondition(access) : undefined,
+    // Each major version the reported string names counts, so a "1.8-1.21" proxy answers to both.
+    version ? sql`exists (select 1 from regexp_matches(coalesce(${servers.monitorVersion}, ''), ${MINECRAFT_VERSION_SQL_PATTERN}, 'g') as m(parts) where m.parts[1] = ${version})` : undefined,
+    edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition} and se.verification_status = 'verified')` : undefined,
+  ];
+}
+
+/** Free text reaches the name, the description and the modes the server advertises. */
+function catalogSearchCondition(queryText: string) {
+  if (!queryText) return undefined;
+  const needle = queryText.slice(0, 80);
+  return sql`(${ilike(servers.name, `%${needle}%`)} or ${ilike(servers.description, `%${needle}%`)} or similarity(lower(${servers.name}), lower(${needle})) > 0.2 or similarity(lower(coalesce(${servers.description}, '')), lower(${needle})) > 0.2 or exists (select 1 from server_game_modes gm where gm.server_id = ${servers.id} and gm.mode like ${`%${needle.toLowerCase()}%`}))`;
+}
+
+/** Relevance: a name match outranks a mode match, and a mode match outranks the description. */
+function catalogRelevanceOrder(queryText: string) {
+  const needle = queryText.slice(0, 80);
+  return desc(sql`greatest(similarity(lower(${servers.name}), lower(${needle})) * 3, coalesce((select max(similarity(gm.mode, lower(${needle}))) * 2 from server_game_modes gm where gm.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${needle})))`);
+}
+
 export async function listPublishedServersWithMonitor({
   page,
   query,
-  tagSlugs,
-  edition,
   status,
   sort,
   tableSort,
   tableDirection,
-}: {
+  ...facets
+}: CatalogFacets & {
   page: number;
   query: string;
-  tagSlugs: string[];
-  edition?: "java" | "bedrock";
   status?: AggregateHealthStatus;
   sort: PublicServerSort;
   tableSort?: PublicServerTableSort;
@@ -555,7 +614,7 @@ export async function listPublishedServersWithMonitor({
   const catalogOrder = tableSort && tableSort !== "players" && tableSort !== "version" && tableSort !== "latency"
     ? [tableSortOrder(tableSort, tableDirection)]
     : queryText
-      ? [desc(sql`greatest(similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) * 3, coalesce((select max(similarity(lower(t.slug), lower(${queryText.slice(0, 80)}))) * 2 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})))`)]
+      ? [catalogRelevanceOrder(queryText)]
       : sort === "recent"
         ? [desc(servers.createdAt)]
         : [desc(sql`coalesce((select avg(sr.rating) from server_reviews sr where sr.server_id = ${servers.id} and sr.status = 'published'), 0)`)];
@@ -567,10 +626,9 @@ export async function listPublishedServersWithMonitor({
       eq(servers.moderationStatus, "active"),
       eq(servers.verificationStatus, "verified"),
       isNull(servers.availabilityHiddenAt),
-      queryText ? sql`(${ilike(servers.name, `%${queryText.slice(0, 80)}%`)} or ${ilike(servers.description, `%${queryText.slice(0, 80)}%`)} or similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) > 0.2 or similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})) > 0.2 or exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.status = 'active' and (t.slug like ${`%${queryText.slice(0, 80).toLowerCase()}%`} or similarity(lower(t.slug), lower(${queryText.slice(0, 80)})) > 0.2)))` : undefined,
-      edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition} and se.verification_status = 'verified')` : undefined,
+      catalogSearchCondition(queryText),
+      ...catalogFacetConditions(facets),
       sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
-      ...tagSlugs.slice(0, 8).map((slug) => sql`exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.slug = ${slug} and t.status = 'active')`),
     ))
     .orderBy(...catalogOrder, desc(servers.createdAt), desc(servers.id));
   const monitorSort = tableSort === "players" || sort === "players" ? "players" : tableSort === "latency" ? "latency" : tableSort === "version" ? "version" : "catalog";
@@ -583,13 +641,13 @@ export async function listPublishedServersWithMonitor({
     pageSize: PUBLIC_SERVER_PAGE_SIZE,
   });
   if (!result) throw new Error("Monitor API is not configured for catalog queries.");
-  const hydrated = await hydratePublishedCatalogServers(result.ids, edition);
+  const hydrated = await hydratePublishedCatalogServers(result.ids, facets.edition);
   const statesById = new Map(result.states.map((state) => [state.serverId, state]));
   const monitored = hydrated.map((server) => monitorFromApi(server, statesById.get(server.id) ?? null));
   return { servers: monitored, hasNextPage: result.totalCount > page * PUBLIC_SERVER_PAGE_SIZE, totalCount: result.totalCount, page };
 }
 
-export async function listPublishedServersFromNeon({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating", tableSort, tableDirection = "asc" }: PublishedServerListArgs = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number }> {
+export async function listPublishedServersFromNeon({ page = 1, query = "", status, sort = "rating", tableSort, tableDirection = "asc", ...facets }: PublishedServerListArgs = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number }> {
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
     : 1;
@@ -597,7 +655,7 @@ export async function listPublishedServersFromNeon({ page = 1, query = "", tagSl
   const catalogOrder = tableSort
     ? [tableSortOrder(tableSort, tableDirection)]
     : queryText
-      ? [desc(sql`greatest(similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) * 3, coalesce((select max(similarity(lower(t.slug), lower(${queryText.slice(0, 80)}))) * 2 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})))`)]
+      ? [catalogRelevanceOrder(queryText)]
       : sort === "players"
         ? [desc(sql`coalesce(${servers.monitorPlayersCurrent}, 0)`)]
         : sort === "recent"
@@ -611,10 +669,9 @@ export async function listPublishedServersFromNeon({ page = 1, query = "", tagSl
       eq(servers.moderationStatus, "active"),
       eq(servers.verificationStatus, "verified"),
       isNull(servers.availabilityHiddenAt),
-      queryText ? sql`(${ilike(servers.name, `%${queryText.slice(0, 80)}%`)} or ${ilike(servers.description, `%${queryText.slice(0, 80)}%`)} or similarity(lower(${servers.name}), lower(${queryText.slice(0, 80)})) > 0.2 or similarity(lower(coalesce(${servers.description}, '')), lower(${queryText.slice(0, 80)})) > 0.2 or exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.status = 'active' and (t.slug like ${`%${queryText.slice(0, 80).toLowerCase()}%`} or similarity(lower(t.slug), lower(${queryText.slice(0, 80)})) > 0.2)))` : undefined,
-      edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition} and se.verification_status = 'verified')` : undefined,
+      catalogSearchCondition(queryText),
+      ...catalogFacetConditions(facets),
       sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
-      ...tagSlugs.slice(0, 8).map((slug) => sql`exists (select 1 from server_tags st inner join tags t on t.id = st.tag_id where st.server_id = ${servers.id} and t.slug = ${slug} and t.status = 'active')`),
       status ? sql`case when ${servers.monitorLastCheckedAt} is null then 'unknown' when ${servers.monitorLastCheckedAt} <= now() - (case when ${servers.publicationStatus} = 'published' and ${servers.moderationStatus} = 'active' and ${servers.availabilityHiddenAt} is null then interval '30 minutes' else interval '120 minutes' end) then 'unknown' else ${servers.monitorHealthStatus} end = ${status}` : undefined,
     ))
     .orderBy(...catalogOrder, desc(servers.createdAt), desc(servers.id))
@@ -628,18 +685,18 @@ export async function listPublishedServersFromNeon({ page = 1, query = "", tagSl
     return { servers: emptyServers, hasNextPage: false, totalCount: 0, page: safePage };
   }
 
-  const catalogServers = await hydratePublishedCatalogServers(ids, edition);
+  const catalogServers = await hydratePublishedCatalogServers(ids, facets.edition);
   return { servers: catalogServers, hasNextPage, totalCount, page: safePage };
 }
 
-export async function listPublishedServers({ page = 1, query = "", tagSlugs = [], edition, status, sort = "rating", tableSort, tableDirection = "asc" }: PublishedServerListArgs = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number }> {
+export async function listPublishedServers({ page = 1, query = "", status, sort = "rating", tableSort, tableDirection = "asc", ...facets }: PublishedServerListArgs = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number }> {
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
     : 1;
   if (isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, sort, tableSort })) {
-    return listPublishedServersWithMonitor({ page: safePage, query, tagSlugs, edition, status, sort, tableSort, tableDirection });
+    return listPublishedServersWithMonitor({ page: safePage, query, status, sort, tableSort, tableDirection, ...facets });
   }
-  const result = await listPublishedServersFromNeon({ page: safePage, query, tagSlugs, edition, status, sort, tableSort, tableDirection });
+  const result = await listPublishedServersFromNeon({ page: safePage, query, status, sort, tableSort, tableDirection, ...facets });
   if (!isMonitorApiConfigured()) return result;
   return { ...result, servers: await attachMonitorApiStatuses(result.servers) };
 }
@@ -655,6 +712,7 @@ export async function getPublishedServerCoreBySlug(slug: string) {
         websiteUrl: servers.websiteUrl,
         storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
+        country: servers.country,
         accessType: servers.accessType,
         accessFormUrl: servers.accessFormUrl,
         accountMode: servers.accountMode,
@@ -713,6 +771,7 @@ export async function getManagedServerBySlug(slug: string, userId: string) {
       websiteUrl: servers.websiteUrl,
       storeUrl: servers.storeUrl,
       discordUrl: servers.discordUrl,
+      country: servers.country,
       accessType: servers.accessType,
       accessFormUrl: servers.accessFormUrl,
       accountMode: servers.accountMode,
@@ -778,7 +837,7 @@ export async function getManagedServerBySlug(slug: string, userId: string) {
 
   const [catalog] = await attachCatalogData([{
     ...server,
-    tags: [],
+    gameModes: [],
     media: [],
   }]);
   return {
@@ -799,7 +858,7 @@ export async function getManagedServerBySlug(slug: string, userId: string) {
       hasVerifiedEndpoint: endpoints.some((endpoint) => endpoint.verificationStatus === "verified"),
     }),
     endpoints,
-    tags: catalog?.tags ?? [],
+    gameModes: catalog?.gameModes ?? [],
     media: catalog?.media ?? [],
     latestVerification: latestVerification[0] ?? null,
   };

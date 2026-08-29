@@ -83,19 +83,6 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
           <div className="mt-5 grid gap-2.5">
             {query.created ? <Notice>Se creó el borrador. Revísalo y publícalo cuando esté listo.</Notice> : null}
             {query.updated ? <Notice>Se guardaron los datos del servidor.</Notice> : null}
-            {query.verification === "verified" ? <Notice>Identidad verificada. Ya puedes retirar el código del MOTD.</Notice> : null}
-            {query.verification === "code_not_found" ? <Notice tone="warning">No se encontró el código en el MOTD.</Notice> : null}
-            {query.verification === "offline" ? <Notice tone="warning">El servidor está fuera de línea o no respondió a tiempo.</Notice> : null}
-            {query.verification === "timeout" ? <Notice tone="warning">La comprobación agotó el tiempo de espera.</Notice> : null}
-            {query.verification === "blocked_target" ? <Notice tone="warning">Este destino está bloqueado porque no es una dirección pública.</Notice> : null}
-            {query.verification === "invalid_response" ? <Notice tone="warning">El servidor devolvió una respuesta no válida.</Notice> : null}
-            {query.verification === "endpoint_taken" ? <Notice tone="warning">Esta dirección ya está verificada por otro servidor.</Notice> : null}
-            {query.verification === "stale" ? <Notice tone="warning">La verificación ya no está activa. Genera un código nuevo.</Notice> : null}
-            {query.verification === "expired" ? <Notice tone="warning">El código de verificación ha caducado. Genera uno nuevo.</Notice> : null}
-            {query.verificationError === "already-verified" ? <Notice>La identidad de este servidor ya está verificada; no necesitas generar otro código.</Notice> : null}
-            {query.verificationError === "pending" ? <Notice tone="warning">Ya hay un código pendiente para esta dirección. Añádelo al MOTD antes de comprobarla.</Notice> : null}
-            {query.verificationError === "no-endpoint" ? <Notice tone="warning">Añade una dirección pública de Minecraft antes de verificar la identidad de este servidor.</Notice> : null}
-            {query.verificationError && query.verificationError !== "already-verified" && query.verificationError !== "pending" && query.verificationError !== "no-endpoint" ? <Notice tone="warning">No se pudo iniciar o completar la verificación: {query.verificationError.replaceAll("-", " ")}.</Notice> : null}
             {query.memberUpdated ? <Notice>Se actualizó la lista de miembros.</Notice> : null}
             {query.memberError ? <Notice tone="warning">La acción sobre el miembro falló: {query.memberError.replaceAll("-", " ")}.</Notice> : null}
           </div>

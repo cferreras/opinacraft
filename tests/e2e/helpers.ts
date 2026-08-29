@@ -96,7 +96,9 @@ export async function createServer(
     websiteUrl?: string;
     storeUrl?: string;
     discordUrl?: string;
-    tags?: string[];
+    /** Mode labels as they read on the chips, e.g. "PvP". */
+    gameModes?: string[];
+    country?: string;
   },
 ) {
   await page.goto("/servers/new");
@@ -116,12 +118,10 @@ export async function createServer(
     if (options.bedrockPort !== undefined) await page.locator('input[name="bedrockPort"]').fill(String(options.bedrockPort));
   }
 
-  if (options.tags?.length) {
-    const tagInput = page.getByRole("combobox", { name: "Etiquetas" });
-    for (const tag of options.tags) {
-      await tagInput.fill(tag);
-      await tagInput.press("Enter");
-    }
+  if (options.country) await page.locator("#server-country").selectOption(options.country);
+
+  for (const mode of options.gameModes ?? []) {
+    await page.getByRole("checkbox", { name: mode, exact: true }).check({ force: true });
   }
 
   await page.getByRole("button", { name: "Crear servidor" }).click();

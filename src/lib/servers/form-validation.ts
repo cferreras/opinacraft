@@ -8,7 +8,8 @@ export type ServerValidationField =
   | "accessType"
   | "accountMode"
   | "authMode"
-  | "tags"
+  | "gameModes"
+  | "country"
   | "endpoints"
   | "publicationStatus";
 
@@ -23,7 +24,8 @@ const serverFields = new Set<ServerValidationField>([
   "accessType",
   "accountMode",
   "authMode",
-  "tags",
+  "gameModes",
+  "country",
   "endpoints",
   "publicationStatus",
 ]);

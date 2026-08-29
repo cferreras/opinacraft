@@ -27,13 +27,11 @@ test("starts public server viewer data with the other page queries", () => {
 test("uses an overflow-aware preview for long public server descriptions", () => {
   const previewPath = path.resolve("src/components/server-description-preview.tsx");
   const previewSource = existsSync(previewPath) ? readFileSync(previewPath, "utf8") : "";
-  const homeSource = readProjectFile("src/app/page.tsx");
   const cardSource = readProjectFile("src/components/public-server-card.tsx");
 
   assert.equal(existsSync(previewPath), true, "the description preview should be a dedicated component");
   assert.match(previewSource, /ResizeObserver/);
   assert.match(previewSource, /Ver más/);
-  assert.match(homeSource, /<ServerDescriptionPreview/);
   assert.match(cardSource, /<ServerDescriptionPreview/);
 });
 
@@ -185,23 +183,25 @@ test("keeps sortable header hover compact without rounded edges", () => {
   assert.match(linkClass, /\bhover:bg-muted\/60\b/);
 });
 
-test("synchronizes the catalog sort control with sortable table state", () => {
+test("keeps catalog ordering in the results table, not in the filter bar", () => {
   const source = readProjectFile("src/app/servers/page.tsx");
+  const barSource = readProjectFile("src/components/catalog-filter-bar.tsx");
 
   assert.match(source, /const activeTableSort = tableSort \?\?/);
   assert.match(source, /const activeTableDirection(?:[^=]*)= tableSort \?/);
-  assert.match(source, /defaultValue=\{tableSort \? "table" : sort\}/);
-  assert.match(source, /<option value="table" disabled>/);
+  assert.match(source, /tableSortHref\(column\.key\)/);
+  assert.doesNotMatch(barSource, /sortValue|catalogSortOptions/);
 });
 
-test("preserves table sorting when the catalog filters submit", () => {
+test("preserves ordering and health when the catalog filters submit", () => {
   const pageSource = readProjectFile("src/app/servers/page.tsx");
-  const filterSource = readProjectFile("src/components/filter-select.tsx");
 
+  // The bar only carries facets, so every other piece of catalog state rides along as a hidden
+  // field: without these a facet change would silently reset the visitor's ordering.
   assert.match(pageSource, /name="tableSort" value=\{tableSort\}/);
   assert.match(pageSource, /name="tableDirection" value=\{tableDirection\}/);
-  assert.match(pageSource, /clearFieldsOnChange=\{tableSort \? \["tableSort", "tableDirection"\] : undefined\}/);
-  assert.match(filterSource, /clearFieldsOnChange\?: string\[\]/);
+  assert.match(pageSource, /name="sort" value=\{sort\}/);
+  assert.match(pageSource, /name="status" value=\{status\}/);
 });
 
 test("does not apply app lint rules to bundled skill scripts", async () => {
@@ -381,15 +381,10 @@ test("shows the platform-specific search shortcut without changing its keyboard 
 
 test("shares server status and edition presentation helpers", () => {
   const formatSource = readProjectFile("src/lib/servers/format.ts");
-  const homeSource = readProjectFile("src/app/page.tsx");
   const rowSource = readProjectFile("src/components/public-server-row.tsx");
   const detailSource = readProjectFile("src/app/servers/[slug]/page.tsx");
 
   assert.match(formatSource, /export function editionLabel/);
-  assert.match(homeSource, /import \{ StatusPill \} from ["']@\/components\/server-status-pill["']/);
-  assert.match(homeSource, /editionLabel, playersLabel, primaryEndpoint/);
-  assert.doesNotMatch(homeSource, /function editionLabel/);
-  assert.doesNotMatch(homeSource, /function StatusPill/);
   assert.match(rowSource, /import \{ StatusPill \} from ["']@\/components\/server-status-pill["']/);
   assert.doesNotMatch(rowSource, /function statusLabel/);
   assert.doesNotMatch(rowSource, /function StatusPill/);
@@ -411,4 +406,17 @@ test("uses a stable test id for the Discord icon in both server E2E flows", () =
     assert.match(source, /discordLink\.getByTestId\("discord-icon"\)/);
     assert.doesNotMatch(source, /tabler-icon-brand-discord/);
   }
+});
+
+test("answers the verification forms in place instead of redirecting to the top of the manage page", () => {
+  const actionsSource = readProjectFile("src/app/servers/[slug]/manage/actions.ts");
+  const panelSource = readProjectFile("src/components/verification-panel.tsx");
+  const pageSource = readProjectFile("src/app/servers/[slug]/manage/page.tsx");
+
+  assert.doesNotMatch(actionsSource, /verification=|verificationError=/, "the verification actions should not redirect with a query flag");
+  assert.match(actionsSource, /export async function checkVerificationAction\(_previousState: VerificationState/);
+  assert.match(actionsSource, /return \{ outcome: result\.result \};/);
+  assert.match(panelSource, /useActionState\(checkVerificationAction, null\)/);
+  assert.match(panelSource, /useActionState\(startVerificationAction, null\)/);
+  assert.doesNotMatch(pageSource, /query\.verification/, "the verification result now renders inside the panel");
 });

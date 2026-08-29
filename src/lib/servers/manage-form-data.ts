@@ -12,7 +12,8 @@ export type ServerManageFormData = {
   accessFormUrl: string | null;
   accountMode: ManagedServer["accountMode"];
   authMode: ManagedServer["authMode"];
-  tags: Array<{ label: string; slug: string }>;
+  gameModes: string[];
+  country: string | null;
   publicationStatus: ManagedServer["publicationStatus"];
   endpoints: Array<{ edition: "java" | "bedrock"; host: string; port: number }>;
   role: ManagedServer["role"];
@@ -32,7 +33,8 @@ export function toServerManageFormData(
     | "accessFormUrl"
     | "accountMode"
     | "authMode"
-    | "tags"
+    | "gameModes"
+    | "country"
     | "publicationStatus"
     | "endpoints"
     | "role"
@@ -50,7 +52,8 @@ export function toServerManageFormData(
     accessFormUrl: server.accessFormUrl,
     accountMode: server.accountMode,
     authMode: server.authMode,
-    tags: server.tags.map(({ label, slug }) => ({ label, slug })),
+    gameModes: [...server.gameModes],
+    country: server.country,
     publicationStatus: server.publicationStatus,
     endpoints: server.endpoints.map(({ edition, host, port }) => ({ edition, host, port })),
     role: server.role,

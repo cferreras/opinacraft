@@ -21,6 +21,8 @@ import {
   normalizeServerDescription,
   SERVER_DESCRIPTION_MAX_LENGTH,
 } from "./description.ts";
+import { MAX_SERVER_GAME_MODES, normalizeGameModeInputs } from "./game-modes.ts";
+import { normalizeCountryInput } from "./countries.ts";
 
 export const minecraftEditions = ["java", "bedrock"] as const;
 export type MinecraftEdition = (typeof minecraftEditions)[number];
@@ -44,7 +46,8 @@ export type CreateServerInput = {
   accessFormUrl?: string;
   accountMode?: ServerAccountMode;
   authMode?: ServerAuthMode;
-  tags?: string[];
+  gameModes?: string[];
+  country?: string;
   host?: string;
   javaPort?: number;
   bedrockPort?: number;
@@ -69,7 +72,8 @@ export type NormalizedCreateServerInput = {
   accessFormUrl: string | null;
   accountMode: ServerAccountMode;
   authMode: ServerAuthMode;
-  tags: string[];
+  gameModes: string[];
+  country: string | null;
   host: string;
   endpoints: NormalizedServerEndpoint[];
 };
@@ -93,7 +97,9 @@ export const createServerInputSchema = z
     accessFormUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     accountMode: z.enum(serverAccountModes).default("premium_only"),
     authMode: z.enum(serverAuthModes).default("direct"),
-    tags: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
+    // Unknown slugs are filtered out by normalizeGameModeInputs, so only the count is a hard error.
+    gameModes: z.array(z.string().trim().min(1).max(32)).max(MAX_SERVER_GAME_MODES, `Elige hasta ${MAX_SERVER_GAME_MODES} modos de juego.`).optional(),
+    country: z.string().trim().max(8).optional(),
     host: z.string().trim().min(1).max(253).optional(),
     javaPort: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
     bedrockPort: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
@@ -356,7 +362,8 @@ export function normalizeCreateServerInput(
       : null,
     accountMode: parsed.accountMode,
     authMode: parsed.authMode,
-    tags: parsed.tags ?? [],
+    gameModes: normalizeGameModeInputs(parsed.gameModes),
+    country: normalizeCountryInput(parsed.country),
     host,
     endpoints,
   };

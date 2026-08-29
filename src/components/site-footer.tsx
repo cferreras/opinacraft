@@ -6,10 +6,10 @@ const footerColumns = [
   {
     title: "Explorar",
     links: [
-      { label: "Directorio de servidores", href: "/servers" },
-      { label: "Servidores Java", href: "/servers?edition=java" },
-      { label: "Servidores Bedrock", href: "/servers?edition=bedrock" },
-      { label: "En línea ahora", href: "/servers?status=online" },
+      { label: "Directorio de servidores", href: "/" },
+      { label: "Servidores Java", href: "/?edition=java" },
+      { label: "Servidores Bedrock", href: "/?edition=bedrock" },
+      { label: "En línea ahora", href: "/?status=online" },
     ],
   },
   {
