@@ -15,5 +15,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // The build environment may not have database network access; the route
     // becomes complete on the first request in the deployed runtime.
   }
-  return [{ url: base, changeFrequency: "daily", priority: 1 }, { url: `${base}/servers`, changeFrequency: "hourly", priority: .9 }, ...rows.map((row) => ({ url: `${base}/servers/${row.slug}`, lastModified: row.updatedAt, changeFrequency: "daily" as const, priority: .7 }))];
+  return [{ url: base, changeFrequency: "daily", priority: 1 }, ...rows.map((row) => ({ url: `${base}/servers/${row.slug}`, lastModified: row.updatedAt, changeFrequency: "daily" as const, priority: .7 }))];
 }

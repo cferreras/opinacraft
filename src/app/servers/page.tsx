@@ -1,19 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { FilterSelect } from "@/components/filter-select";
+import { CatalogFilterBar } from "@/components/catalog-filter-bar";
+import { PromotedServersSection } from "@/components/promoted-servers-section";
 import { PublicServerRow } from "@/components/public-server-row";
-import { ServerSearchInput } from "@/components/server-search-input";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { TagCombobox } from "@/components/tag-combobox";
-import { getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
+import { getCachedCatalogVersions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
 import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
 import {
   isMonitorDependentCatalogQuery,
@@ -25,35 +24,25 @@ import {
   type PublicServerTableSort,
 } from "@/lib/servers/queries";
 import { getServerResultsSummary } from "@/lib/servers/result-summary";
-import { normalizeTagSlug } from "@/lib/servers/tags";
+import { buildCatalogHref, catalogPath } from "@/lib/servers/catalog-route";
+import { catalogAccessOptions, catalogSortOptions, catalogStatusOptions, parseCatalogAccessParam } from "@/lib/servers/catalog-filters";
+import { gameModeLabel, parseGameModeParam } from "@/lib/servers/game-modes";
+import { parseCountryParam, serverCountryLabel } from "@/lib/servers/countries";
+import { parseVersionParam } from "@/lib/servers/minecraft-version";
 
-export const metadata: Metadata = { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", alternates: { canonical: "/servers" }, openGraph: { title: "Servidores Minecraft | OpinaCraft", description: "Descubre comunidades Minecraft en OpinaCraft.", type: "website" } };
-export const tableGridTemplate = "lg:grid-cols-[minmax(0,1fr)_5rem_5.75rem_4.75rem_4rem_6rem_9.5rem]";
-
-const sortOptions: Array<{ value: PublicServerSort; label: string }> = [
-  { value: "rating", label: "Mejor valorados" },
-  { value: "players", label: "Más jugadores" },
-  { value: "recent", label: "Más recientes" },
-];
+export const metadata: Metadata = { title: "Servidores Minecraft | OpinaCraft", description: "Descubre, compara y únete a comunidades de Minecraft en OpinaCraft.", alternates: { canonical: catalogPath }, openGraph: { title: "Servidores Minecraft | OpinaCraft", description: "Descubre, compara y únete a comunidades de Minecraft en OpinaCraft.", type: "website" } };
+export const tableGridTemplate = "lg:grid-cols-[minmax(0,1fr)_5.5rem_4.5rem_8rem]";
 
 const tableColumns: Array<{ key: PublicServerTableSort; label: string }> = [
   { key: "name", label: "Servidor" },
-  { key: "edition", label: "Edición" },
   { key: "players", label: "Jugadores" },
-  { key: "version", label: "Versión" },
   { key: "latency", label: "Ping" },
   { key: "rating", label: "Valoración" },
-  { key: "ip", label: "Dirección" },
 ];
-
-function tableSortLabel(sort: PublicServerTableSort, direction: PublicServerSortDirection) {
-  const column = tableColumns.find((item) => item.key === sort);
-  return `${column?.label ?? "Tabla"} · ${direction === "asc" ? "ascendente" : "descendente"}`;
-}
 
 function orderSummary(activeSort: PublicServerTableSort | undefined, direction: PublicServerSortDirection, fallback: PublicServerSort, hasQuery: boolean) {
   if (hasQuery && !activeSort) return "Ordenado por relevancia";
-  if (!activeSort) return `Ordenado por ${sortOptions.find((option) => option.value === fallback)?.label.toLowerCase() ?? "valoración"}`;
+  if (!activeSort) return `Ordenado por ${catalogSortOptions.find((option) => option.value === fallback)?.label.toLowerCase() ?? "valoración"}`;
   const column = tableColumns.find((item) => item.key === activeSort);
   return `Ordenado por ${(column?.label ?? "tabla").toLowerCase()}, de ${direction === "asc" ? "menor a mayor" : "mayor a menor"}`;
 }
@@ -90,11 +79,26 @@ function SortableColumnHeader({
   );
 }
 
-export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; tags?: string; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
+function ActiveFilterChip({ label, removeHref, removeLabel }: { label: string; removeHref: string; removeLabel: string }) {
+  return (
+    <span className="inline-flex h-8 items-center gap-1 rounded-full bg-accent pl-3 pr-1 text-[0.8125rem] font-medium text-accent-foreground">
+      {label}
+      <Link href={removeHref} aria-label={removeLabel} className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground">
+        <X aria-hidden="true" className="size-3.5" />
+      </Link>
+    </span>
+  );
+}
+
+export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; mode?: string; version?: string; country?: string; access?: string; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
   await connection();
   const query = await searchParams;
   const requestedPage = Number.parseInt(query.page ?? "1", 10);
   const hasQuery = Boolean(query.q?.trim());
+  const mode = parseGameModeParam(query.mode);
+  const version = parseVersionParam(query.version);
+  const country = parseCountryParam(query.country);
+  const access = parseCatalogAccessParam(query.access);
   const edition = query.edition === "java" || query.edition === "bedrock" ? query.edition : undefined;
   const status = query.status === "online" || query.status === "offline" || query.status === "unknown" ? query.status : undefined;
   const sort: PublicServerSort = query.sort === "players" || query.sort === "recent" ? query.sort : "rating";
@@ -104,8 +108,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const presetTableSort = (sort === "rating" || sort === "players") && (!hasQuery || hasExplicitSort) ? sort : undefined;
   const activeTableSort = tableSort ?? presetTableSort;
   const activeTableDirection: PublicServerSortDirection = tableSort ? tableDirection : "desc";
-  const tagSlugs = (query.tags ?? "").split(",").map((tag) => normalizeTagSlug(tag)).filter(Boolean);
-  const listArgs = { page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", tagSlugs, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection } as const;
+  const listArgs = { page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", mode, version, country, access, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection } as const;
   const monitorDependent = isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, sort, tableSort: activeTableSort });
   const monitorResult = monitorDependent
     ? await getCachedMonitorCatalogPage(listArgs).catch((error) => {
@@ -127,30 +130,39 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     }
   }
   const { hasNextPage, page, totalCount } = result;
-  const searchParamsForPage = new URLSearchParams();
-  if (query.q) searchParamsForPage.set("q", query.q);
-  if (query.tags) searchParamsForPage.set("tags", query.tags);
-  if (query.edition) searchParamsForPage.set("edition", query.edition);
-  if (query.status) searchParamsForPage.set("status", query.status);
-  if (query.sort) searchParamsForPage.set("sort", query.sort);
+  const baseParams = new URLSearchParams();
+  if (query.q) baseParams.set("q", query.q);
+  if (mode) baseParams.set("mode", mode);
+  if (version) baseParams.set("version", version);
+  if (country) baseParams.set("country", country);
+  if (access) baseParams.set("access", access);
+  if (query.edition) baseParams.set("edition", query.edition);
+  if (query.status) baseParams.set("status", query.status);
+  if (query.sort) baseParams.set("sort", query.sort);
   if (tableSort) {
-    searchParamsForPage.delete("sort");
-    searchParamsForPage.set("tableSort", tableSort);
-    searchParamsForPage.set("tableDirection", tableDirection);
+    baseParams.delete("sort");
+    baseParams.set("tableSort", tableSort);
+    baseParams.set("tableDirection", tableDirection);
   }
-  const pageHref = (nextPage: number) => { searchParamsForPage.set("page", String(nextPage)); return `/servers?${searchParamsForPage.toString()}`; };
-  const tableSortHref = (nextSort: PublicServerTableSort) => {
-    const nextSearchParams = new URLSearchParams(searchParamsForPage);
-    nextSearchParams.delete("page");
-    nextSearchParams.delete("sort");
-    nextSearchParams.set("tableSort", nextSort);
-    nextSearchParams.set("tableDirection", activeTableSort === nextSort && activeTableDirection === "asc" ? "desc" : "asc");
-    return `/servers?${nextSearchParams.toString()}`;
+  const hrefWith = (overrides: Record<string, string | undefined>, { keepPage = false } = {}) => {
+    const next = new URLSearchParams(baseParams);
+    if (!keepPage) next.delete("page");
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value === undefined || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    return buildCatalogHref(Object.fromEntries(next.entries()));
   };
-  const initialTags = (query.tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean);
-  const hasActiveFilters = Boolean(hasQuery || query.tags || query.edition || query.status || (query.sort && query.sort !== "rating") || tableSort);
+  const pageHref = (nextPage: number) => hrefWith({ page: String(nextPage) }, { keepPage: true });
+  const tableSortHref = (nextSort: PublicServerTableSort) =>
+    hrefWith({ sort: undefined, tableSort: nextSort, tableDirection: activeTableSort === nextSort && activeTableDirection === "asc" ? "desc" : "asc" });
+  const activeFilterCount = [hasQuery, Boolean(mode), Boolean(version), Boolean(country), Boolean(access), Boolean(edition), Boolean(status)].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0 || Boolean(query.sort && query.sort !== "rating") || Boolean(tableSort);
+  // Offered even when a filter is active: the list is cheap, cached, and a facet the visitor is
+  // already inside should not reorder itself under them.
+  const versionOptions = await getCachedCatalogVersions().catch(() => [] as string[]);
   const serverResultsSummary = getServerResultsSummary({ page, pageSize: PUBLIC_SERVER_PAGE_SIZE, visibleCount: servers.length, totalCount });
-
+  const totalPages = Math.max(1, Math.ceil(totalCount / PUBLIC_SERVER_PAGE_SIZE));
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -161,70 +173,84 @@ export default async function PublicServersPage({ searchParams }: { searchParams
               <h1 id="servers-heading" className="max-w-[40rem] text-3xl font-bold tracking-tight sm:text-[2rem]">Encuentra tu próximo servidor de Minecraft</h1>
               <p className="mt-2.5 max-w-[35rem] text-sm leading-6 text-muted-foreground">Explora, compara y únete a las comunidades publicadas en OpinaCraft.</p>
             </div>
-            <Button variant="outline" asChild size="lg" className="shrink-0"><Link href="/servers/new"><Plus className="size-4" /> Publicar servidor</Link></Button>
+            <Button variant="outline" asChild size="lg" className="shrink-0 bg-card"><Link href="/servers/new"><Plus className="size-4" /> Publicar servidor</Link></Button>
           </div>
 
-          <form action="/servers" method="get" className="mt-6">
-            <Card className="overflow-visible">
-              <CardContent>
-                <div className="relative min-w-0">
-                  <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <label htmlFor="server-search" className="sr-only">Buscar</label>
-                  <ServerSearchInput defaultValue={query.q ?? ""} />
-                </div>
-                {tableSort ? <><input type="hidden" name="tableSort" value={tableSort} /><input type="hidden" name="tableDirection" value={tableDirection} /></> : null}
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.05fr_1.2fr_1.35fr_1.16fr]">
-                  <FilterSelect id="edition-filter" name="edition" label="Edición" defaultValue={query.edition ?? ""} submitOnChange><option value="">Todas</option><option value="java">Java</option><option value="bedrock">Bedrock</option></FilterSelect>
-                  <FilterSelect id="status-filter" name="status" label="Estado" defaultValue={query.status ?? ""} submitOnChange><option value="">Todos</option><option value="online">En línea</option><option value="offline">Fuera de línea</option><option value="unknown">Desconocido</option></FilterSelect>
-                  <TagCombobox key={query.tags ?? ""} name="tags" initialTags={initialTags} compact label="Etiquetas" submitOnChange resetPagination />
-                  <FilterSelect id="sort-filter" name="sort" label="Ordenar" defaultValue={tableSort ? "table" : sort} submitOnChange clearFieldsOnChange={tableSort ? ["tableSort", "tableDirection"] : undefined}>{tableSort ? <option value="table" disabled>{tableSortLabel(tableSort, tableDirection)}</option> : null}{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</FilterSelect>
-                </div>
-              </CardContent>
-            </Card>
-            <Button type="submit" variant="ghost" className="sr-only">Aplicar filtros</Button>
-          </form>
-        </section>
+          <PromotedServersSection className="mt-7" />
 
-        {monitorUnavailable ? (
-          <Alert className="mt-4 border-warning/40 bg-warning/10">
-            <AlertDescription>No se pudo consultar el estado del monitor para aplicar estos filtros. Inténtalo de nuevo en unos instantes.</AlertDescription>
-          </Alert>
-        ) : servers.length === 0 ? (
-          <Empty className="mt-4 rounded-xl border">
-            <EmptyHeader>
-              <EmptyMedia variant="icon"><Search /></EmptyMedia>
-              <EmptyTitle>{hasActiveFilters ? "Ningún servidor coincide con estos filtros" : "Todavía no hay servidores publicados"}</EmptyTitle>
-              <EmptyDescription>{hasActiveFilters ? "Prueba a quitar la edición o el estado, o busca solo por nombre." : "Sé el primero en publicar una comunidad Minecraft en OpinaCraft."}</EmptyDescription>
-            </EmptyHeader>
-            {hasActiveFilters ? <Button variant="outline" asChild><Link href="/servers">Limpiar filtros</Link></Button> : <Button asChild><Link href="/servers/new">Añadir servidor</Link></Button>}
-          </Empty>
-        ) : (
-          <section className="mt-4" aria-labelledby="server-results-heading">
-            <h2 id="server-results-heading" className="sr-only">Resultados de servidores</h2>
-            <Card className="gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0 lg:border lg:bg-card lg:shadow-sm lg:ring-1">
-              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-3">
-                <p className="text-sm tabular-nums text-muted-foreground">
-                  Mostrando <strong className="font-semibold text-foreground">{serverResultsSummary.rangeLabel}</strong> de <strong className="font-semibold text-foreground">{serverResultsSummary.totalCount}</strong> {serverResultsSummary.serverLabel}
-                </p>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span>{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span>
-                  {hasActiveFilters ? <Button variant="link" asChild size="sm" className="h-auto p-0 text-xs font-semibold"><Link href="/servers">Limpiar filtros</Link></Button> : null}
-                </div>
+          <section aria-labelledby="server-results-heading" className="mt-7">
+            <h2 id="server-results-heading" className="text-lg font-semibold tracking-tight">Todos los servidores</h2>
+
+            <form action={catalogPath} method="get" className="mt-3">
+              {tableSort ? <><input type="hidden" name="tableSort" value={tableSort} /><input type="hidden" name="tableDirection" value={tableDirection} /></> : null}
+              {!tableSort && hasExplicitSort ? <input type="hidden" name="sort" value={sort} /> : null}
+              {status ? <input type="hidden" name="status" value={status} /> : null}
+
+              <CatalogFilterBar
+                defaultQuery={query.q ?? ""}
+                mode={mode}
+                version={version}
+                country={country}
+                access={access}
+                edition={edition}
+                versionOptions={versionOptions}
+                clearHref={hasActiveFilters ? catalogPath : undefined}
+              />
+
+            {activeFilterCount > 0 ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Filtros activos</span>
+                {hasQuery ? <ActiveFilterChip label={`Búsqueda: ${query.q?.trim()}`} removeHref={hrefWith({ q: undefined })} removeLabel="Quitar la búsqueda" /> : null}
+                {mode ? <ActiveFilterChip label={`Modo: ${gameModeLabel(mode)}`} removeHref={hrefWith({ mode: undefined })} removeLabel="Quitar el filtro de modo" /> : null}
+                {version ? <ActiveFilterChip label={`Versión: ${version}`} removeHref={hrefWith({ version: undefined })} removeLabel="Quitar el filtro de versión" /> : null}
+                {country ? <ActiveFilterChip label={`País: ${serverCountryLabel(country)}`} removeHref={hrefWith({ country: undefined })} removeLabel="Quitar el filtro de país" /> : null}
+                {access ? <ActiveFilterChip label={`Acceso: ${catalogAccessOptions.find((option) => option.value === access)?.label ?? access}`} removeHref={hrefWith({ access: undefined })} removeLabel="Quitar el filtro de acceso" /> : null}
+                {edition ? <ActiveFilterChip label={`Edición: ${edition === "java" ? "Java" : "Bedrock"}`} removeHref={hrefWith({ edition: undefined })} removeLabel="Quitar el filtro de edición" /> : null}
+                {status ? <ActiveFilterChip label={`Estado: ${catalogStatusOptions.find((option) => option.value === status)?.label ?? status}`} removeHref={hrefWith({ status: undefined })} removeLabel="Quitar el filtro de estado" /> : null}
               </div>
-              <CardContent className="flex flex-col gap-2 p-2 lg:block lg:p-0">
-                <div role="row" aria-label="Ordenar resultados" className={`hidden h-10 items-center border-y bg-muted/30 px-4 text-muted-foreground lg:grid ${tableGridTemplate} lg:items-center lg:gap-3`}>
-                  {tableColumns.map((column) => <SortableColumnHeader key={column.key} column={column} activeSort={activeTableSort} direction={activeTableDirection} href={tableSortHref(column.key)} />)}
-                </div>
-                {servers.map((server) => <PublicServerRow key={server.id} server={server} />)}
-              </CardContent>
-            </Card>
-            <nav className="mt-5 flex items-center justify-between gap-4" aria-label="Páginas de servidores">
-              {page > 1 ? <Button asChild variant="outline" size="sm"><Link href={pageHref(page - 1)}>Anterior</Link></Button> : <span />}
-              <span className="text-xs tabular-nums text-muted-foreground">Página {page}</span>
-              {hasNextPage ? <Button asChild variant="outline" size="sm"><Link href={pageHref(page + 1)}>Siguiente</Link></Button> : <span />}
-            </nav>
+            ) : null}
+
+              <div className="mt-4 min-w-0">
+                {monitorUnavailable ? (
+                  <Alert className="border-warning/40 bg-warning/10">
+                    <AlertDescription>No se pudo consultar el estado del monitor para aplicar estos filtros. Inténtalo de nuevo en unos instantes.</AlertDescription>
+                  </Alert>
+                ) : servers.length === 0 ? (
+                  <Empty className="rounded-xl border">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon"><Search /></EmptyMedia>
+                      <EmptyTitle>{hasActiveFilters ? "Ningún servidor coincide con estos filtros" : "Todavía no hay servidores publicados"}</EmptyTitle>
+                      <EmptyDescription>{hasActiveFilters ? "Prueba a quitar el modo o la versión, o busca solo por nombre." : "Sé el primero en publicar una comunidad de Minecraft en OpinaCraft."}</EmptyDescription>
+                    </EmptyHeader>
+                    {hasActiveFilters ? <Button variant="outline" asChild><Link href={catalogPath}>Ver todos los servidores</Link></Button> : <Button asChild><Link href="/servers/new">Publicar servidor</Link></Button>}
+                  </Empty>
+                ) : (
+                  <>
+                    <Card className="gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0 lg:bg-card lg:ring-1">
+                      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-3">
+                        <p className="text-sm tabular-nums text-muted-foreground">
+                          Mostrando <strong className="font-semibold text-foreground">{serverResultsSummary.rangeLabel}</strong> de <strong className="font-semibold text-foreground">{serverResultsSummary.totalCount}</strong> {serverResultsSummary.serverLabel}
+                        </p>
+                        <span className="text-xs text-muted-foreground">{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span>
+                      </div>
+                      <CardContent className="flex flex-col gap-2 p-0 lg:block">
+                        <div role="row" aria-label="Ordenar resultados" className={`hidden h-10 items-center border-y bg-muted/50 px-4 text-muted-foreground lg:grid ${tableGridTemplate} lg:items-center lg:gap-3`}>
+                          {tableColumns.map((column) => <SortableColumnHeader key={column.key} column={column} activeSort={activeTableSort} direction={activeTableDirection} href={tableSortHref(column.key)} />)}
+                        </div>
+                        {servers.map((server) => <PublicServerRow key={server.id} server={server} />)}
+                      </CardContent>
+                    </Card>
+                    <nav className="mt-5 flex items-center justify-between gap-4" aria-label="Páginas de servidores">
+                      {page > 1 ? <Button asChild variant="outline" size="sm"><Link href={pageHref(page - 1)}>Anterior</Link></Button> : <span />}
+                      <span className="text-xs tabular-nums text-muted-foreground">Página {page} de {totalPages}</span>
+                      {hasNextPage ? <Button asChild variant="outline" size="sm"><Link href={pageHref(page + 1)}>Siguiente</Link></Button> : <span />}
+                    </nav>
+                  </>
+                )}
+              </div>
+            </form>
           </section>
-        )}
+        </section>
       </main>
       <SiteFooter />
     </div>

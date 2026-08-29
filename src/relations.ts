@@ -14,7 +14,7 @@ export const relations = defineRelations({ ...schema, user }, (r) => ({
     playerHourly: r.many.serverPlayerHourly(),
     members: r.many.serverMembers(),
     verifications: r.many.serverVerifications(),
-    tags: r.many.serverTags(),
+    gameModes: r.many.serverGameModes(),
     media: r.many.serverMedia(),
     reviews: r.many.serverReviews(),
     reviewReports: r.many.serverReviewReports(),
@@ -86,18 +86,11 @@ export const relations = defineRelations({ ...schema, user }, (r) => ({
       to: r.user.id,
     }),
   },
-  serverTags: {
+  serverGameModes: {
     server: r.one.servers({
-      from: r.serverTags.serverId,
+      from: r.serverGameModes.serverId,
       to: r.servers.id,
     }),
-    tag: r.one.tags({
-      from: r.serverTags.tagId,
-      to: r.tags.id,
-    }),
-  },
-  tags: {
-    servers: r.many.serverTags(),
   },
   serverMedia: {
     server: r.one.servers({

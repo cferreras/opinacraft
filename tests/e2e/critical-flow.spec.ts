@@ -74,7 +74,7 @@ test("owner can create, publish, browse and manage a server", async ({ page }) =
   const serverName = `E2E Community ${Date.now()}`;
   const { slug } = await createAndPublishServer(page, serverName, "e2e.example.invalid");
 
-  await page.goto("/servers");
+  await page.goto("/");
   const card = page.locator("article").filter({ hasText: serverName });
   await expect(card.getByRole("heading", { name: serverName })).toBeVisible();
   await card.getByRole("link", { name: serverName }).click();

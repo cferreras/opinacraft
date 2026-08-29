@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/session";
 import { grantPlatformRole, moderateReport, moderateReviewReport } from "@/lib/admin";
 import { ReportAlreadyOpenError } from "@/lib/servers/reports";
-import { blockTag, mergeTags, renameTag } from "@/lib/servers/tags";
 import { ReviewReportAlreadyOpenError } from "@/lib/servers/reviews";
 import { getServerIdBySlug } from "@/lib/servers/queries";
 import { invalidateReviewCache } from "@/lib/servers/cache-tags";
@@ -26,7 +25,7 @@ export async function moderateReportAction(formData: FormData) {
   }
   if (!transitioned) redirect("/admin?error=transition");
   revalidatePath("/admin");
-  revalidatePath("/servers");
+  revalidatePath("/");
   redirect("/admin?updated=1");
 }
 
@@ -50,22 +49,9 @@ export async function moderateReviewReportAction(formData: FormData) {
     if (serverId) invalidateReviewCache(serverId);
   }
   revalidatePath("/admin");
-  revalidatePath("/servers");
+  revalidatePath("/");
   if (slug) revalidatePath(`/servers/${slug}`);
   redirect("/admin?updated=1");
-}
-
-export async function moderateTagAction(formData: FormData) {
-  const session = await getServerSession();
-  if (!session) redirect("/sign-in?callbackURL=/admin");
-  const action = String(formData.get("tagAction") ?? "");
-  try {
-    if (action === "block") await blockTag(session.user.id, String(formData.get("tagId") ?? ""));
-    else if (action === "rename") await renameTag(session.user.id, String(formData.get("tagId") ?? ""), String(formData.get("label") ?? ""));
-    else if (action === "merge") await mergeTags(session.user.id, String(formData.get("tagId") ?? ""), String(formData.get("canonicalId") ?? ""));
-    else throw new Error("invalid tag action");
-  } catch { redirect("/admin?error=tag"); }
-  revalidatePath("/admin"); revalidatePath("/servers"); redirect("/admin?updated=1");
 }
 
 export async function grantRoleAction(formData: FormData) {

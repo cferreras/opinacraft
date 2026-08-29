@@ -128,7 +128,8 @@ test("normalizes one shared host with optional edition ports", () => {
     accessFormUrl: null,
     accountMode: "premium_only",
     authMode: "direct",
-    tags: [],
+    gameModes: [],
+    country: null,
     host: "play.example.com",
     endpoints: [
       { edition: "java", host: "play.example.com", port: 25565 },

@@ -27,6 +27,7 @@ import { LocalizedTimestamp } from "@/components/localized-timestamp";
 import { PlayerHistoryCard } from "@/components/player-history-card";
 import { ReportForm } from "@/components/report-form";
 import { ReviewSection } from "@/components/review-section";
+import { ServerCountryCode } from "@/components/server-country-code";
 import { ServerLogo } from "@/components/server-logo";
 import { ServerUtilityActions } from "@/components/server-utility-actions";
 import { SiteFooter } from "@/components/site-footer";
@@ -34,6 +35,7 @@ import { SiteHeader } from "@/components/site-header";
 import { normalizeServerDescription } from "@/lib/servers/description";
 import { getServerSession } from "@/lib/session";
 import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
+import { gameModeLabel } from "@/lib/servers/game-modes";
 import { editionLabel, formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
 import { getCachedMonitorStatuses, getCachedPublicReviews, getCachedPublishedServer, getCachedReviewSummary } from "@/lib/servers/cached-queries";
 import { monitorFromApi, type ManagedServer } from "@/lib/servers/queries";
@@ -181,9 +183,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 pb-14 sm:px-6 lg:px-8">
         <nav aria-label="Ruta de navegación" className="flex items-center gap-1.5 py-4 text-xs text-muted-foreground">
-          <Link href="/" className="transition-colors hover:text-foreground">Inicio</Link>
-          <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground/50" />
-          <Link href="/servers" className="transition-colors hover:text-foreground">Explorar</Link>
+          <Link href="/" className="transition-colors hover:text-foreground">Servidores</Link>
           <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground/50" />
           <span className="truncate font-semibold text-foreground">{server.name}</span>
         </nav>
@@ -194,6 +194,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <h1 id="server-name" className="text-3xl font-bold tracking-tight sm:text-[2.125rem]">{server.name}</h1>
+                    <ServerCountryCode code={server.country} className="text-xs sm:text-sm" />
                     <Badge className="bg-success-soft text-success hover:bg-success-soft">
                       <span aria-hidden="true" className="mr-1 inline-flex size-3.5 items-center justify-center rounded-full bg-success text-primary-foreground"><Check className="size-2.5 stroke-[3]" /></span>
                       Servidor verificado
@@ -205,9 +206,9 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                     <span aria-hidden="true">·</span>
                     <span>En OpinaCraft desde el <LocalizedTimestamp value={server.createdAt} mode="datetime" /></span>
                   </div>
-                  {server.tags.length > 0 ? (
+                  {server.gameModes.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      {server.tags.map((tag) => <Badge key={tag.slug} variant="outline">{tag.label}</Badge>)}
+                      {server.gameModes.map((mode) => <Badge key={mode} variant="outline">{gameModeLabel(mode)}</Badge>)}
                     </div>
                   ) : null}
                 </div>

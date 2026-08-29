@@ -17,6 +17,11 @@ export type PlayerHistoryChartPoint = HistoryPoint & {
   bedrockPeak?: number | null;
 };
 
+export function formatPlayerHistoryTooltipValue(value: unknown) {
+  if (value === null || value === undefined) return "Sin datos";
+  return `${typeof value === "number" ? value.toLocaleString() : String(value)} jugadores`;
+}
+
 export function getPlayerHistoryChartTickMode(period: HistoryPeriod): "time" | "date" {
   return period === "24h" ? "time" : "date";
 }

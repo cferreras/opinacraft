@@ -32,14 +32,14 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body className="min-h-full bg-background font-sans text-foreground antialiased">
-        <Suspense fallback={null}>
-          <ThemeProvider>
-            <TooltipProvider>
-              {children}
-              <Toaster position="bottom-right" />
-            </TooltipProvider>
-          </ThemeProvider>
-        </Suspense>
+        {/* The theme provider stays outside the boundary: next-themes renders its anti-flash script,
+            and React drops script tags rendered on the client. */}
+        <ThemeProvider>
+          <TooltipProvider>
+            <Suspense fallback={null}>{children}</Suspense>
+            <Toaster position="bottom-right" />
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

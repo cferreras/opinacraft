@@ -207,6 +207,12 @@ test("player history tooltip separates the metric label from its numeric value",
   assert.match(chartTooltipValueRowClassName, /(?:^|\s)gap-2(?:\s|$)/);
 });
 
+test("player history tooltip formats the value as a player count", async () => {
+  const { formatPlayerHistoryTooltipValue } = await import("../src/lib/servers/player-history-chart.ts");
+
+  assert.equal(formatPlayerHistoryTooltipValue(10), "10 jugadores");
+});
+
 test("server history keeps gaps and derives weighted response statistics", async () => {
   const { aggregateHistorySeries } = await import("../src/lib/servers/player-history-aggregate.ts");
   const at = "2026-08-03T12:00:00.000Z";

@@ -22,13 +22,13 @@ test("authenticated navigation links to the profile instead of sign-in", async (
   const account = await createAccount(page, "header-profile");
   createdEmails.push(account.email);
 
-  await page.goto("/servers");
+  await page.goto("/");
   await page.getByRole("button", { name: "Abrir mi perfil" }).click();
   await expect(page.getByRole("menuitem", { name: "Mi perfil" })).toBeVisible();
   await expect(page.locator('header a[href="/sign-in"]')).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/servers");
+  await page.goto("/");
   await page.getByRole("button", { name: "Abrir menú" }).click();
   await expect(page.locator('a[href="/profile"]:visible').first()).toBeVisible();
   await expect(page.locator('header a[href="/sign-in"]')).toHaveCount(0);

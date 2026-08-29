@@ -32,13 +32,24 @@ export async function getCachedMonitorCatalogPage(args: PublishedServerListArgs)
   return listPublishedServersWithMonitor({
     page: args.page ?? 1,
     query: args.query ?? "",
-    tagSlugs: args.tagSlugs ?? [],
+    mode: args.mode,
+    country: args.country,
+    version: args.version,
+    access: args.access,
     edition: args.edition,
     status: args.status,
     sort: args.sort ?? "rating",
     tableSort: args.tableSort,
     tableDirection: args.tableDirection ?? "asc",
   });
+}
+
+export async function getCachedCatalogVersions() {
+  "use cache";
+  cacheLife({ stale: 180, revalidate: 300, expire: 900 });
+  cacheTag(publicServersTag());
+  const { listCatalogVersions } = await import("./queries");
+  return listCatalogVersions();
 }
 
 export async function getCachedPublishedServerCount() {

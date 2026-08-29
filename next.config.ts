@@ -14,6 +14,7 @@ const discordEnabled = Boolean(
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
+  redirects: async () => [{ source: "/servers", destination: "/", permanent: true }],
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   reactCompiler: true,
   experimental: {

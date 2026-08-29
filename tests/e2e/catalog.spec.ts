@@ -15,7 +15,14 @@ test.afterAll(async () => {
   await cleanupAccounts(createdEmails);
 });
 
-test("public catalog searches and filters by text, tags, edition and health", async ({ page }) => {
+test("redirects the legacy catalog URL to the home directory", async ({ page }) => {
+  await page.goto("/servers?edition=java");
+
+  await expect(page).toHaveURL(/\/\?edition=java$/);
+  await expect(page.getByRole("heading", { name: "Encuentra tu próximo servidor de Minecraft" })).toBeVisible();
+});
+
+test("public catalog searches and filters by text, mode, edition and health", async ({ page }) => {
   const owner = await createAccount(page, "catalog");
   createdEmails.push(owner.email);
 
@@ -25,7 +32,8 @@ test("public catalog searches and filters by text, tags, edition and health", as
     name: alphaName,
     javaHost: `alpha-java-${Date.now()}.example.invalid`,
     bedrockHost: `alpha-bedrock-${Date.now()}.example.invalid`,
-    tags: ["pvp", "spanish"],
+    gameModes: ["PvP"],
+    country: "es",
   });
   await markServerVerified(alpha.slug, ["java", "bedrock"]);
   await publishServer(page, alpha.slug);
@@ -34,52 +42,82 @@ test("public catalog searches and filters by text, tags, edition and health", as
   const beta = await createServer(page, {
     name: betaName,
     javaHost: `beta-java-${Date.now()}.example.invalid`,
-    tags: ["creative"],
+    gameModes: ["Creativo"],
   });
   await markServerVerified(beta.slug);
   await publishServer(page, beta.slug);
   await setEndpointHealth(beta.slug, "java", "offline");
 
-  await page.goto("/servers");
+  await page.goto("/");
   await expect(page.getByRole("heading", { name: alphaName })).toBeVisible();
   await expect(page.getByRole("heading", { name: betaName })).toBeVisible();
 
   await page.getByLabel("Buscar", { exact: true }).fill("Alpha");
   await page.getByLabel("Buscar", { exact: true }).press("Enter");
-  await page.getByLabel("Edición").selectOption("bedrock");
+  await page.getByLabel("Edición", { exact: true }).selectOption("bedrock");
   await expect(page).toHaveURL(/q=Alpha/);
   await expect(page).toHaveURL(/edition=bedrock/);
   await expect(page.getByRole("heading", { name: alphaName })).toBeVisible();
   await expect(page.getByRole("heading", { name: betaName })).toHaveCount(0);
 
-  await page.goto("/servers?tags=pvp");
+  await page.goto("/?mode=pvp");
   await expect(page.getByRole("heading", { name: alphaName })).toBeVisible();
   await expect(page.getByRole("heading", { name: betaName })).toHaveCount(0);
 
-  await page.goto("/servers?status=offline");
+  await page.goto("/?country=es");
+  await expect(page.getByRole("heading", { name: alphaName })).toBeVisible();
+  await expect(page.getByRole("heading", { name: betaName })).toHaveCount(0);
+
+  await page.goto("/?status=offline");
   await expect(page.getByRole("heading", { name: betaName })).toBeVisible();
   await expect(page.getByRole("heading", { name: alphaName })).toHaveCount(0);
 });
 
-test("syncs the selected tag pill after client-side catalog navigation", async ({ page }) => {
-  const owner = await createAccount(page, "catalog-tag-pill");
+test("syncs the mode filter and its chip after client-side catalog navigation", async ({ page }) => {
+  const owner = await createAccount(page, "catalog-mode-chip");
   createdEmails.push(owner.email);
 
   const stamp = Date.now();
   const server = await createServer(page, {
-    name: `E2E Tag Pill ${stamp}`,
-    javaHost: `tag-pill-${stamp}.example.invalid`,
-    tags: ["supervivencia"],
+    name: `E2E Mode Chip ${stamp}`,
+    javaHost: `mode-chip-${stamp}.example.invalid`,
+    gameModes: ["Survival"],
   });
   await markServerVerified(server.slug);
   await publishServer(page, server.slug);
 
-  await page.goto("/servers?tags=supervivencia");
-  await expect(page.getByRole("button", { name: "Eliminar supervivencia" })).toBeVisible();
+  await page.goto("/?mode=survival");
+  await expect(page.getByLabel("Modo", { exact: true })).toHaveValue("survival");
+  await expect(page.getByText("Modo: Survival")).toBeVisible();
 
-  await page.getByRole("link", { name: "Limpiar filtros", exact: true }).click();
-  await expect(page).toHaveURL(/\/servers$/);
-  await expect(page.getByRole("button", { name: "Eliminar supervivencia" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Borrar filtros", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByLabel("Modo", { exact: true })).toHaveValue("");
+  await expect(page.getByText("Modo: Survival")).toHaveCount(0);
+});
+
+test("the mode filter narrows the catalog to the servers that advertise it", async ({ page }) => {
+  const owner = await createAccount(page, "catalog-mode-filter");
+  createdEmails.push(owner.email);
+
+  const stamp = Date.now();
+  const skyblockName = `E2E Skyblock ${stamp}`;
+  const skyblock = await createServer(page, {
+    name: skyblockName,
+    javaHost: `skyblock-${stamp}.example.invalid`,
+    gameModes: ["Skyblock"],
+  });
+  await markServerVerified(skyblock.slug);
+  await publishServer(page, skyblock.slug);
+
+  await page.goto("/");
+  await page.getByLabel("Modo", { exact: true }).selectOption("skyblock");
+  await expect(page).toHaveURL(/mode=skyblock/);
+  await expect(page.getByRole("heading", { name: skyblockName })).toBeVisible();
+
+  await page.getByLabel("Modo", { exact: true }).selectOption("anarquia");
+  await expect(page).toHaveURL(/mode=anarquia/);
+  await expect(page.getByRole("heading", { name: skyblockName })).toHaveCount(0);
 });
 
 test("public catalog headers sort the visible columns and toggle direction", async ({ page }) => {
@@ -103,22 +141,19 @@ test("public catalog headers sort the visible columns and toggle direction", asy
   await markServerVerified(beta.slug);
   await publishServer(page, beta.slug);
 
-  await page.goto("/servers");
-  await expect(page.getByLabel("Ordenar", { exact: true })).toHaveValue("rating");
+  await page.goto("/");
   await expect(page.getByRole("columnheader", { name: "Valoración" })).toHaveAttribute("aria-sort", "descending");
 
-  await page.goto(`/servers?q=${encodeURIComponent(`E2E Sort ${stamp}`)}`);
+  await page.goto(`/?q=${encodeURIComponent(`E2E Sort ${stamp}`)}`);
   await expect(page.getByRole("heading", { name: alphaName })).toBeVisible();
   await expect(page.getByRole("heading", { name: betaName })).toBeVisible();
-  await expect(page.getByRole("columnheader")).toHaveCount(7);
-  await expect(page.getByRole("link", { name: /^Ordenar por / })).toHaveCount(7);
+  await expect(page.getByRole("columnheader")).toHaveCount(4);
+  await expect(page.getByRole("link", { name: /^Ordenar por / })).toHaveCount(4);
 
   await expect(page.getByRole("columnheader", { name: "Servidor" })).toHaveAttribute("aria-sort", "none");
   await page.getByRole("link", { name: "Ordenar por Servidor ascendente" }).click();
   await expect(page).toHaveURL(/tableSort=name/);
   await expect(page).toHaveURL(/tableDirection=asc/);
-  await expect(page.getByLabel("Ordenar", { exact: true })).toHaveValue("table");
-  await expect(page.getByLabel("Ordenar", { exact: true }).locator("option:checked")).toHaveText("Servidor · ascendente");
   await expect(page.getByRole("columnheader", { name: "Servidor" })).toHaveAttribute("aria-sort", "ascending");
   await expect(page.locator("article h3").nth(0)).toHaveText(alphaName);
   await expect(page.locator("article h3").nth(1)).toHaveText(betaName);
@@ -126,20 +161,19 @@ test("public catalog headers sort the visible columns and toggle direction", asy
   await page.getByLabel("Edición", { exact: true }).selectOption("java");
   await expect(page).toHaveURL(/tableSort=name/);
   await expect(page).toHaveURL(/tableDirection=asc/);
-  await expect(page.getByLabel("Ordenar", { exact: true })).toHaveValue("table");
   await expect(page.getByRole("columnheader", { name: "Servidor" })).toHaveAttribute("aria-sort", "ascending");
 
   await page.getByRole("link", { name: "Ordenar por Servidor descendente" }).click();
   await expect(page).toHaveURL(/tableDirection=desc/);
-  await expect(page.getByLabel("Ordenar", { exact: true }).locator("option:checked")).toHaveText("Servidor · descendente");
   await expect(page.getByRole("columnheader", { name: "Servidor" })).toHaveAttribute("aria-sort", "descending");
   await expect(page.locator("article h3").nth(0)).toHaveText(betaName);
   await expect(page.locator("article h3").nth(1)).toHaveText(alphaName);
 
-  await page.getByLabel("Ordenar", { exact: true }).selectOption("players");
+  // A preset sort arrives by URL now, and the filter bar has to carry it through a facet change.
+  await page.goto(`/?sort=players&q=${encodeURIComponent(`E2E Sort ${stamp}`)}`);
+  await expect(page.getByRole("columnheader", { name: "Jugadores" })).toHaveAttribute("aria-sort", "descending");
+  await page.getByLabel("Edición", { exact: true }).selectOption("java");
   await expect(page).toHaveURL(/sort=players/);
-  await expect(page).not.toHaveURL(/tableSort=/);
-  await expect(page.getByLabel("Ordenar", { exact: true })).toHaveValue("players");
   await expect(page.getByRole("columnheader", { name: "Jugadores" })).toHaveAttribute("aria-sort", "descending");
 });
 
@@ -154,13 +188,13 @@ test("mobile catalog presents each server as a compact card", async ({ page }) =
     name: serverName,
     description,
     javaHost: `mobile-card-${stamp}.example.invalid`,
-    tags: ["survival", "community"],
+    gameModes: ["Survival", "SMP"],
   });
   await markServerVerified(server.slug);
   await publishServer(page, server.slug);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/servers?q=${encodeURIComponent(serverName)}`);
+  await page.goto(`/?q=${encodeURIComponent(serverName)}`);
 
   const row = page.locator("article").filter({ has: page.getByRole("heading", { name: serverName }) });
   await expect(row).toBeVisible();
@@ -170,6 +204,21 @@ test("mobile catalog presents each server as a compact card", async ({ page }) =
   await expect(row).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   const resultsSurface = row.locator("xpath=../..");
   expect(await resultsSurface.evaluate((element) => getComputedStyle(element).boxShadow)).not.toContain("0px 0px 0px 1px");
+});
+
+test("mobile access filter keeps the semi-premium choice readable", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?access=semi-premium");
+
+  const accessSelect = page.getByLabel("Tipo de acceso", { exact: true });
+  await expect(accessSelect).toHaveValue("semi-premium");
+  await expect(page.getByText("Acceso: Semi-premium", { exact: true })).toBeVisible();
+
+  const accessControl = accessSelect.locator("xpath=../..");
+  const accessBox = await accessControl.boundingBox();
+  expect(accessBox).not.toBeNull();
+  expect(accessBox!.width).toBeGreaterThan(300);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
 test("a public server page exposes a controlled not-found state", async ({ page }) => {

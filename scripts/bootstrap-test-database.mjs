@@ -105,6 +105,7 @@ async function main() {
     );
     await addColumn(client, "servers", '"availability_hidden_at" timestamp with time zone');
     await addColumn(client, "servers", '"store_url" text');
+    await addColumn(client, "servers", '"country" varchar(8)');
     await addColumn(client, "servers", '"access_type" "server_access_type" DEFAULT \'open\'::"server_access_type" NOT NULL');
     await addColumn(client, "servers", '"access_form_url" text');
     await addColumn(client, "servers", '"account_mode" "server_account_mode" DEFAULT \'premium_only\'::"server_account_mode" NOT NULL');
@@ -182,6 +183,17 @@ async function main() {
       client,
       'CREATE UNIQUE INDEX IF NOT EXISTS "server_endpoints_verified_edition_host_port_key" ON "server_endpoints" ("edition", "host", "port") WHERE "verification_status" = \'verified\'',
     );
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "server_game_modes" (
+        "server_id" uuid NOT NULL REFERENCES "servers"("id") ON DELETE CASCADE,
+        "mode" varchar(32) NOT NULL,
+        "position" smallint DEFAULT 0 NOT NULL,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        PRIMARY KEY ("server_id", "mode")
+      )
+    `);
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_game_modes_mode_idx" ON "server_game_modes" ("mode")');
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS "tags" (
@@ -387,6 +399,23 @@ async function main() {
     `);
     await addColumn(client, "notification_jobs", '"processing_started_at" timestamp with time zone');
     await createIndex(client, 'CREATE INDEX IF NOT EXISTS "notification_jobs_queue_idx" ON "notification_jobs" ("status", "next_attempt_at")');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "server_monitor_sync_outbox" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "dedupe_key" varchar(255) NOT NULL UNIQUE,
+        "server_id" uuid NOT NULL,
+        "operation" varchar(20) NOT NULL CHECK ("operation" in ('upsert', 'delete')),
+        "payload" jsonb NOT NULL DEFAULT '{}'::jsonb,
+        "status" varchar(20) NOT NULL DEFAULT 'pending' CHECK ("status" in ('pending', 'processing', 'done', 'failed')),
+        "attempts" smallint NOT NULL DEFAULT 0,
+        "next_attempt_at" timestamp with time zone NOT NULL DEFAULT now(),
+        "last_error" text,
+        "created_at" timestamp with time zone NOT NULL DEFAULT now(),
+        "processed_at" timestamp with time zone
+      )
+    `);
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_monitor_sync_outbox_queue_idx" ON "server_monitor_sync_outbox" ("status", "next_attempt_at")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_monitor_sync_outbox_server_idx" ON "server_monitor_sync_outbox" ("server_id")');
     await client.query(`
       CREATE TABLE IF NOT EXISTS "monitor_runs" (
         "run_id" varchar(100) PRIMARY KEY,

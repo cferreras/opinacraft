@@ -31,6 +31,7 @@ import {
   VerificationAlreadyPendingError,
   VerificationRateLimitError,
   VerificationUnavailableError,
+  type VerificationFailureCode,
 } from "@/lib/servers/verification";
 import { ServerPermissionError } from "@/lib/servers/permissions";
 import { databaseConstraint, databaseErrorCode } from "@/lib/db-errors";
@@ -40,13 +41,23 @@ import {
 } from "@/lib/servers/validation";
 import { parseEnabledPort } from "@/lib/servers/endpoint-fields";
 import { serverValidationField } from "@/lib/servers/form-validation";
-import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 import { processMonitorSyncOutbox } from "@/lib/servers/monitor-sync";
 import { invalidatePublicServerCache } from "@/lib/servers/cache-tags";
 
+export type VerificationOutcome =
+  | "started"
+  | "verified"
+  | "expired"
+  | "stale"
+  | "endpoint_changed"
+  | "endpoint_taken"
+  | VerificationFailureCode;
+export type VerificationErrorReason = "already-verified" | "pending" | "no-endpoint" | "rate-limit" | "unavailable" | "unknown";
+export type VerificationState = { outcome: VerificationOutcome } | { error: VerificationErrorReason } | null;
+
 export type ManageState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "tags" | "endpoints" | "publicationStatus", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "gameModes" | "country" | "endpoints" | "publicationStatus", string>>;
 };
 
 function formValue(formData: FormData, key: string) {
@@ -68,7 +79,8 @@ function getServerInput(formData: FormData): UpdateServerInput {
     accessFormUrl: formValue(formData, "accessFormUrl"),
     accountMode: formValue(formData, "accountMode") as UpdateServerInput["accountMode"],
     authMode: formValue(formData, "authMode") as UpdateServerInput["authMode"],
-    tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
+    gameModes: formData.getAll("gameModes").filter((value) => typeof value === "string"),
+    country: formValue(formData, "country"),
     host: formValue(formData, "host"),
     javaPort: parseEnabledPort(formValue(formData, "javaPort"), javaEnabled),
     bedrockPort: parseEnabledPort(formValue(formData, "bedrockPort"), bedrockEnabled),
@@ -123,9 +135,6 @@ export async function updateServerAction(
     if (error instanceof NoVerifiedEndpointError) {
       return { formError: error.message };
     }
-    if (error instanceof TagInputError || error instanceof TagBlockedError) {
-      return { fieldErrors: { tags: error.message } };
-    }
     if (error instanceof DuplicateEndpointError || (databaseErrorCode(error) === "23505" && databaseConstraint(error) === "server_endpoints_verified_edition_host_port_key")) {
       return { fieldErrors: { endpoints: "One of these addresses is already registered." } };
     }
@@ -137,7 +146,7 @@ export async function updateServerAction(
     console.error("Failed to dispatch monitor target sync", error instanceof Error ? error.name : "unknown");
   });
   invalidatePublicServerCache(serverId, slug);
-  revalidatePath("/servers");
+  revalidatePath("/");
   revalidatePath("/dashboard/servers");
   revalidatePath(`/servers/${slug}`);
   revalidatePath(`/servers/${slug}/manage`);
@@ -157,7 +166,7 @@ export async function deleteServerAction(formData: FormData) {
     console.error("Failed to dispatch monitor target deletion", error instanceof Error ? error.name : "unknown");
   });
   invalidatePublicServerCache(serverId, formValue(formData, "slug") ?? undefined);
-  revalidatePath("/servers");
+  revalidatePath("/");
   revalidatePath("/dashboard/servers");
   redirect("/dashboard/servers?deleted=1");
 }
@@ -228,7 +237,9 @@ export async function removeMemberAction(formData: FormData) {
   redirect(`/servers/${slug}/manage?memberUpdated=1`);
 }
 
-export async function startVerificationAction(formData: FormData) {
+// Both verification actions answer in place instead of redirecting: the panel sits at the bottom of
+// a long page, and a redirect sent the owner back to the top, away from the code they were reading.
+export async function startVerificationAction(_previousState: VerificationState, formData: FormData): Promise<VerificationState> {
   const session = await getServerSession();
   if (!session) redirect("/sign-in?callbackURL=/dashboard/servers");
   const serverId = formValue(formData, "serverId") ?? "";
@@ -237,19 +248,19 @@ export async function startVerificationAction(formData: FormData) {
   try {
     await startServerVerification(serverId, session.user.id, edition);
   } catch (error) {
-    const reason = error instanceof EndpointAlreadyVerifiedError ? "already-verified" :
+    const reason: VerificationErrorReason = error instanceof EndpointAlreadyVerifiedError ? "already-verified" :
       error instanceof VerificationAlreadyPendingError ? "pending" :
       error instanceof NoJavaEndpointError || error instanceof NoBedrockEndpointError ? "no-endpoint" :
       error instanceof VerificationRateLimitError ? "rate-limit" :
       error instanceof VerificationUnavailableError ? "unavailable" : "unknown";
     if (reason === "unknown") console.error("Failed to start server verification", error);
-    redirect(`/servers/${slug}/manage?verificationError=${reason}`);
+    return { error: reason };
   }
   revalidatePath(`/servers/${slug}/manage`);
-  redirect(`/servers/${slug}/manage?verification=started`);
+  return { outcome: "started" };
 }
 
-export async function checkVerificationAction(formData: FormData) {
+export async function checkVerificationAction(_previousState: VerificationState, formData: FormData): Promise<VerificationState> {
   const session = await getServerSession();
   if (!session) redirect("/sign-in?callbackURL=/dashboard/servers");
   const serverId = formValue(formData, "serverId") ?? "";
@@ -259,22 +270,16 @@ export async function checkVerificationAction(formData: FormData) {
   try {
     result = await checkServerVerification(verificationId, serverId, session.user.id);
   } catch (error) {
-    if (error instanceof VerificationExpiredError) {
-      redirect(`/servers/${slug}/manage?verification=expired`);
-    }
-    if (error instanceof VerificationRateLimitError) {
-      redirect(`/servers/${slug}/manage?verificationError=rate-limit`);
-    }
-    if (error instanceof VerificationUnavailableError) {
-      redirect(`/servers/${slug}/manage?verificationError=unavailable`);
-    }
+    if (error instanceof VerificationExpiredError) return { outcome: "expired" };
+    if (error instanceof VerificationRateLimitError) return { error: "rate-limit" };
+    if (error instanceof VerificationUnavailableError) return { error: "unavailable" };
     console.error("Failed to check server verification", error);
-    redirect(`/servers/${slug}/manage?verificationError=unknown`);
+    return { error: "unknown" };
   }
   revalidatePath(`/servers/${slug}/manage`);
   if (result.result === "verified") {
-    revalidatePath("/servers");
+    revalidatePath("/");
     revalidatePath(`/servers/${slug}`);
   }
-  redirect(`/servers/${slug}/manage?verification=${result.result}`);
+  return { outcome: result.result };
 }

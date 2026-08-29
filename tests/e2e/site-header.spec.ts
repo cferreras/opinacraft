@@ -5,7 +5,9 @@ test("keeps the wordmark text vertically aligned with the primary navigation", a
   await page.goto("/");
 
   const brandText = page.locator('header a[aria-label="OpinaCraft, inicio"] span span');
-  const homeLink = page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: "Inicio" });
+  const primaryNavigation = page.getByRole("navigation", { name: "Navegación principal" });
+  const homeLink = primaryNavigation.getByRole("link", { name: "Mis servidores" });
+  await expect(primaryNavigation.getByRole("link", { name: "Servidores" })).toHaveCount(0);
   const [brandCenter, homeCenter] = await Promise.all([
     brandText.evaluate((element) => {
       const { top, height } = element.getBoundingClientRect();

@@ -193,14 +193,32 @@ test("keeps the server description within the two-thousand-character limit", () 
   }));
 });
 
-test("trims server tags and enforces the eight-tag limit", () => {
+test("keeps only known game modes and caps them at three", () => {
   const input = normalizeCreateServerInput({
     name: "A Minecraft Community",
-    tags: [" Survival ", "survival", "español"],
+    gameModes: ["Skyblock", "no-existe", "survival"],
     endpoints: [{ edition: "java", host: "play.example.com" }],
   });
-  assert.deepEqual(input.tags, ["Survival", "survival", "español"]);
-  assert.equal(createServerInputSchema.safeParse({ name: "A Minecraft Community", tags: Array.from({ length: 9 }, () => "tag"), endpoints: [{ edition: "java", host: "play.example.com" }] }).success, false);
+
+  // Catalogue order wins over the order the owner clicked, so two servers list alike.
+  assert.deepEqual(input.gameModes, ["survival", "skyblock"]);
+  assert.equal(createServerInputSchema.safeParse({ name: "A Minecraft Community", gameModes: ["survival", "pvp", "skyblock", "prison"], endpoints: [{ edition: "java", host: "play.example.com" }] }).success, false);
+});
+
+test("stores a known country and drops anything else", () => {
+  const withCountry = normalizeCreateServerInput({
+    name: "A Minecraft Community",
+    country: "ES",
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  });
+  const withoutCountry = normalizeCreateServerInput({
+    name: "A Minecraft Community",
+    country: "xx",
+    endpoints: [{ edition: "java", host: "play.example.com" }],
+  });
+
+  assert.equal(withCountry.country, "es");
+  assert.equal(withoutCountry.country, null);
 });
 
 test("accepts a whitelist form and the mixed-account password profile", () => {

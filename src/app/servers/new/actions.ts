@@ -17,13 +17,12 @@ import {
 } from "@/lib/servers/validation";
 import { parseEnabledPort } from "@/lib/servers/endpoint-fields";
 import { serverValidationField } from "@/lib/servers/form-validation";
-import { TagBlockedError, TagInputError } from "@/lib/servers/tags";
 import { processMonitorSyncOutbox } from "@/lib/servers/monitor-sync";
 import { invalidatePublicServerCache } from "@/lib/servers/cache-tags";
 
 export type CreateServerState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "tags" | "endpoints", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "gameModes" | "country" | "endpoints", string>>;
   created?: { id: string; slug: string };
 };
 
@@ -46,7 +45,8 @@ function getInput(formData: FormData): CreateServerInput {
     accessFormUrl: formValue(formData, "accessFormUrl"),
     accountMode: formValue(formData, "accountMode") as CreateServerInput["accountMode"],
     authMode: formValue(formData, "authMode") as CreateServerInput["authMode"],
-    tags: (formValue(formData, "tags") ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
+    gameModes: formData.getAll("gameModes").filter((value) => typeof value === "string"),
+    country: formValue(formData, "country"),
     host: formValue(formData, "host"),
     javaPort: parseEnabledPort(formValue(formData, "javaPort"), javaEnabled),
     bedrockPort: parseEnabledPort(formValue(formData, "bedrockPort"), bedrockEnabled),
@@ -105,9 +105,6 @@ export async function createServerAction(
 
     if (error instanceof UnverifiedEmailError) {
       return { formError: `${error.message} Revisa tu perfil para reenviar el enlace.` };
-    }
-    if (error instanceof TagInputError || error instanceof TagBlockedError) {
-      return { fieldErrors: { tags: error.message } };
     }
 
     console.error("Failed to create server", error instanceof Error ? error.name : "unknown");

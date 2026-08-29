@@ -69,7 +69,7 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   await moderator.getByRole("alertdialog").getByRole("button", { name: "Sí, ocultar" }).click();
   await expect(moderator).toHaveURL(/\/admin\?updated=1$/);
 
-  await reporter.goto("/servers");
+  await reporter.goto("/");
   await expect(reporter.getByRole("heading", { name: serverName })).toHaveCount(0);
 
   await moderator.goto("/admin?status=actioned");

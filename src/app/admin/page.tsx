@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { AlertCircle, CheckCircle2, Tag as TagIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 
-import { moderateReportAction, moderateReviewReportAction, moderateTagAction, grantRoleAction } from "@/app/admin/actions";
+import { moderateReportAction, moderateReviewReportAction, grantRoleAction } from "@/app/admin/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AdminModerationWorkbench } from "@/components/admin-moderation-workbench";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getPlatformRole, listOpenReports, listOpenReviewReports } from "@/lib/admin";
-import { listModerationTags } from "@/lib/servers/tags";
 import { getServerSession } from "@/lib/session";
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string; updated?: string; status?: string }> }) {
@@ -24,7 +23,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (!role) redirect("/");
   const query = await searchParams;
   const reportStatus = query.status === "actioned" || query.status === "dismissed" ? query.status : "open";
-  const [reports, reviewReports, tags] = await Promise.all([listOpenReports(reportStatus), listOpenReviewReports(reportStatus), listModerationTags()]);
+  const [reports, reviewReports] = await Promise.all([listOpenReports(reportStatus), listOpenReviewReports(reportStatus)]);
   const moderationItems = [
     ...reports.map((report) => ({
       id: report.id,
@@ -74,17 +73,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
         <AdminModerationWorkbench items={moderationItems} status={reportStatus} serverAction={moderateReportAction} reviewAction={moderateReviewReportAction} />
 
-        <section className="mt-10" aria-labelledby="tags-heading">
-          <Card><CardHeader><div className="flex items-center gap-2"><TagIcon aria-hidden="true" className="size-5 text-primary" /><CardTitle id="tags-heading">Etiquetas</CardTitle></div><CardDescription>Revisa el uso y el estado de las etiquetas del catálogo.</CardDescription></CardHeader><CardContent>{tags.length ? <div className="divide-y rounded-md border">{tags.map((tag) => <div key={tag.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><p className="font-medium">{tag.label}</p><p className="text-xs text-muted-foreground">{tag.usageCount} usos · <span className="capitalize">{tag.status}</span></p></div><div className="flex flex-wrap items-center gap-2"><form action={moderateTagAction}><input type="hidden" name="tagAction" value="block" /><input type="hidden" name="tagId" value={tag.id} /><Button type="submit" variant="outline" size="sm">Bloquear</Button></form><form action={moderateTagAction} className="flex items-center gap-2"><input type="hidden" name="tagAction" value="rename" /><input type="hidden" name="tagId" value={tag.id} /><Input name="label" placeholder="Nuevo nombre" className="h-8 w-32 text-xs" aria-label={`Nuevo nombre para ${tag.label}`} /><Button type="submit" variant="ghost" size="sm" className="h-8">Renombrar</Button></form></div></div>)}</div> : <EmptyState>No hay etiquetas para moderar.</EmptyState>}</CardContent></Card>
-        </section>
-
         {role === "admin" ? <section className="mt-10" aria-labelledby="roles-heading"><Card><CardHeader><CardTitle id="roles-heading">Gestionar roles</CardTitle><CardDescription>Concede permisos de moderación a una cuenta existente.</CardDescription></CardHeader><CardContent><form action={grantRoleAction} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"><Field><FieldLabel htmlFor="role-email">Correo electrónico</FieldLabel><Input id="role-email" required type="email" name="email" placeholder="cuenta@ejemplo.com" /></Field><Field><FieldLabel htmlFor="role-value">Rol</FieldLabel><NativeSelect id="role-value" name="role"><option value="moderator">Moderador</option><option value="admin">Administrador</option></NativeSelect></Field><Button type="submit">Conceder rol</Button></form></CardContent></Card></section> : null}
       </main>
       <SiteFooter variant="compact" />
     </div>
   );
-}
-
-function EmptyState({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">{children}</div>;
 }

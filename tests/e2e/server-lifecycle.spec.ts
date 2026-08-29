@@ -28,7 +28,7 @@ test("owner can create a complete Java/Bedrock listing, upload media, edit visib
     websiteUrl: "https://example.com/community",
     storeUrl: "https://shop.example.com/store",
     discordUrl: "https://discord.gg/example",
-    tags: ["survival", "community"],
+    gameModes: ["Survival"],
   });
   await markServerVerified(slug, ["java", "bedrock"]);
   await publishServer(page, slug);
@@ -72,7 +72,7 @@ test("owner can create a complete Java/Bedrock listing, upload media, edit visib
   await page.getByRole("button", { name: "Guardar cambios" }).click();
   await expect(page).toHaveURL(new RegExp(`/servers/${slug}/manage\\?updated=1$`));
 
-  await page.goto("/servers");
+  await page.goto("/");
   await expect(page.getByText(serverName)).toHaveCount(0);
 
   await page.goto(`/servers/${slug}/manage`);
