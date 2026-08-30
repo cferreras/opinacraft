@@ -163,7 +163,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const serverResultsSummary = getServerResultsSummary({ page, pageSize: PUBLIC_SERVER_PAGE_SIZE, visibleCount: servers.length, totalCount });
   const totalPages = Math.max(1, Math.ceil(totalCount / PUBLIC_SERVER_PAGE_SIZE));
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex-1 bg-background">
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-9 sm:px-6 lg:px-8">
         <section aria-labelledby="servers-heading">

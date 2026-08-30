@@ -60,7 +60,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         : "No se pudo completar la acción de moderación.";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex-1 bg-background">
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">

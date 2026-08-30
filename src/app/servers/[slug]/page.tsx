@@ -178,7 +178,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
   const editions = editionLabel(server);
   const description = normalizeServerDescription(server.description) ?? "Esta comunidad de Minecraft está preparada para recibirte. Consulta sus canales oficiales para conocer sus normas y novedades.";
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex-1 bg-background">
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 pb-14 sm:px-6 lg:px-8">
         <nav aria-label="Ruta de navegación" className="flex items-center gap-1.5 py-4 text-xs text-muted-foreground">

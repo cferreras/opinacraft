@@ -41,3 +41,23 @@ test("all app pages expose the full site footer exactly once", async ({ page }) 
     await expect(footer.getByRole("navigation", { name: "Explorar" })).toBeVisible();
   }
 });
+
+test("does not add a second viewport before the shared footer", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1200 });
+
+  for (const path of ["/contact", "/sign-in"]) {
+    await page.goto(path);
+
+    const bounds = await page.locator("footer").evaluate((footer) => {
+      const rect = footer.getBoundingClientRect();
+      return {
+        footerBottom: Math.round(rect.bottom),
+        documentHeight: document.documentElement.scrollHeight,
+        viewportHeight: window.innerHeight,
+      };
+    });
+
+    expect(bounds.footerBottom, `footer should fit on ${path}`).toBeLessThanOrEqual(bounds.viewportHeight);
+    expect(bounds.documentHeight, `page should not overflow on ${path}`).toBeLessThanOrEqual(bounds.viewportHeight);
+  }
+});

@@ -14,7 +14,7 @@ type AuthShellProps = {
 
 export function AuthShell({ title, description, children, footer }: AuthShellProps) {
   return (
-    <main className="grid min-h-[calc(100vh-4rem)] place-items-center px-4 py-8 sm:py-12">
+    <main className="grid flex-1 place-items-center px-4 py-8 sm:py-12">
       <section className="grid w-full max-w-4xl overflow-hidden rounded-xl border bg-card shadow-sm md:grid-cols-[0.9fr_1.1fr]">
         <aside className="hidden flex-col justify-between bg-primary p-8 text-primary-foreground md:flex lg:p-10">
           <Link href="/" className="relative z-10 inline-flex items-center gap-2.5 text-sm font-bold tracking-tight">

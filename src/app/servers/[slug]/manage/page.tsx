@@ -46,7 +46,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
   const history = emptyPlayerHistoryResponse("24h");
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex-1 bg-background">
       <SiteHeader />
       <main className="mx-auto w-full max-w-7xl px-4 pb-14 sm:px-6 lg:px-8">
         <div className="pt-7 sm:pt-10">

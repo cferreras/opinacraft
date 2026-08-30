@@ -100,7 +100,7 @@ export default async function ManagedServersPage({ searchParams }: Props) {
   ].filter(Boolean).join(" · ");
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex-1 bg-background">
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-8 sm:px-6 lg:px-8">
         <section aria-labelledby="managed-servers-heading">
