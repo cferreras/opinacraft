@@ -37,12 +37,12 @@ export default function RootLayout({
             and React drops script tags rendered on the client. */}
         <ThemeProvider>
           <TooltipProvider>
-            <div className="flex min-h-screen flex-col">
-              <div className="flex min-h-0 flex-1 flex-col">
-                <Suspense fallback={null}>{children}</Suspense>
+            <Suspense fallback={null}>
+              <div className="flex min-h-screen flex-col">
+                <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+                <SiteFooter />
               </div>
-              <SiteFooter />
-            </div>
+            </Suspense>
             <Toaster position="bottom-right" />
           </TooltipProvider>
         </ThemeProvider>

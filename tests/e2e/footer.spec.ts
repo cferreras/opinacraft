@@ -61,3 +61,18 @@ test("does not add a second viewport before the shared footer", async ({ page })
     expect(bounds.documentHeight, `page should not overflow on ${path}`).toBeLessThanOrEqual(bounds.viewportHeight);
   }
 });
+
+test("does not stream the footer before async route content", async ({ page }) => {
+  await page.goto("/sign-in");
+
+  const firstChunk = await page.evaluate(async () => {
+    const response = await fetch("/admin");
+    const reader = response.body?.getReader();
+    const chunk = await reader?.read();
+
+    await reader?.cancel();
+    return new TextDecoder().decode(chunk?.value);
+  });
+
+  expect(firstChunk).not.toContain("<footer");
+});
