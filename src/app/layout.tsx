@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SiteFooter } from "@/components/site-footer";
 
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default function RootLayout({
         <ThemeProvider>
           <TooltipProvider>
             <Suspense fallback={null}>{children}</Suspense>
+            <SiteFooter />
             <Toaster position="bottom-right" />
           </TooltipProvider>
         </ThemeProvider>

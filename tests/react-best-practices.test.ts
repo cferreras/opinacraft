@@ -43,11 +43,29 @@ test("passes a shaped payload to the server manage client boundary", () => {
   assert.doesNotMatch(source, /<ServerManageForm server=\{server\}/);
 });
 
+test("keeps the public preview rail below the sticky site header", () => {
+  const pageSource = readProjectFile("src/app/servers/[slug]/manage/page.tsx");
+  const headerSource = readProjectFile("src/components/site-header.tsx");
+
+  assert.match(headerSource, /<div className="mx-auto flex h-16 /);
+  assert.match(pageSource, /<aside className="order-first min-w-0 lg:order-none lg:sticky lg:top-\[calc\(4rem\+1\.25rem\)\]/);
+  assert.doesNotMatch(pageSource, /lg:sticky lg:top-5/);
+});
+
 test("narrows profile effects to the authenticated user identity", () => {
   const source = readProjectFile("src/app/profile/page.tsx");
 
   assert.match(source, /session\?\.user\?\.id/);
   assert.doesNotMatch(source, /\}, \[session\]\);/);
+});
+
+test("gives profile tabs a visible active surface", () => {
+  const profileSource = readProjectFile("src/app/profile/page.tsx");
+  const tabsSource = readProjectFile("src/components/ui/tabs.tsx");
+
+  assert.match(profileSource, /<TabsList className="grid w-full grid-cols-3 bg-accent sm:w-auto">/);
+  assert.match(tabsSource, /data-\[state=active\]:bg-background/);
+  assert.doesNotMatch(tabsSource, /data-active:/);
 });
 
 test("keeps moderation access out of the header layout flow", () => {

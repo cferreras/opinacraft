@@ -38,6 +38,7 @@ export async function listServerMembers(serverId: string, userId: string) {
       userId: serverMembers.userId,
       name: user.name,
       email: user.email,
+      image: user.image,
       role: serverMembers.role,
       joinedAt: serverMembers.joinedAt,
     })

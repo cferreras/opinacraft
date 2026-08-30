@@ -30,7 +30,6 @@ import { ReviewSection } from "@/components/review-section";
 import { ServerCountryCode } from "@/components/server-country-code";
 import { ServerLogo } from "@/components/server-logo";
 import { ServerUtilityActions } from "@/components/server-utility-actions";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { normalizeServerDescription } from "@/lib/servers/description";
 import { getServerSession } from "@/lib/session";
@@ -298,7 +297,6 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
           </div>
         </div>
       </main>
-      <SiteFooter />
     </div>
   );
 }

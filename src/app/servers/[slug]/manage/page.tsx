@@ -14,7 +14,6 @@ import { MemberPanel } from "@/components/member-panel";
 import { PlayerHistoryCard } from "@/components/player-history-card";
 import { ServerLogo } from "@/components/server-logo";
 import { ServerManageForm } from "@/components/server-manage-form";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { VerificationPanel, VerificationPanelEmpty } from "@/components/verification-panel";
 import { formatEndpoint } from "@/lib/servers/format";
@@ -98,7 +97,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
               {server.role === "owner" ? <DeleteServerForm serverId={server.id} slug={server.slug} /> : null}
             </div>
 
-            <aside className="order-first min-w-0 lg:order-none lg:sticky lg:top-5 lg:self-start">
+            <aside className="order-first min-w-0 lg:order-none lg:sticky lg:top-[calc(4rem+1.25rem)] lg:self-start">
               <div className="space-y-4">
                 <Card><CardHeader><CardDescription className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Vista pública</CardDescription><div className="mt-2 flex items-center gap-3"><ServerLogo name={server.name} media={server.media} className="size-11 rounded-lg" /><div className="min-w-0"><CardTitle className="truncate text-sm">{server.name}</CardTitle><p className="mt-0.5 text-xs text-muted-foreground">/{server.slug}</p></div></div></CardHeader><CardContent><div className="rounded-md border bg-muted/30 p-3 text-xs"><div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Estado de la ficha</span><span className={server.publicationStatus === "published" ? "font-semibold text-success" : "font-semibold text-warning"}>{publicationLabel(server.publicationStatus)}</span></div><div className="mt-2.5 flex items-center justify-between gap-3"><span className="text-muted-foreground">Identidad verificada</span><span className="inline-flex items-center gap-1 font-semibold text-success"><Check aria-hidden="true" className="size-3.5" />{server.verificationStatus === "verified" ? "Lista" : "Pendiente"}</span></div></div>{server.publicationStatus === "published" ? <Button asChild size="lg" className="mt-3 w-full justify-between"><Link href={`/servers/${server.slug}`}>Abrir página pública<ChevronRight aria-hidden="true" /></Link></Button> : <p className="mt-3 rounded-md bg-warning/10 px-3 py-2.5 text-xs leading-4 text-warning">Publica la ficha desde Detalles cuando esté lista para descubrirse.</p>}</CardContent></Card>
 
@@ -110,7 +109,6 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
           </div>
         </div>
       </main>
-      <SiteFooter variant="compact" />
     </div>
   );
 }

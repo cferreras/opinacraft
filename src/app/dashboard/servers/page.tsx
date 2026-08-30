@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { ManagedServerRow, managedTableGridTemplate } from "@/components/managed-server-row";
 import { ManagedServersToolbar } from "@/components/managed-servers-toolbar";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { requireServerSession } from "@/lib/session";
+import { getCachedMonitorStatuses } from "@/lib/servers/cached-queries";
 import {
   collectManagedServerNotices,
   filterManagedServers,
@@ -21,7 +21,8 @@ import {
   summarizeManagedServers,
   type ManagedServerNotice,
 } from "@/lib/servers/managed-servers";
-import { listManagedServers } from "@/lib/servers/queries";
+import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
+import { applyMonitorStatuses, listManagedServers } from "@/lib/servers/queries";
 
 type Props = { searchParams?: Promise<{ deleted?: string; q?: string; filter?: string; sort?: string }> };
 
@@ -69,10 +70,20 @@ function NoticeItem({ notice }: { notice: ManagedServerNotice }) {
 export default async function ManagedServersPage({ searchParams }: Props) {
   await connection();
   const session = await requireServerSession("/dashboard/servers");
-  const [servers, query] = await Promise.all([
+  const [databaseServers, query] = await Promise.all([
     listManagedServers(session.user.id),
     searchParams ?? Promise.resolve<{ deleted?: string; q?: string; filter?: string; sort?: string }>({}),
   ]);
+  let servers = databaseServers;
+
+  if (isMonitorApiConfigured() && servers.length > 0) {
+    try {
+      const states = await getCachedMonitorStatuses(servers.map((server) => server.id)) ?? [];
+      servers = applyMonitorStatuses(servers, states);
+    } catch (error) {
+      console.error("[monitor] managed status cache unavailable", error instanceof Error ? error.name : "unknown");
+    }
+  }
 
   const summary = summarizeManagedServers(servers);
   const notices = collectManagedServerNotices(servers);
@@ -190,7 +201,6 @@ export default async function ManagedServersPage({ searchParams }: Props) {
           )}
         </section>
       </main>
-      <SiteFooter variant="compact" />
     </div>
   );
 }

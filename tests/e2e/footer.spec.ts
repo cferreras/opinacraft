@@ -30,3 +30,14 @@ test("mobile footer keeps its content groups readable", async ({ page }) => {
   await expect(helpNavigation).toBeVisible();
   await expect(helpNavigation.getByRole("link", { name: /Privacidad/ })).toBeVisible();
 });
+
+test("all app pages expose the full site footer exactly once", async ({ page }) => {
+  for (const path of ["/sign-in", "/forgot-password", "/terms", "/dashboard/servers"]) {
+    await page.goto(path);
+
+    const footer = page.locator("footer");
+    await expect(footer, `footer on ${path}`).toHaveCount(1);
+    await expect(footer.getByRole("navigation"), `full footer on ${path}`).toHaveCount(3);
+    await expect(footer.getByRole("navigation", { name: "Explorar" })).toBeVisible();
+  }
+});

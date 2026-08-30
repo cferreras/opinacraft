@@ -10,7 +10,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { CatalogFilterBar } from "@/components/catalog-filter-bar";
 import { PromotedServersSection } from "@/components/promoted-servers-section";
 import { PublicServerRow } from "@/components/public-server-row";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getCachedCatalogVersions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
 import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
@@ -252,7 +251,6 @@ export default async function PublicServersPage({ searchParams }: { searchParams
           </section>
         </section>
       </main>
-      <SiteFooter />
     </div>
   );
 }
