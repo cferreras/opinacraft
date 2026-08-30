@@ -1,7 +1,7 @@
 import { UserPlus, Users } from "lucide-react";
 
 import { addMemberAction, changeMemberRoleAction, removeMemberAction } from "@/app/servers/[slug]/manage/actions";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 
-type Member = { userId: string; name: string; email: string; role: "owner" | "admin" | "editor" };
+type Member = { userId: string; name: string; email: string; image: string | null; role: "owner" | "admin" | "editor" };
 
 function initials(value: string) {
   return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
@@ -22,7 +22,7 @@ export function MemberPanel({ serverId, slug, members, canManage }: { serverId: 
       <CardContent className="grid gap-3">
         {members.map((member) => (
           <div key={member.userId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
-            <div className="flex min-w-0 items-center gap-3"><Avatar className="size-8"><AvatarFallback className="text-xs">{initials(member.name || member.email)}</AvatarFallback></Avatar><div className="min-w-0"><p className="truncate text-sm font-semibold">{member.name}</p><p className="truncate text-xs text-muted-foreground">{member.email}</p></div></div>
+            <div className="flex min-w-0 items-center gap-3"><Avatar className="size-8"><AvatarImage src={member.image ?? undefined} alt="" /><AvatarFallback className="text-xs">{initials(member.name || member.email)}</AvatarFallback></Avatar><div className="min-w-0"><p className="truncate text-sm font-semibold">{member.name}</p><p className="truncate text-xs text-muted-foreground">{member.email}</p></div></div>
             <div className="flex items-center gap-2">
               {canManage && member.role !== "owner" ? <form action={changeMemberRoleAction} className="flex items-center gap-2"><input type="hidden" name="serverId" value={serverId} /><input type="hidden" name="slug" value={slug} /><input type="hidden" name="targetUserId" value={member.userId} /><NativeSelect name="role" defaultValue={member.role} aria-label={`Rol de ${member.email}`}><option value="admin">Administrador</option><option value="editor">Editor</option></NativeSelect><Button type="submit" variant="outline" size="sm" className="h-8">Guardar</Button></form> : <Badge variant="secondary" className="capitalize">{member.role === "owner" ? "propietario" : member.role === "admin" ? "administrador" : "editor"}</Badge>}
               {canManage && member.role !== "owner" ? <form action={removeMemberAction}><input type="hidden" name="serverId" value={serverId} /><input type="hidden" name="slug" value={slug} /><input type="hidden" name="targetUserId" value={member.userId} /><Button type="submit" variant="link" size="sm" className="h-auto p-0 text-destructive">Quitar</Button></form> : null}

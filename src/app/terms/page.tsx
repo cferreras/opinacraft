@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
 export const metadata = {
@@ -24,7 +23,7 @@ const sections: readonly [string, ReactNode][] = [
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex-1 bg-background">
       <SiteHeader />
       <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <Card>
@@ -32,7 +31,6 @@ export default function TermsPage() {
           <CardContent className="sm:p-8 sm:pt-0"><Separator /><div className="mt-8 grid gap-7 text-sm leading-7 text-muted-foreground">{sections.map(([title, content]) => <section key={title}><h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2><p className="mt-2">{content}</p></section>)}</div><Separator className="my-8" /><nav className="flex flex-wrap gap-2" aria-label="Enlaces legales"><Button asChild variant="link" className="h-auto p-0"><Link href="/privacy">Privacidad</Link></Button><Button asChild variant="link" className="h-auto p-0"><Link href="/contact">Contacto</Link></Button></nav></CardContent>
         </Card>
       </main>
-      <SiteFooter />
     </div>
   );
 }

@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getPlatformRole, listOpenReports, listOpenReviewReports } from "@/lib/admin";
 import { getServerSession } from "@/lib/session";
@@ -61,7 +60,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         : "No se pudo completar la acción de moderación.";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex-1 bg-background">
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -75,7 +74,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
         {role === "admin" ? <section className="mt-10" aria-labelledby="roles-heading"><Card><CardHeader><CardTitle id="roles-heading">Gestionar roles</CardTitle><CardDescription>Concede permisos de moderación a una cuenta existente.</CardDescription></CardHeader><CardContent><form action={grantRoleAction} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"><Field><FieldLabel htmlFor="role-email">Correo electrónico</FieldLabel><Input id="role-email" required type="email" name="email" placeholder="cuenta@ejemplo.com" /></Field><Field><FieldLabel htmlFor="role-value">Rol</FieldLabel><NativeSelect id="role-value" name="role"><option value="moderator">Moderador</option><option value="admin">Administrador</option></NativeSelect></Field><Button type="submit">Conceder rol</Button></form></CardContent></Card></section> : null}
       </main>
-      <SiteFooter variant="compact" />
     </div>
   );
 }

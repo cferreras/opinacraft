@@ -297,6 +297,11 @@ export function monitorFromApi<T extends PublicServer>(server: T, state: Monitor
   return { ...server, monitor, aggregateStatus: state.freshness === "fresh" ? state.healthStatus : "unknown" } as T;
 }
 
+export function applyMonitorStatuses<T extends PublicServer>(items: T[], states: readonly MonitorStatusView[]) {
+  const statesById = new Map(states.map((state) => [state.serverId, state]));
+  return items.map((item) => monitorFromApi(item, statesById.get(item.id) ?? null));
+}
+
 export async function attachMonitorApiStatuses<T extends PublicServer>(items: T[], options: Pick<RequestInit, "cache"> = {}) {
   if (!items.length || !isMonitorApiConfigured()) return items;
   let states: MonitorStatusView[] = [];
@@ -305,8 +310,7 @@ export async function attachMonitorApiStatuses<T extends PublicServer>(items: T[
   } catch (error) {
     console.error("[monitor] status batch unavailable", error instanceof Error ? error.name : "unknown");
   }
-  const byId = new Map(states.map((state) => [state.serverId, state]));
-  return items.map((item) => monitorFromApi(item, byId.get(item.id) ?? null));
+  return applyMonitorStatuses(items, states);
 }
 
 async function attachCatalogData<T extends { id: string; gameModes: ServerGameModes; media: ServerMedia[] }>(items: T[]) {

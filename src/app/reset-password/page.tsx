@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AuthShell } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
 
-export default function ResetPasswordPage() { return <Suspense fallback={<main className="grid min-h-screen place-items-center"><Skeleton className="h-32 w-full max-w-md" /></main>}><ResetPasswordForm /></Suspense>; }
+export default function ResetPasswordPage() { return <Suspense fallback={<main className="grid flex-1 place-items-center"><Skeleton className="h-32 w-full max-w-md" /></main>}><ResetPasswordForm /></Suspense>; }
 function ResetPasswordForm() {
   const router = useRouter(); const token = useSearchParams().get("token"); const [password, setPassword] = useState(""); const [confirmation, setConfirmation] = useState(""); const [error, setError] = useState<string | null>(null); const [isPending, setIsPending] = useState(false);
   async function handleSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setError(null); if (!token) { setError("Este enlace no es válido o ha caducado."); return; } if (password !== confirmation) { setError("Las contraseñas no coinciden."); return; } setIsPending(true); try { const { error: resetError } = await authClient.resetPassword({ newPassword: password, token }); if (resetError) { setError(resetError.message ?? "No se ha podido restablecer la contraseña."); return; } router.push("/sign-in?reset=success"); } catch (caughtError) { setError(caughtError instanceof Error ? caughtError.message : "No se ha podido restablecer la contraseña."); } finally { setIsPending(false); } }

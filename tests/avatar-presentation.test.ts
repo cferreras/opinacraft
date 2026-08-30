@@ -25,6 +25,15 @@ test("loads and renders the persisted review author avatar", () => {
   assert.match(cardSource, /review\.authorImage/);
 });
 
+test("loads and renders the persisted server member avatar", () => {
+  const querySource = readProjectFile("src/lib/servers/members.ts");
+  const panelSource = readProjectFile("src/components/member-panel.tsx");
+
+  assert.match(querySource, /image: user\.image/);
+  assert.match(panelSource, /AvatarImage/);
+  assert.match(panelSource, /member\.image/);
+});
+
 test("invalidates cached review avatars after profile avatar changes", () => {
   const cachedReviewsSource = readProjectFile("src/lib/servers/cached-queries.ts");
   const avatarRouteSource = readProjectFile("src/app/api/account/avatar/route.ts");
