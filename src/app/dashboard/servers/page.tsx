@@ -149,7 +149,7 @@ export default async function ManagedServersPage({ searchParams }: Props) {
           ) : null}
 
           {servers.length === 0 ? (
-            <Empty className="mt-6 rounded-xl border">
+            <Empty className="mt-6 rounded-xl border bg-white dark:bg-card">
               <EmptyHeader>
                 <EmptyMedia variant="icon"><Plus /></EmptyMedia>
                 <EmptyTitle>Todavía no gestionas ningún servidor</EmptyTitle>
@@ -170,7 +170,7 @@ export default async function ManagedServersPage({ searchParams }: Props) {
               <div className="mt-4"><ManagedServersToolbar query={search} filter={filter} sort={sort} counts={counts} /></div>
 
               {visibleServers.length === 0 ? (
-                <Empty className="mt-4 rounded-xl border">
+                <Empty className="mt-4 rounded-xl border bg-white dark:bg-card">
                   <EmptyHeader>
                     <EmptyTitle>Ningún servidor coincide con este filtro</EmptyTitle>
                     <EmptyDescription>Prueba con otro estado o borra el texto de búsqueda.</EmptyDescription>

@@ -59,13 +59,19 @@ test("narrows profile effects to the authenticated user identity", () => {
   assert.doesNotMatch(source, /\}, \[session\]\);/);
 });
 
-test("gives profile tabs a visible active surface", () => {
-  const profileSource = readProjectFile("src/app/profile/page.tsx");
-  const tabsSource = readProjectFile("src/components/ui/tabs.tsx");
+test("keeps every profile tab active surface white", () => {
+  const source = readProjectFile("src/app/profile/page.tsx");
 
-  assert.match(profileSource, /<TabsList className="grid w-full grid-cols-3 bg-accent sm:w-auto">/);
-  assert.match(tabsSource, /data-\[state=active\]:bg-background/);
-  assert.doesNotMatch(tabsSource, /data-active:/);
+  assert.match(source, /<TabsTrigger value="identity" className="data-active:bg-white">Identidad<\/TabsTrigger>/);
+  assert.match(source, /<TabsTrigger value="security" className="data-active:bg-white">Seguridad<\/TabsTrigger>/);
+  assert.match(source, /<TabsTrigger value="account" className="data-active:bg-white">Cuenta<\/TabsTrigger>/);
+});
+
+test("gives managed-server empty states a white surface", () => {
+  const source = readProjectFile("src/app/dashboard/servers/page.tsx");
+
+  assert.match(source, /<Empty className="mt-6 rounded-xl border bg-white dark:bg-card">/);
+  assert.match(source, /<Empty className="mt-4 rounded-xl border bg-white dark:bg-card">/);
 });
 
 test("keeps moderation access out of the header layout flow", () => {
