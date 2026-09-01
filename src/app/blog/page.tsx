@@ -7,6 +7,7 @@ import { BlogCategoryBadge } from "@/components/blog-category-badge";
 import { Card } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { SiteHeader } from "@/components/site-header";
+import { OG_IMAGES } from "@/lib/brand/og";
 import {
   blogCategories,
   blogCategoryBySlug,
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
   title,
   description,
   alternates: { canonical: blogPath },
-  openGraph: { title, description, type: "website" },
+  openGraph: { title, description, type: "website", images: OG_IMAGES },
 };
 
 function CategoryFilters({ active }: { active?: string }) {

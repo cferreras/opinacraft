@@ -33,6 +33,7 @@ import { ServerUtilityActions } from "@/components/server-utility-actions";
 import { SiteHeader } from "@/components/site-header";
 import { normalizeServerDescription } from "@/lib/servers/description";
 import { getServerSession } from "@/lib/session";
+import { OG_IMAGES } from "@/lib/brand/og";
 import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
 import { gameModeLabel } from "@/lib/servers/game-modes";
 import { editionLabel, formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
@@ -135,9 +136,11 @@ export async function generateMetadata({ params }: PublicServerPageProps): Promi
         title: `${server.name} | OpinaCraft`,
         description: normalizeServerDescription(server.description) ?? `Descubre ${server.name} en OpinaCraft.`,
         alternates: { canonical: `/servers/${server.slug}` },
-        openGraph: { title: server.name, description: normalizeServerDescription(server.description) ?? undefined, type: "website", images: socialMedia ? [{ url: socialMedia.url }] : undefined },
+        openGraph: { title: server.name, description: normalizeServerDescription(server.description) ?? undefined, type: "website", images: socialMedia ? [{ url: socialMedia.url }] : OG_IMAGES },
       }
-    : { title: "Servidor no encontrado | OpinaCraft" };
+    // Same soft 404 as the blog: the shell has already streamed a 200 by the time
+    // notFound() runs, so noindex is what keeps the page out of the index.
+    : { title: "Servidor no encontrado | OpinaCraft", robots: { index: false, follow: false } };
 }
 
 export default async function PublicServerPage({ params, searchParams }: PublicServerPageProps) {

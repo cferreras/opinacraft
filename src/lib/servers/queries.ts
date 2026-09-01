@@ -14,6 +14,7 @@ import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } 
 import { catalogAccessCondition, type CatalogAccessFilter } from "./catalog-filters";
 import { MINECRAFT_VERSION_SQL_PATTERN, minecraftVersionsIn, sortMinecraftVersions } from "./minecraft-version";
 import { normalizeGameModeInputs } from "./game-modes";
+import { reviewScoreSql } from "./review-score";
 import { fetchMonitorStatuses, isMonitorApiConfigured, queryMonitorCatalog } from "./monitor-api-client";
 import type { MonitorStatusView } from "@/lib/monitor/repository";
 
@@ -384,12 +385,7 @@ function tableSortOrder(sort: PublicServerTableSort, direction: PublicServerSort
     order by case when se.edition = 'java' then 0 else 1 end
     limit 1
   )`;
-  const reviewAverage = sql`(
-    select avg(sr.rating)
-    from server_reviews sr
-    where sr.server_id = ${servers.id}
-      and sr.status = 'published'
-  )`;
+  const reviewScore = reviewScoreSql();
 
   switch (sort) {
     case "name": return sql`${servers.name} ${directionClause}`;
@@ -397,7 +393,7 @@ function tableSortOrder(sort: PublicServerTableSort, direction: PublicServerSort
     case "players": return sql`${servers.monitorPlayersCurrent} ${directionClause}`;
     case "version": return sql`${servers.monitorVersion} ${directionClause}`;
     case "latency": return sql`${servers.monitorLatencyMs} ${directionClause}`;
-    case "rating": return sql`${reviewAverage} ${directionClause}`;
+    case "rating": return sql`${reviewScore} ${directionClause}`;
     case "ip": return sql`${primaryEndpointAddress} ${directionClause}`;
   }
 }
@@ -621,7 +617,7 @@ export async function listPublishedServersWithMonitor({
       ? [catalogRelevanceOrder(queryText)]
       : sort === "recent"
         ? [desc(servers.createdAt)]
-        : [desc(sql`coalesce((select avg(sr.rating) from server_reviews sr where sr.server_id = ${servers.id} and sr.status = 'published'), 0)`)];
+        : [desc(sql`coalesce(${reviewScoreSql()}, 0)`)];
   const candidates = await db
     .select({ id: servers.id })
     .from(servers)
@@ -664,7 +660,7 @@ export async function listPublishedServersFromNeon({ page = 1, query = "", statu
         ? [desc(sql`coalesce(${servers.monitorPlayersCurrent}, 0)`)]
         : sort === "recent"
           ? [desc(servers.createdAt)]
-          : [desc(sql`coalesce((select avg(sr.rating) from server_reviews sr where sr.server_id = ${servers.id} and sr.status = 'published'), 0)`)];
+          : [desc(sql`coalesce(${reviewScoreSql()}, 0)`)];
   const serverIds = await db
     .select({ id: servers.id, totalCount: sql<number>`count(*) over()::int` })
     .from(servers)
