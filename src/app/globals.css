@@ -31,6 +31,18 @@
   --warning-soft: oklch(0.97 0.035 90);
   --danger: oklch(0.58 0.18 25);
   --danger-soft: oklch(0.96 0.03 25);
+  /* Blog categories. Three reuse the semantic hues the product already speaks
+   * (160 primary, 230 info, 80 warning); 300 is new, because the fourth
+   * category had no hue left. `-ink` is the readable text pair for a tinted
+   * badge on a light surface. */
+  --category-guias: oklch(0.54 0.16 160);
+  --category-guias-ink: oklch(0.45 0.14 160);
+  --category-comparativas: oklch(0.58 0.12 230);
+  --category-comparativas-ink: oklch(0.48 0.12 230);
+  --category-rendimiento: oklch(0.62 0.15 80);
+  --category-rendimiento-ink: oklch(0.5 0.13 80);
+  --category-admins: oklch(0.56 0.13 300);
+  --category-admins-ink: oklch(0.47 0.13 300);
   --history-java: oklch(0.56 0.16 160);
   --history-bedrock: oklch(0.56 0.09 230);
   --history-grid: oklch(0.45 0.02 200 / 14%);
@@ -77,6 +89,14 @@
   --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-category-guias: var(--category-guias);
+  --color-category-guias-ink: var(--category-guias-ink);
+  --color-category-comparativas: var(--category-comparativas);
+  --color-category-comparativas-ink: var(--category-comparativas-ink);
+  --color-category-rendimiento: var(--category-rendimiento);
+  --color-category-rendimiento-ink: var(--category-rendimiento-ink);
+  --color-category-admins: var(--category-admins);
+  --color-category-admins-ink: var(--category-admins-ink);
   --color-history-java: var(--history-java);
   --color-history-bedrock: var(--history-bedrock);
   --color-chart-1: var(--chart-1);
@@ -191,6 +211,12 @@ select {
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.68 0.16 160);
   --info: oklch(0.72 0.12 230);
+  /* On a dark surface the badge ink lifts well above the base hue; the base
+   * itself only tints the badge, so it stays put. */
+  --category-guias-ink: oklch(0.8 0.13 160);
+  --category-comparativas-ink: oklch(0.75 0.11 230);
+  --category-rendimiento-ink: oklch(0.8 0.13 80);
+  --category-admins-ink: oklch(0.78 0.12 300);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.68 0.16 160);

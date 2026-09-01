@@ -25,7 +25,7 @@ export default function PrivacyPage() {
   return (
     <div className="flex-1 bg-background">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+      <main className="mx-auto w-full max-w-4xl px-4 pb-8 pt-9 sm:px-6 lg:px-8 lg:pb-12">
         <Card>
           <CardHeader className="gap-4 sm:p-8"><div className="flex flex-wrap items-center justify-between gap-3"><Button asChild variant="link" className="h-auto p-0 text-base font-bold"><Link href="/">OpinaCraft</Link></Button><Badge variant="outline">Documento legal</Badge></div><div className="pt-8"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">Tus datos, bajo control</p><CardTitle className="mt-3 text-4xl tracking-tight sm:text-5xl">Política de privacidad</CardTitle><CardDescription className="mt-4 text-sm">Última actualización: 31 de julio de 2026.</CardDescription></div></CardHeader>
           <CardContent className="sm:p-8 sm:pt-0"><Separator /><div className="mt-8 grid gap-7 text-sm leading-7 text-muted-foreground">{sections.map(([title, content]) => <section key={title}><h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2><p className="mt-2">{content}</p></section>)}</div><Separator className="my-8" /><nav className="flex flex-wrap gap-2" aria-label="Enlaces legales"><Button asChild variant="link" className="h-auto p-0"><Link href="/terms">Términos de uso</Link></Button><Button asChild variant="link" className="h-auto p-0"><Link href="/contact">Contacto</Link></Button></nav></CardContent>

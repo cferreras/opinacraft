@@ -49,3 +49,13 @@ test("keeps the catalog reachable from the brand without a duplicate primary-nav
   assert.equal(headerSource.includes('label: "Servidores", href: "/"'), false);
   assert.equal(headerSource.includes('label: "Mis servidores", href: "/dashboard/servers"'), true);
 });
+
+test("links the blog from the desktop and mobile header navigation", () => {
+  const headerSource = readProjectFile("src/components/site-header.tsx");
+
+  assert.match(headerSource, /label: "Blog", href: "\/blog"/);
+  assert.match(
+    headerSource,
+    /MobileNavigationSection label="Explorar" items=\{publicItems\}/,
+  );
+});

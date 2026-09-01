@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
+  BookOpen,
   ChevronRight,
   CircleHelp,
   Menu,
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
+import { BrandMark } from "@/components/brand-mark";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,6 +29,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 const navigation = [
   { label: "Mis servidores", href: "/dashboard/servers", icon: Server },
+  { label: "Blog", href: "/blog", icon: BookOpen },
 ] as const;
 
 type PlatformRole = "moderator" | "admin";
@@ -43,15 +45,7 @@ const getServerPlatform = () => false;
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2 text-[0.9375rem] font-bold tracking-tight">
-      <Image
-        src="/brand/opinacraft-server-mark.webp"
-        alt=""
-        aria-hidden="true"
-        width={compact ? 26 : 28}
-        height={compact ? 26 : 28}
-        priority
-        className="object-contain"
-      />
+      <BrandMark size={compact ? 26 : 28} className="text-primary" />
       {!compact && <span>OpinaCraft</span>}
     </span>
   );
@@ -129,12 +123,14 @@ function MobileNavigationSection({
 }
 
 function MobileNavigation({ pathname, canModerate, onNavigate }: { pathname: string; canModerate: boolean; onNavigate: () => void }) {
+  const publicItems: readonly NavigationItem[] = [navigation[1]];
   const managementItems: readonly NavigationItem[] = canModerate
     ? [navigation[0], moderationNavigation]
     : [navigation[0]];
 
   return (
     <nav aria-label="Navegación móvil" className="space-y-5">
+      <MobileNavigationSection label="Explorar" items={publicItems} pathname={pathname} onNavigate={onNavigate} />
       <MobileNavigationSection label="Gestionar" items={managementItems} pathname={pathname} onNavigate={onNavigate} />
     </nav>
   );

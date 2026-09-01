@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 128" fill="none" role="img" aria-labelledby="lockupTitle">
+  <title id="lockupTitle">OpinaCraft</title>
+  <!-- Convert the wordmark to outlines before using this file anywhere Manrope
+       is not loaded; inside the app the webfont is already present. -->
+  <path fill="#00894c" fill-rule="evenodd" clip-rule="evenodd" d="M28 6L100 6L116 22L116 86L100 102L52 102L32 122L28 122L28 102L12 86L12 22ZM61.5 23L66.5 23L74.05 41.17L93.66 42.74L95.2 47.48L80.26 60.28L84.83 79.42L80.79 82.36L64 72.1L47.21 82.36L43.17 79.42L47.74 60.28L32.8 47.48L34.34 42.74L53.95 41.17L61.5 23Z" />
+  <text x="156" y="82" fill="#070b09" font-family="Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="76" font-weight="800" letter-spacing="-2.6">OpinaCraft</text>
+</svg>

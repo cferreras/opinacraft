@@ -1,6 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Heart } from "lucide-react";
+
+import { BrandMark } from "@/components/brand-mark";
 
 const footerColumns = [
   {
@@ -10,6 +11,7 @@ const footerColumns = [
       { label: "Servidores Java", href: "/?edition=java" },
       { label: "Servidores Bedrock", href: "/?edition=bedrock" },
       { label: "En línea ahora", href: "/?status=online" },
+      { label: "Blog", href: "/blog" },
     ],
   },
   {
@@ -34,7 +36,7 @@ const footerColumns = [
 function BrandLink({ size = 24 }: { size?: number }) {
   return (
     <Link href="/" aria-label="OpinaCraft, inicio" className="inline-flex shrink-0 items-center gap-2 text-[0.9375rem] font-bold tracking-tight text-foreground transition-opacity hover:opacity-80">
-      <Image src="/brand/opinacraft-server-mark.webp" alt="" aria-hidden="true" width={size} height={size} className="object-contain" />
+      <BrandMark size={size} className="text-primary" />
       <span>OpinaCraft</span>
     </Link>
   );
