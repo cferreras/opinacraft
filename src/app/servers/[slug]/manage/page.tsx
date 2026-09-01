@@ -48,7 +48,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
   return (
     <div className="flex-1 bg-background">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-7xl px-4 pb-14 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-7xl px-4 pb-14 pt-9 sm:px-6 lg:px-8">
         <div className="pt-7 sm:pt-10">
           <header className="flex flex-col gap-5 border-b pb-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">

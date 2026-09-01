@@ -102,7 +102,7 @@ export default async function ManagedServersPage({ searchParams }: Props) {
   return (
     <div className="flex-1 bg-background">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-8 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-9 sm:px-6 lg:px-8">
         <section aria-labelledby="managed-servers-heading">
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div>

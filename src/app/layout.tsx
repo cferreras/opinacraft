@@ -11,13 +11,10 @@ export const metadata: Metadata = {
   title: "OpinaCraft",
   description: "Discover and share Minecraft communities.",
   icons: {
-    icon: [
-      {
-        url: "/brand/opinacraft-server-mark.webp",
-        type: "image/webp",
-        sizes: "256x256",
-      },
-    ],
+    // favicon.ico comes from the app-directory file convention; the SVG is what
+    // modern browsers actually pick up, and it stays crisp at any density.
+    icon: [{ url: "/brand/opinacraft-mark.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/brand/opinacraft-apple-touch-icon.png", sizes: "180x180" }],
   },
   robots:
     process.env.VERCEL_ENV === "preview"

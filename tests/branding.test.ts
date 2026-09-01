@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 import sharp from "sharp";
 
-const brandMarkPath = path.resolve("public/brand/opinacraft-server-mark.webp");
+const brandMarkPath = path.resolve("public/brand/opinacraft-mark.webp");
 const faviconPath = path.resolve("src/app/favicon.ico");
 
 type IcoEntry = {

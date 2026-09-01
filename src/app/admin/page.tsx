@@ -62,7 +62,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   return (
     <div className="flex-1 bg-background">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-6xl px-4 pb-8 pt-9 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div><p className="text-xs font-semibold uppercase tracking-[0.08em] text-primary">Moderación</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Cola de moderación</h1><p className="mt-2 text-sm text-muted-foreground">Rol: <span className="font-medium capitalize text-foreground">{role}</span>. Las decisiones quedan registradas en un historial inmutable.</p></div>
           <div className="flex flex-wrap gap-2"><Button asChild variant={reportStatus === "open" ? "default" : "outline"} size="sm"><a href="/admin">Pendientes</a></Button><Button asChild variant={reportStatus === "actioned" ? "default" : "outline"} size="sm"><a href="/admin?status=actioned">Resueltos</a></Button><Button asChild variant={reportStatus === "dismissed" ? "default" : "outline"} size="sm"><a href="/admin?status=dismissed">Descartados</a></Button></div>

@@ -6,7 +6,6 @@ import { type ReactNode } from "react";
 import {
   Activity,
   Check,
-  ChevronRight,
   ExternalLink,
   Globe,
   KeyRound,
@@ -20,6 +19,7 @@ import { IconBrandDiscord } from "@tabler/icons-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyAddressButton } from "@/components/copy-address-button";
@@ -180,12 +180,8 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
   return (
     <div className="flex-1 bg-background">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 pb-14 sm:px-6 lg:px-8">
-        <nav aria-label="Ruta de navegación" className="flex items-center gap-1.5 py-4 text-xs text-muted-foreground">
-          <Link href="/" className="transition-colors hover:text-foreground">Servidores</Link>
-          <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground/50" />
-          <span className="truncate font-semibold text-foreground">{server.name}</span>
-        </nav>
+      <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-9 sm:px-6 lg:px-8">
+        <Breadcrumbs trail={[{ label: "Servidores", href: "/" }]} current={server.name} />
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <section className="min-w-0 lg:col-start-1 lg:row-start-1" aria-labelledby="server-name">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
