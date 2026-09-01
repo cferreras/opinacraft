@@ -9,10 +9,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { BlogHighlightsCard } from "@/components/blog-highlights-card";
 import { CatalogFilterBar } from "@/components/catalog-filter-bar";
-import { PromotedServersSection } from "@/components/promoted-servers-section";
 import { PublicServerRow } from "@/components/public-server-row";
 import { SiteHeader } from "@/components/site-header";
-import { OG_IMAGES } from "@/lib/brand/og";
+import { JsonLd } from "@/components/json-ld";
+import { buildOpenGraph } from "@/lib/seo/open-graph";
+import { itemListSchema } from "@/lib/seo/structured-data";
 import { getCachedCatalogVersions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
 import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
 import {
@@ -31,7 +32,10 @@ import { gameModeLabel, parseGameModeParam } from "@/lib/servers/game-modes";
 import { parseCountryParam, serverCountryLabel } from "@/lib/servers/countries";
 import { parseVersionParam } from "@/lib/servers/minecraft-version";
 
-export const metadata: Metadata = { title: "Servidores Minecraft | OpinaCraft", description: "Descubre, compara y únete a comunidades de Minecraft en OpinaCraft.", alternates: { canonical: catalogPath }, openGraph: { title: "Servidores Minecraft | OpinaCraft", description: "Descubre, compara y únete a comunidades de Minecraft en OpinaCraft.", type: "website", images: OG_IMAGES } };
+export const catalogTitle = "Directorio de servidores de Minecraft en español | OpinaCraft";
+export const catalogDescription = "Descubre, compara y únete a comunidades de Minecraft: estado en tiempo real, ping, modalidad y opiniones de quienes ya juegan en ellas.";
+
+export const metadata: Metadata = { title: catalogTitle, description: catalogDescription, alternates: { canonical: catalogPath }, openGraph: buildOpenGraph({ title: catalogTitle, description: catalogDescription, path: catalogPath }) };
 /**
  * The rail leaves the table ~700px at `lg` and its designed 828px only past ~1120px, which is where
  * the edition column fits without squeezing the server name to nothing — so it waits for the room.
@@ -191,6 +195,9 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   return (
     <div className="flex-1 bg-background">
       <SiteHeader />
+      {/* The listing as the ordered list it is. Only the servers actually rendered on this page go
+          in, in the order they are rendered. */}
+      {servers.length > 0 ? <JsonLd data={itemListSchema(servers.map((server) => ({ name: server.name, path: `/servers/${server.slug}` })))} /> : null}
       <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-9 sm:px-6 lg:px-8">
         <section aria-labelledby="servers-heading">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -205,9 +212,10 @@ export default async function PublicServersPage({ searchParams }: { searchParams
               where the blog module belongs on mobile. */}
           <div className="mt-7 grid items-start gap-x-5 lg:grid-cols-[minmax(0,1fr)_15rem]">
             <div className="min-w-0">
-              <PromotedServersSection />
-
-              <section aria-labelledby="server-results-heading" className="mt-7">
+              {/* The promoted-slots placeholder used to sit here, taking a fifth of the first
+                  mobile screen to announce a product that does not exist yet. It comes back when
+                  it has inventory to show. */}
+              <section aria-labelledby="server-results-heading" className="mt-1">
                 <h2 id="server-results-heading" className="text-lg font-semibold tracking-tight">Todos los servidores</h2>
 
                 <form action={catalogPath} method="get" className="mt-3">

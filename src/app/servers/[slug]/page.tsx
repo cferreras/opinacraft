@@ -31,9 +31,12 @@ import { ServerCountryCode } from "@/components/server-country-code";
 import { ServerLogo } from "@/components/server-logo";
 import { ServerUtilityActions } from "@/components/server-utility-actions";
 import { SiteHeader } from "@/components/site-header";
-import { normalizeServerDescription } from "@/lib/servers/description";
+import { JsonLd } from "@/components/json-ld";
+import { buildServerMetaDescription, normalizeServerDescription } from "@/lib/servers/description";
 import { getServerSession } from "@/lib/session";
 import { OG_IMAGES } from "@/lib/brand/og";
+import { buildOpenGraph } from "@/lib/seo/open-graph";
+import { breadcrumbListSchema, serverSchema } from "@/lib/seo/structured-data";
 import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
 import { gameModeLabel } from "@/lib/servers/game-modes";
 import { editionLabel, formatEndpoint, latencyClass, primaryEndpoint, statusClass, statusDot, statusLabel } from "@/lib/servers/format";
@@ -127,20 +130,39 @@ function SummaryRow({ label, value }: { label: ReactNode; value: ReactNode }) {
   );
 }
 
+/** The facts the snippet is built from, shared by `generateMetadata` and the page's schema. */
+function serverEditions(server: Pick<ManagedServer, "endpoints">) {
+  return [...new Set(server.endpoints.map((endpoint) => (endpoint.edition === "bedrock" ? "Bedrock" : "Java")))];
+}
+
 export async function generateMetadata({ params }: PublicServerPageProps): Promise<Metadata> {
   const { slug } = await params;
   const server = await getCachedPublishedServer(slug);
   const socialMedia = server?.media.find((media) => media.kind === "banner" || media.kind === "logo");
-  return server
-    ? {
-        title: `${server.name} | OpinaCraft`,
-        description: normalizeServerDescription(server.description) ?? `Descubre ${server.name} en OpinaCraft.`,
-        alternates: { canonical: `/servers/${server.slug}` },
-        openGraph: { title: server.name, description: normalizeServerDescription(server.description) ?? undefined, type: "website", images: socialMedia ? [{ url: socialMedia.url }] : OG_IMAGES },
-      }
-    // Same soft 404 as the blog: the shell has already streamed a 200 by the time
-    // notFound() runs, so noindex is what keeps the page out of the index.
-    : { title: "Servidor no encontrado | OpinaCraft", robots: { index: false, follow: false } };
+  if (server) {
+    // Cached alongside the page's own call, so this costs a map lookup rather than a query.
+    const summary = await getCachedReviewSummary(server.id);
+    const title = `${server.name} | OpinaCraft`;
+    const description = buildServerMetaDescription({
+      name: server.name,
+      editions: serverEditions(server),
+      gameModes: server.gameModes.map((mode) => gameModeLabel(mode)),
+      accessLabel: accessTypeLabel(server.accessType),
+      accountLabel: accountModeLabel(server.accountMode),
+      average: summary.average,
+      reviewCount: summary.total,
+      ownerDescription: server.description,
+    });
+    return {
+      title,
+      description,
+      alternates: { canonical: `/servers/${server.slug}` },
+      openGraph: buildOpenGraph({ title: server.name, description, path: `/servers/${server.slug}`, images: socialMedia ? [{ url: socialMedia.url }] : OG_IMAGES }),
+    };
+  }
+  // Same soft 404 as the blog: the shell has already streamed a 200 by the time
+  // notFound() runs, so noindex is what keeps the page out of the index.
+  return { title: "Servidor no encontrado | OpinaCraft", robots: { index: false, follow: false } };
 }
 
 export default async function PublicServerPage({ params, searchParams }: PublicServerPageProps) {
@@ -183,12 +205,29 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
   return (
     <div className="flex-1 bg-background">
       <SiteHeader />
+      {/* Everything below is on the page as text already; this is the same set of facts in the
+          shape a crawler can read. `Product` carries the rating because `GameServer`, the exact
+          type, is not eligible for review snippets -- it rides along as `additionalType`. */}
+      <JsonLd
+        data={[
+          breadcrumbListSchema([{ name: "Servidores", path: "/" }, { name: server.name, path: `/servers/${server.slug}` }]),
+          serverSchema({
+            name: server.name,
+            slug: server.slug,
+            description,
+            image: server.media.find((media) => media.kind === "logo" || media.kind === "banner")?.url ?? null,
+            average: reviewSummary.average,
+            reviewCount: reviewSummary.total,
+            reviews: reviewPage.reviews.map((review) => ({ rating: review.rating, content: review.content, authorName: review.authorName, createdAt: review.createdAt })),
+          }),
+        ]}
+      />
       <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-9 sm:px-6 lg:px-8">
         <Breadcrumbs trail={[{ label: "Servidores", href: "/" }]} current={server.name} />
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <section className="min-w-0 lg:col-start-1 lg:row-start-1" aria-labelledby="server-name">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-                <ServerLogo name={server.name} media={server.media} className="size-20 shrink-0 rounded-2xl sm:size-[5.5rem]" />
+                <ServerLogo name={server.name} media={server.media} size={88} className="size-20 shrink-0 rounded-2xl sm:size-[5.5rem]" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <h1 id="server-name" className="text-3xl font-bold tracking-tight sm:text-[2.125rem]">{server.name}</h1>
@@ -233,7 +272,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
 
           <aside className="grid min-w-0 gap-4 lg:sticky lg:top-20 lg:col-start-2 lg:row-span-2 lg:row-start-1" aria-label="Conexión y acceso">
             <Card className="gap-0 overflow-hidden pb-0" aria-labelledby="connection-heading">
-              <CardHeader><CardTitle id="connection-heading">Conectar</CardTitle><CardDescription>Elige tu edición y conéctate.</CardDescription></CardHeader>
+              <CardHeader><CardTitle as="h2" id="connection-heading">Conectar</CardTitle><CardDescription>Elige tu edición y conéctate.</CardDescription></CardHeader>
               <CardContent className="grid gap-4 pt-4">
                 {server.endpoints.length ? server.endpoints.map((item) => <EndpointRow key={`${item.edition}:${item.host}:${item.port}`} endpoint={item} />) : <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">No hay direcciones verificadas disponibles.</p>}
                 <CopyAddressButton value={copyAddress} showIcon label="Copiar dirección" className="h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90" />
@@ -249,7 +288,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
               <div className="mt-4"><ServerUtilityActions name={server.name} /></div>
             </Card>
             <Card aria-labelledby="availability-heading">
-              <CardHeader><CardTitle id="availability-heading" className="flex items-center gap-2"><Activity aria-hidden="true" className="size-4 text-primary" />Disponibilidad</CardTitle></CardHeader>
+              <CardHeader><CardTitle as="h2" id="availability-heading" className="flex items-center gap-2"><Activity aria-hidden="true" className="size-4 text-primary" />Disponibilidad</CardTitle></CardHeader>
               <CardContent className="grid gap-2.5">
                 <SummaryRow label="Última comprobación" value={<LocalizedTimestamp value={server.monitor.lastUpdatedAt} />} />
                 {server.monitor.offlineSince ? <SummaryRow label="Fuera de línea desde" value={<LocalizedTimestamp value={server.monitor.offlineSince} />} /> : null}
@@ -260,7 +299,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
               </CardContent>
             </Card>
             <Card aria-labelledby="access-summary-heading">
-              <CardHeader><CardTitle id="access-summary-heading">Acceso de jugadores</CardTitle><CardDescription>Cómo entrar antes de copiar la dirección.</CardDescription></CardHeader>
+              <CardHeader><CardTitle as="h2" id="access-summary-heading">Acceso de jugadores</CardTitle><CardDescription>Cómo entrar antes de copiar la dirección.</CardDescription></CardHeader>
               <CardContent className="grid gap-2.5">
                 <SummaryRow label="Admisión" value={<Badge variant={server.accessType === "whitelist" ? "default" : "outline"}>{accessTypeLabel(server.accessType)}</Badge>} />
                 <SummaryRow label="Cuentas" value={accountModeLabel(server.accountMode)} />

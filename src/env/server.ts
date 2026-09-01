@@ -8,6 +8,9 @@ export const serverEnv = createEnv({
     DIRECT_DATABASE_URL: z.url().optional(),
     BETTER_AUTH_SECRET: z.string().min(32),
     BETTER_AUTH_URL: z.url().default("http://localhost:3000"),
+    // Public origin for canonicals, the sitemap and Open Graph. Defaults to BETTER_AUTH_URL,
+    // normalised to the host that answers 200 (see src/lib/seo/site-url.ts).
+    SITE_URL: z.url().optional(),
     BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
     SERVER_VERIFICATION_SECRET: z.string().min(32).optional(),
     CRON_MONITOR_SECRET: z.string().min(32).optional(),

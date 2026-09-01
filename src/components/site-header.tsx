@@ -63,10 +63,17 @@ function avatarLabel(session: { user?: { name?: string | null; email?: string | 
   return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "OC";
 }
 
-function NavigationLinks({ pathname }: { pathname: string }) {
+// `Mis servidores` points at `/dashboard/servers`, which robots.txt disallows. Rendering it to
+// everyone meant every crawl of every page followed a link it was then told to ignore; it is also
+// no use to someone who is not signed in.
+function visibleNavigation(signedIn: boolean) {
+  return signedIn ? navigation : navigation.filter((item) => item.href !== "/dashboard/servers");
+}
+
+function NavigationLinks({ pathname, signedIn }: { pathname: string; signedIn: boolean }) {
   return (
     <nav aria-label="Navegación principal" className="flex h-16 items-stretch gap-0.5">
-      {navigation.map((item) => {
+      {visibleNavigation(signedIn).map((item) => {
         const active = isNavigationActive(pathname, item.href);
         return (
           <Link
@@ -122,16 +129,18 @@ function MobileNavigationSection({
   );
 }
 
-function MobileNavigation({ pathname, canModerate, onNavigate }: { pathname: string; canModerate: boolean; onNavigate: () => void }) {
+function MobileNavigation({ pathname, canModerate, signedIn, onNavigate }: { pathname: string; canModerate: boolean; signedIn: boolean; onNavigate: () => void }) {
   const publicItems: readonly NavigationItem[] = [navigation[1]];
-  const managementItems: readonly NavigationItem[] = canModerate
-    ? [navigation[0], moderationNavigation]
-    : [navigation[0]];
+  const managementItems: readonly NavigationItem[] = signedIn
+    ? canModerate
+      ? [navigation[0], moderationNavigation]
+      : [navigation[0]]
+    : [];
 
   return (
     <nav aria-label="Navegación móvil" className="space-y-5">
       <MobileNavigationSection label="Explorar" items={publicItems} pathname={pathname} onNavigate={onNavigate} />
-      <MobileNavigationSection label="Gestionar" items={managementItems} pathname={pathname} onNavigate={onNavigate} />
+      {managementItems.length > 0 ? <MobileNavigationSection label="Gestionar" items={managementItems} pathname={pathname} onNavigate={onNavigate} /> : null}
     </nav>
   );
 }
@@ -213,7 +222,7 @@ export function SiteHeader() {
               <SheetDescription>Encuentra, publica y gestiona servidores.</SheetDescription>
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
-              <MobileNavigation pathname={pathname} canModerate={canModerate} onNavigate={() => setMenuOpen(false)} />
+              <MobileNavigation pathname={pathname} canModerate={canModerate} signedIn={Boolean(session)} onNavigate={() => setMenuOpen(false)} />
             </div>
             <div className="mt-auto border-t p-4">
               {session ? (
@@ -238,7 +247,7 @@ export function SiteHeader() {
         </Sheet>
 
         <Link href="/" aria-label="OpinaCraft, inicio" className="inline-flex shrink-0 items-center"><Brand compact={false} /></Link>
-        <div className="hidden lg:block"><NavigationLinks pathname={pathname} /></div>
+        <div className="hidden lg:block"><NavigationLinks pathname={pathname} signedIn={Boolean(session)} /></div>
 
         <form onSubmit={submitSearch} className="relative ml-auto hidden w-full max-w-xs lg:block">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

@@ -16,7 +16,7 @@ export function PublicServerCard({ server }: { server: PublicServer }) {
   const statusLabel = server.aggregateStatus === "online" ? "En línea" : server.aggregateStatus === "offline" ? "Fuera de línea" : "Estado desconocido";
   return (
     <Card className="overflow-hidden">
-      {banner ? <img src={banner.url} alt="" className="h-32 w-full object-cover" /> : null}
+      {banner ? <img src={banner.url} alt={`Imagen de cabecera de ${server.name}`} width={1200} height={256} loading="lazy" className="h-32 w-full object-cover" /> : null}
       <CardHeader className="flex flex-row items-start justify-between gap-3"><div><CardTitle>{server.name}</CardTitle><p className="mt-1 text-sm text-muted-foreground">/{server.slug}</p></div><Badge variant={server.aggregateStatus === "online" ? "default" : "secondary"}>{statusLabel}</Badge></CardHeader>
       <CardContent className="grid gap-4">
         <ServerDescriptionPreview description={server.description} href={`/servers/${server.slug}`} />

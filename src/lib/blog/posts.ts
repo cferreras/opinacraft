@@ -55,6 +55,12 @@ export type BlogPost = {
   readingMinutes: number;
   /** Path under public/. Generated cover art, one composition and one hue per post. */
   cover: string;
+  /**
+   * What the cover shows. These images used to ship as `alt=""`, which declares an image
+   * decorative -- a false claim about the piece of art that leads an article, and the reason none
+   * of them could appear in image search.
+   */
+  coverAlt: string;
   /** Optional highlighted line, rendered between the second and third section. */
   pullQuote?: string;
   sections: readonly BlogSection[];
@@ -70,6 +76,7 @@ export const blogPosts: readonly BlogPost[] = [
     excerpt: "El mejor servidor no es el que más jugadores tiene, sino el que encaja con las horas que juegas y con lo que te apetece construir.",
     readingMinutes: 5,
     cover: "/blog/portada-elegir-servidor.webp",
+    coverAlt: "Ilustración de una brújula verde en 3D sobre fondo claro, la imagen que abre la guía para elegir servidor de Minecraft.",
     pullQuote: "Quédate con el servidor que te apetezca volver a abrir al día siguiente. Esa es la única métrica que importa de verdad.",
     sections: [
       {
@@ -109,6 +116,7 @@ export const blogPosts: readonly BlogPost[] = [
     excerpt: "Las dos ediciones comparten el nombre y poco más cuando hablamos de multijugador. Esto es lo que cambia al conectarte.",
     readingMinutes: 4,
     cover: "/blog/portada-java-o-bedrock.webp",
+    coverAlt: "Ilustración de una puerta azul entreabierta en 3D sobre fondo claro, la imagen que abre la comparativa entre Java y Bedrock.",
     pullQuote: "Un servidor publicado como Java no aparecerá si lo buscas desde una consola, por muy bien escrita que esté la dirección.",
     sections: [
       {
@@ -148,6 +156,7 @@ export const blogPosts: readonly BlogPost[] = [
     excerpt: "Cien milisegundos no significan lo mismo en un survival que en un minijuego de PvP. Cómo leer la latencia que ves en el catálogo.",
     readingMinutes: 4,
     cover: "/blog/portada-ping-y-latencia.webp",
+    coverAlt: "Ilustración de un reloj de arena naranja en 3D sobre fondo claro, la imagen que abre el artículo sobre el ping y la latencia.",
     pullQuote: "Cien milisegundos estables se llevan mucho mejor que sesenta que saltan a cuatrocientos cada dos por tres.",
     sections: [
       {
@@ -187,6 +196,7 @@ export const blogPosts: readonly BlogPost[] = [
     excerpt: "Una ficha completa y unas cuantas opiniones honestas valen más que cualquier campaña. Cómo arrancar sin trampas.",
     readingMinutes: 5,
     cover: "/blog/portada-primeras-resenas.webp",
+    coverAlt: "Ilustración de una estrella morada en 3D sobre fondo claro, la imagen que abre la guía para conseguir las primeras reseñas de un servidor.",
     pullQuote: "Una reseña de cuatro estrellas que explica qué mejorarías es más creíble, y más útil, que diez cincos publicados la misma tarde.",
     sections: [
       {

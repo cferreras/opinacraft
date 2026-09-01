@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { type ReactNode } from "react";
 
@@ -6,10 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SiteHeader } from "@/components/site-header";
+import { buildOpenGraph } from "@/lib/seo/open-graph";
 
-export const metadata = {
-  title: "Términos · OpinaCraft",
-  description: "Términos de uso de OpinaCraft.",
+const title = "Términos de uso | OpinaCraft";
+const description = "Términos de uso de OpinaCraft: cuenta, contenido publicado, moderación, apelaciones y responsabilidad.";
+
+export const metadata: Metadata = {
+  title,
+  description,
+  alternates: { canonical: "/terms" },
+  openGraph: buildOpenGraph({ title, description, path: "/terms" }),
 };
 
 const sections: readonly [string, ReactNode][] = [
@@ -27,7 +34,7 @@ export default function TermsPage() {
       <SiteHeader />
       <main className="mx-auto w-full max-w-4xl px-4 pb-8 pt-9 sm:px-6 lg:px-8 lg:pb-12">
         <Card>
-          <CardHeader className="gap-4 sm:p-8"><div className="flex flex-wrap items-center justify-between gap-3"><Button asChild variant="link" className="h-auto p-0 text-base font-bold"><Link href="/">OpinaCraft</Link></Button><Badge variant="outline">Documento legal</Badge></div><div className="pt-8"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">La letra pequeña, clara</p><CardTitle className="mt-3 text-4xl tracking-tight sm:text-5xl">Términos de uso</CardTitle><CardDescription className="mt-4 text-sm">Última actualización: 31 de julio de 2026.</CardDescription></div></CardHeader>
+          <CardHeader className="gap-4 sm:p-8"><div className="flex flex-wrap items-center justify-between gap-3"><Button asChild variant="link" className="h-auto p-0 text-base font-bold"><Link href="/">OpinaCraft</Link></Button><Badge variant="outline">Documento legal</Badge></div><div className="pt-8"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">La letra pequeña, clara</p><CardTitle as="h1" className="mt-3 text-4xl tracking-tight sm:text-5xl">Términos de uso</CardTitle><CardDescription className="mt-4 text-sm">Última actualización: 31 de julio de 2026.</CardDescription></div></CardHeader>
           <CardContent className="sm:p-8 sm:pt-0"><Separator /><div className="mt-8 grid gap-7 text-sm leading-7 text-muted-foreground">{sections.map(([title, content]) => <section key={title}><h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2><p className="mt-2">{content}</p></section>)}</div><Separator className="my-8" /><nav className="flex flex-wrap gap-2" aria-label="Enlaces legales"><Button asChild variant="link" className="h-auto p-0"><Link href="/privacy">Privacidad</Link></Button><Button asChild variant="link" className="h-auto p-0"><Link href="/contact">Contacto</Link></Button></nav></CardContent>
         </Card>
       </main>

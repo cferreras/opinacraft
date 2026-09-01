@@ -189,6 +189,6 @@ test("the blog routes and the sitemap cover every published post", () => {
   assert.equal(blogPath, "/blog");
   assert.match(readProjectFile("src/app/blog/page.tsx"), /export default async function BlogIndexPage/);
   assert.match(readProjectFile("src/app/blog/[slug]/page.tsx"), /export function generateStaticParams/);
-  assert.match(sitemapSource, /\$\{base\}\$\{blogPath\}/);
+  assert.match(sitemapSource, /\$\{siteUrl\}\$\{blogPath\}/);
   assert.match(sitemapSource, /blogPostPath\(post\.slug\)/);
 });

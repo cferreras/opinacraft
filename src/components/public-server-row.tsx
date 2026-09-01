@@ -179,10 +179,12 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
       <p className="hidden items-baseline justify-end gap-1 tabular-nums lg:flex"><PlayersMetric monitor={server.monitor} /></p>
       <p className="hidden items-baseline justify-end gap-1 tabular-nums lg:flex"><LatencyMetric latencyMs={server.monitor.latencyMs} /></p>
       <Rating server={server} emptyLabel="Sin valorar" className="hidden items-center justify-end gap-1 whitespace-nowrap lg:flex" />
-      {/* The name already links to the same page, so the chevron is decoration for pointer users. */}
-      <Link href={`/servers/${server.slug}`} tabIndex={-1} aria-hidden="true" className="hidden items-center justify-end text-muted-foreground/45 transition-colors group-hover:text-primary lg:flex">
+      {/* Decoration, not navigation: the name already links to the same page. It used to be an
+          anchor with no text and no accessible name, which is a link as far as a crawler is
+          concerned -- a second, nameless vote for the same URL from every row. */}
+      <span aria-hidden="true" className="hidden items-center justify-end text-muted-foreground/45 transition-colors group-hover:text-primary lg:flex">
         <ChevronRight className="size-4" />
-      </Link>
+      </span>
 
       <div className="flex items-stretch overflow-hidden rounded-lg bg-background/55 lg:hidden [&>*+*]:border-l">
         <StripCell label="Jugadores"><PlayersMetric monitor={server.monitor} /></StripCell>

@@ -36,7 +36,7 @@ export function ReviewCard({ review, serverId, slug, canReport, canReply, canMan
     <Card id={`review-${review.id}`}>
       <CardContent className="p-4 sm:p-5">
         <div className="flex items-start gap-3">
-          <Avatar className="size-8 shrink-0"><AvatarImage src={review.authorImage ?? undefined} alt="" /><AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">{initials(review.authorName)}</AvatarFallback></Avatar>
+          <Avatar className="size-8 shrink-0"><AvatarImage src={review.authorImage ?? undefined} alt="" width={32} height={32} /><AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">{initials(review.authorName)}</AvatarFallback></Avatar>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
               <div>

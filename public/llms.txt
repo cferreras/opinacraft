@@ -1,0 +1,28 @@
+# OpinaCraft
+
+> Directorio independiente de servidores de Minecraft en español: estado medido en tiempo real,
+> ping, modalidades y opiniones verificadas de jugadores. Sin relación con Mojang ni Microsoft.
+
+Cada ficha de servidor separa tres cosas: lo que declara quien publica el servidor, lo que medimos
+nosotros conectándonos a él, y lo que opinan quienes juegan allí. La insignia de servidor verificado
+solo se concede cuando el administrador demuestra el control del servidor colocando un código
+temporal en el MOTD de una dirección pública.
+
+## Páginas principales
+
+- [Directorio de servidores](https://www.opinacraft.com/): catálogo filtrable por edición, modalidad, versión, país y acceso.
+- [Quiénes somos](https://www.opinacraft.com/quienes-somos): quién mantiene el proyecto, cómo se verifica un servidor y cómo se moderan las opiniones.
+- [Blog](https://www.opinacraft.com/blog): guías y comparativas sobre elegir servidor y administrar el tuyo.
+
+## Blog
+
+- [Cómo elegir servidor de Minecraft según tu forma de jugar](https://www.opinacraft.com/blog/elegir-servidor)
+- [Java o Bedrock: qué cambia al unirte a un servidor](https://www.opinacraft.com/blog/java-o-bedrock)
+- [Qué ping es aceptable y por qué varía tanto](https://www.opinacraft.com/blog/ping-y-latencia)
+- [Publica tu servidor y consigue tus primeras reseñas](https://www.opinacraft.com/blog/primeras-resenas)
+
+## Legal
+
+- [Términos de uso](https://www.opinacraft.com/terms)
+- [Política de privacidad](https://www.opinacraft.com/privacy)
+- [Contacto](https://www.opinacraft.com/contact)

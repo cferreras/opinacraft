@@ -2,8 +2,10 @@ import { Clock, Megaphone } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 
-// The paid slots are not sold yet: until the promotion flow and its purchase page exist, the
-// section holds its place above the results table with the announcement designed for that state.
+// Parked, not deleted. This used to render above the catalogue, where it took roughly a fifth of
+// the first mobile screen to announce a product that does not exist yet -- above-the-fold space
+// belongs to the listings until there is inventory to promote. Render it again from the catalogue
+// page on the day the paid slots have something in them.
 export function PromotedServersSection({ className = "" }: { className?: string }) {
   return (
     <section aria-labelledby="promoted-servers-heading" className={`flex items-center gap-4 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/40 px-5 py-4 ${className}`}>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Heart } from "lucide-react";
 
 import { BrandMark } from "@/components/brand-mark";
+import { aboutPath } from "@/lib/site/about";
 
 const footerColumns = [
   {
@@ -16,16 +17,19 @@ const footerColumns = [
   },
   {
     title: "Comunidad",
+    // `/dashboard/servers` and `/profile` used to sit here. Both are disallowed in robots.txt, so
+    // every crawl of every page followed links it was then told to ignore -- and neither is any use
+    // to a signed-out visitor. The header offers them to whoever is actually signed in.
     links: [
       { label: "Publicar servidor", href: "/servers/new" },
-      { label: "Mis servidores", href: "/dashboard/servers" },
-      { label: "Mi perfil", href: "/profile" },
       { label: "Crear cuenta", href: "/sign-up" },
+      { label: "Iniciar sesión", href: "/sign-in" },
     ],
   },
   {
     title: "Ayuda",
     links: [
+      { label: "Quiénes somos", href: aboutPath },
       { label: "Contacto", href: "/contact" },
       { label: "Términos", href: "/terms" },
       { label: "Privacidad", href: "/privacy" },
@@ -59,6 +63,7 @@ function CompactFooter() {
           <span>© OpinaCraft</span>
         </div>
         <nav aria-label="Enlaces legales" className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <Link href={aboutPath} className="transition-colors hover:text-foreground">Quiénes somos</Link>
           <Link href="/contact" className="transition-colors hover:text-foreground">Contacto</Link>
           <Link href="/terms" className="transition-colors hover:text-foreground">Términos</Link>
           <Link href="/privacy" className="transition-colors hover:text-foreground">Privacidad</Link>
