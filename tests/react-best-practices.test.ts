@@ -191,9 +191,10 @@ test("keeps sortable header hover compact without rounded edges", () => {
   const source = readProjectFile("src/app/servers/page.tsx");
   const headerSource = source.slice(
     source.indexOf("function SortableColumnHeader"),
-    source.indexOf("function countLabel"),
+    source.indexOf("function ActiveFilterChip"),
   );
-  const linkClass = headerSource.match(/<Link[\s\S]*?className="([^"]+)"/)?.[1];
+  const linkClassMatch = headerSource.match(/<Link[\s\S]*?className=(?:"([^"]+)"|\{`([^`]+)`\})/);
+  const linkClass = linkClassMatch?.[1] ?? linkClassMatch?.[2];
 
   assert.doesNotMatch(
     headerSource,

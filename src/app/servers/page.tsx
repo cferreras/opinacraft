@@ -12,6 +12,7 @@ import { CatalogFilterBar } from "@/components/catalog-filter-bar";
 import { PromotedServersSection } from "@/components/promoted-servers-section";
 import { PublicServerRow } from "@/components/public-server-row";
 import { SiteHeader } from "@/components/site-header";
+import { OG_IMAGES } from "@/lib/brand/og";
 import { getCachedCatalogVersions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
 import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
 import {
@@ -30,14 +31,34 @@ import { gameModeLabel, parseGameModeParam } from "@/lib/servers/game-modes";
 import { parseCountryParam, serverCountryLabel } from "@/lib/servers/countries";
 import { parseVersionParam } from "@/lib/servers/minecraft-version";
 
-export const metadata: Metadata = { title: "Servidores Minecraft | OpinaCraft", description: "Descubre, compara y únete a comunidades de Minecraft en OpinaCraft.", alternates: { canonical: catalogPath }, openGraph: { title: "Servidores Minecraft | OpinaCraft", description: "Descubre, compara y únete a comunidades de Minecraft en OpinaCraft.", type: "website" } };
-export const tableGridTemplate = "lg:grid-cols-[minmax(0,1fr)_5.5rem_4.5rem_8rem]";
+export const metadata: Metadata = { title: "Servidores Minecraft | OpinaCraft", description: "Descubre, compara y únete a comunidades de Minecraft en OpinaCraft.", alternates: { canonical: catalogPath }, openGraph: { title: "Servidores Minecraft | OpinaCraft", description: "Descubre, compara y únete a comunidades de Minecraft en OpinaCraft.", type: "website", images: OG_IMAGES } };
+/**
+ * The rail leaves the table ~700px at `lg` and its designed 828px only past ~1120px, which is where
+ * the edition column fits without squeezing the server name to nothing — so it waits for the room.
+ */
+export const tableGridTemplate = "lg:grid-cols-[minmax(0,1fr)_9rem_5.5rem_3.25rem_5.75rem_1rem] wide:grid-cols-[minmax(0,1fr)_5.375rem_9rem_5.5rem_3.25rem_5.75rem_1rem]";
 
-const tableColumns: Array<{ key: PublicServerTableSort; label: string }> = [
+const tableColumns: Array<{ key: PublicServerTableSort; label: string; align?: "end" }> = [
   { key: "name", label: "Servidor" },
-  { key: "players", label: "Jugadores" },
-  { key: "latency", label: "Ping" },
-  { key: "rating", label: "Valoración" },
+  { key: "players", label: "Jugadores", align: "end" },
+  { key: "latency", label: "Ping", align: "end" },
+  { key: "rating", label: "Valoración", align: "end" },
+];
+
+/**
+ * The header mirrors the row column for column. Edition and address are read, never ordered by, so
+ * they label themselves instead of pretending to be sortable; the last column holds the row chevron.
+ */
+type TableHeaderCell = { kind: "sort"; key: PublicServerTableSort } | { kind: "static"; label: string; className?: string } | { kind: "spacer" };
+
+const tableHeaderCells: TableHeaderCell[] = [
+  { kind: "sort", key: "name" },
+  { kind: "static", label: "Edición", className: "hidden wide:block" },
+  { kind: "static", label: "Dirección" },
+  { kind: "sort", key: "players" },
+  { kind: "sort", key: "latency" },
+  { kind: "sort", key: "rating" },
+  { kind: "spacer" },
 ];
 
 function orderSummary(activeSort: PublicServerTableSort | undefined, direction: PublicServerSortDirection, fallback: PublicServerSort, hasQuery: boolean) {
@@ -64,19 +85,23 @@ function SortableColumnHeader({
   const SortIcon = isActive ? (direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
 
   return (
-    <div role="columnheader" aria-label={column.label} aria-sort={isActive ? (direction === "asc" ? "ascending" : "descending") : "none"} className="min-w-0">
+    <div role="columnheader" aria-label={column.label} aria-sort={isActive ? (direction === "asc" ? "ascending" : "descending") : "none"} className={`flex min-w-0 ${column.align === "end" ? "justify-end" : ""}`}>
       <Link
         href={href}
         prefetch={false}
         data-active={isActive}
         aria-label={`Ordenar por ${column.label} ${nextDirectionLabel}`}
-        className="group inline-flex min-h-10 max-w-full items-center gap-1 px-1 text-left text-[0.625rem] font-semibold uppercase tracking-[0.035em] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 data-[active=true]:text-primary"
+        className={`group inline-flex min-h-10 max-w-full items-center gap-1 px-1 text-left text-[0.625rem] font-semibold uppercase tracking-[0.035em] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 data-[active=true]:text-primary ${column.align === "end" ? "-mr-1" : "-ml-1"}`}
       >
         <span className="min-w-0 truncate">{column.label}</span>
         <SortIcon aria-hidden="true" className={`size-3 shrink-0 transition-colors ${isActive ? "text-primary" : "text-muted-foreground/40 group-hover:text-muted-foreground group-focus-visible:text-muted-foreground"}`} />
       </Link>
     </div>
   );
+}
+
+function StaticColumnHeader({ label, className = "" }: { label: string; className?: string }) {
+  return <div role="columnheader" className={`min-w-0 truncate px-1 text-[0.625rem] font-semibold uppercase tracking-[0.035em] text-muted-foreground ${className}`}>{label}</div>;
 }
 
 function ActiveFilterChip({ label, removeHref, removeLabel }: { label: string; removeHref: string; removeLabel: string }) {
@@ -231,15 +256,20 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                     ) : (
                       <>
                         <Card className="gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0 lg:bg-card lg:ring-1">
-                          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-3">
+                          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-3 lg:px-4.5 lg:py-3.5">
                             <p className="text-sm tabular-nums text-muted-foreground">
                               Mostrando <strong className="font-semibold text-foreground">{serverResultsSummary.rangeLabel}</strong> de <strong className="font-semibold text-foreground">{serverResultsSummary.totalCount}</strong> {serverResultsSummary.serverLabel}
                             </p>
                             <span className="text-xs text-muted-foreground">{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span>
                           </div>
                           <CardContent className="flex flex-col gap-2 p-0 lg:block">
-                            <div role="row" aria-label="Ordenar resultados" className={`hidden h-10 items-center border-y bg-muted/50 px-4 text-muted-foreground lg:grid ${tableGridTemplate} lg:items-center lg:gap-3`}>
-                              {tableColumns.map((column) => <SortableColumnHeader key={column.key} column={column} activeSort={activeTableSort} direction={activeTableDirection} href={tableSortHref(column.key)} />)}
+                            <div role="row" aria-label="Ordenar resultados" className={`hidden h-10 items-center border-y bg-muted/40 px-4.5 text-muted-foreground lg:grid ${tableGridTemplate} lg:items-center lg:gap-3.5`}>
+                              {tableHeaderCells.map((cell) => {
+                                if (cell.kind === "spacer") return <span key="actions" aria-hidden="true" />;
+                                if (cell.kind === "static") return <StaticColumnHeader key={cell.label} label={cell.label} className={cell.className} />;
+                                const column = tableColumns.find((item) => item.key === cell.key);
+                                return column ? <SortableColumnHeader key={column.key} column={column} activeSort={activeTableSort} direction={activeTableDirection} href={tableSortHref(column.key)} /> : null;
+                              })}
                             </div>
                             {servers.map((server) => <PublicServerRow key={server.id} server={server} />)}
                           </CardContent>

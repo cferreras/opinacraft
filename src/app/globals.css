@@ -14,6 +14,9 @@
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.54 0.16 160);
   --primary-foreground: oklch(0.985 0.004 160);
+  /* Readable text on an `--accent` tint, the same pairing idea as the category `-ink` tokens
+   * below: `--primary` itself only just clears contrast on that surface at pill sizes. */
+  --primary-ink: oklch(0.45 0.14 160);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -72,6 +75,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-ink: var(--primary-ink);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -112,6 +116,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Between `lg` and this the catalog rail leaves the results table too narrow for its last column.
+   * It is a real breakpoint token rather than a `min-[70rem]:` variant on purpose: Tailwind emits
+   * arbitrary min-width variants before the named ones, so `lg:` would override it at every width. */
+  --breakpoint-wide: 70rem;
   --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-heading: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "SFMono-Regular", consolas, "Liberation Mono", monospace;
@@ -200,6 +208,8 @@ select {
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.68 0.16 160);
   --primary-foreground: oklch(0.145 0 0);
+  /* `--accent` turns neutral in the dark theme, so the ink lifts instead of darkening. */
+  --primary-ink: oklch(0.8 0.13 160);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);

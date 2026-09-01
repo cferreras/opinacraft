@@ -32,7 +32,11 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: BlogPostPageProps): Promise<Metadata> {
   const { slug } = await params;
   const post = findBlogPost(slug);
-  if (!post) return { title: "Artículo no encontrado | OpinaCraft" };
+  // notFound() below cannot set a 404 status: cacheComponents streams the shell
+  // first, so the response is already committed as a 200. noindex is what keeps
+  // the resulting soft 404 out of the index. dynamicParams = false, the usual
+  // fix, is rejected outright when cacheComponents is on.
+  if (!post) return { title: "Artículo no encontrado | OpinaCraft", robots: { index: false, follow: false } };
 
   const title = `${post.title} | OpinaCraft`;
   return {
