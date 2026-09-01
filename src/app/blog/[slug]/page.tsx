@@ -6,6 +6,7 @@ import { Blocks } from "lucide-react";
 
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { BlogArticleToc } from "@/components/blog-article-toc";
+import { JsonLd } from "@/components/json-ld";
 import { BlogCategoryBadge, BlogCategoryLabel } from "@/components/blog-category-badge";
 import { Card } from "@/components/ui/card";
 import { SiteHeader } from "@/components/site-header";
@@ -21,7 +22,10 @@ import {
   formatBlogDateLong,
   otherBlogPosts,
 } from "@/lib/blog/posts";
+import { buildOpenGraph } from "@/lib/seo/open-graph";
+import { blogPostingSchema, breadcrumbListSchema } from "@/lib/seo/structured-data";
 import { catalogPath } from "@/lib/servers/catalog-route";
+import { siteAuthor } from "@/lib/site/about";
 
 type BlogPostPageProps = { params: Promise<{ slug: string }> };
 
@@ -43,7 +47,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
     title,
     description: post.excerpt,
     alternates: { canonical: blogPostPath(post.slug) },
-    openGraph: { title, description: post.excerpt, type: "article", publishedTime: post.publishedAt, images: [post.cover] },
+    openGraph: buildOpenGraph({ title, description: post.excerpt, path: blogPostPath(post.slug), type: "article", publishedTime: post.publishedAt, images: [{ url: post.cover, alt: post.coverAlt }] }),
   };
 }
 
@@ -57,6 +61,20 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   return (
     <div className="flex-1 bg-background">
       <SiteHeader />
+      <JsonLd
+        data={[
+          breadcrumbListSchema([{ name: "Blog", path: blogPath }, { name: post.title, path: blogPostPath(post.slug) }]),
+          blogPostingSchema({
+            title: post.title,
+            description: post.excerpt,
+            path: blogPostPath(post.slug),
+            cover: post.cover,
+            publishedAt: post.publishedAt,
+            authorName: siteAuthor.name,
+            authorPath: siteAuthor.path,
+          }),
+        ]}
+      />
       <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-9 sm:px-6 lg:px-8">
         <Breadcrumbs trail={[{ label: "Blog", href: blogPath }]} current={post.title} />
 
@@ -64,7 +82,11 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           <article className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               <BlogCategoryBadge category={post.category} />
+              {/* A review site's articles need a name on them. The byline links to the page that
+                  says who that is and how the directory is run. */}
               <span className="text-xs text-muted-foreground">
+                Por <Link href={siteAuthor.path} rel="author" className="font-semibold text-foreground transition-colors hover:text-primary">{siteAuthor.name}</Link>
+                {" · "}
                 <time dateTime={post.publishedAt}>{formatBlogDateLong(post.publishedAt)}</time> · {post.readingMinutes} min de lectura
               </span>
             </div>
@@ -72,7 +94,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             <h1 className="mt-4 max-w-[43.75rem] text-[1.75rem] font-bold leading-[2.125rem] tracking-[-0.025em] sm:text-4xl sm:leading-[2.75rem]">{post.title}</h1>
             <p className="mt-3.5 max-w-[43.75rem] text-base leading-[1.6875rem] text-muted-foreground">{post.excerpt}</p>
 
-            <Image src={post.cover} alt="" width={blogCoverWidth} height={blogCoverHeight} priority sizes="(min-width: 1024px) 50rem, 100vw" className="mt-7 aspect-video w-full rounded-xl object-cover" />
+            <Image src={post.cover} alt={post.coverAlt} width={blogCoverWidth} height={blogCoverHeight} priority sizes="(min-width: 1024px) 50rem, 100vw" className="mt-7 aspect-video w-full rounded-xl object-cover" />
 
             {post.sections.map((section, index) => (
               <section key={section.heading}>
@@ -101,7 +123,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                   {more.map((item) => (
                     <Card key={item.slug} className="relative gap-0 py-0 transition-colors hover:bg-muted/30 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring/50">
                       <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3.5 p-3.5">
-                        <Image src={item.cover} alt="" width={208} height={208} sizes="6.5rem" className="aspect-square w-full rounded-[0.625rem] object-cover" />
+                        <Image src={item.cover} alt={item.coverAlt} width={208} height={208} sizes="6.5rem" className="aspect-square w-full rounded-[0.625rem] object-cover" />
                         <div className="min-w-0">
                           <BlogCategoryLabel category={item.category} />
                           <p className="mt-1.5 text-sm font-semibold leading-5">

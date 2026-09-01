@@ -32,7 +32,7 @@ export function ReportForm({ serverId }: { serverId: string }) {
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">¿Hay algo que debamos revisar?</CardTitle></CardHeader>
+      <CardHeader><CardTitle as="h2" className="text-base">¿Hay algo que debamos revisar?</CardTitle></CardHeader>
       <CardContent>
         <p className="mb-4 text-sm text-muted-foreground">Ayúdanos a mantener el directorio fiable y útil.</p>
         <form onSubmit={submit} className="grid gap-3 sm:grid-cols-[15rem_minmax(0,1fr)_auto] sm:items-end">

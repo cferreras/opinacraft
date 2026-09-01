@@ -33,9 +33,20 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * A card title is a section title, so it renders as a real heading by default. Rendering it as a
+ * `div` left pages like the server ficha with a single `h1` and nothing else: a crawler had no way
+ * to segment the page into passages, and `aria-labelledby` was already pointing at these titles as
+ * if they were headings. `as` moves it up or down the outline where the page needs it -- or back to
+ * a `div` for the cards whose title is decorative.
+ */
+function CardTitle({
+  className,
+  as: Component = "h3",
+  ...props
+}: React.ComponentProps<"div"> & { as?: "div" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" }) {
   return (
-    <div
+    <Component
       data-slot="card-title"
       className={cn(
         "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
