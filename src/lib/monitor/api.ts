@@ -28,9 +28,12 @@ function constantTimeEqual(actual: string, expected: string) {
   return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
 }
 
+export function isAuthorizedMonitorRequest(authorization: string | null | undefined, secret: string | undefined) {
+  return Boolean(secret && authorization?.startsWith("Bearer ") && constantTimeEqual(authorization.slice(7), secret));
+}
+
 function authorized(request: Request, secret: string | undefined) {
-  const header = request.headers.get("authorization");
-  return Boolean(secret && header?.startsWith("Bearer ") && constantTimeEqual(header.slice(7), secret));
+  return isAuthorizedMonitorRequest(request.headers.get("authorization"), secret);
 }
 
 function pathParts(request: Request) {

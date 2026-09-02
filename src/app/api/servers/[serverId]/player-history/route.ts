@@ -11,12 +11,15 @@ import {
   type HistoryEditionFilter,
   type HistoryPeriod,
 } from "@/lib/servers/player-history";
-import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
+import { isMonitorApiConfigured, isMonitorServerId } from "@/lib/servers/monitor-api-client";
 
 type Props = { params: Promise<{ serverId: string }> };
 
 export async function GET(request: Request, { params }: Props) {
   const { serverId } = await params;
+  // The identifier reaches an internal service URL that carries the monitor
+  // bearer token, so only a canonical UUID is ever forwarded.
+  if (!isMonitorServerId(serverId)) return NextResponse.json({ error: "Server not found." }, { status: 404 });
   const query = new URL(request.url).searchParams;
   const periodValue = query.get("period") ?? "24h";
   const editionValue = query.get("edition") ?? "all";

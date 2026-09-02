@@ -456,11 +456,11 @@ export async function getReviewSummary(serverId: string): Promise<ReviewSummary>
         latestAt: sql<Date | null>`max(${serverReviews.createdAt})`,
       })
       .from(serverReviews)
-      .where(and(eq(serverReviews.serverId, serverId), eq(serverReviews.status, "published"))),
+      .where(and(eq(serverReviews.serverId, serverId), eq(serverReviews.status, "published"), isNull(serverReviews.withheldAt))),
     db
       .select({ rating: serverReviews.rating, count: sql<number>`count(*)::int` })
       .from(serverReviews)
-      .where(and(eq(serverReviews.serverId, serverId), eq(serverReviews.status, "published")))
+      .where(and(eq(serverReviews.serverId, serverId), eq(serverReviews.status, "published"), isNull(serverReviews.withheldAt)))
       .groupBy(serverReviews.rating)
       .orderBy(asc(serverReviews.rating)),
   ]);
@@ -517,7 +517,7 @@ export async function listServerReviews(serverId: string, page = 1, currentUserI
     })
     .from(serverReviews)
     .leftJoin(user, eq(serverReviews.userId, user.id))
-    .where(and(eq(serverReviews.serverId, serverId), eq(serverReviews.status, "published")))
+    .where(and(eq(serverReviews.serverId, serverId), eq(serverReviews.status, "published"), isNull(serverReviews.withheldAt)))
     .orderBy(desc(serverReviews.createdAt), desc(serverReviews.id))
     .limit(REVIEW_PAGE_SIZE + 1)
     .offset((safePage - 1) * REVIEW_PAGE_SIZE);

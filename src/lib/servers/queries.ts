@@ -356,7 +356,7 @@ async function attachReviewSummaries<T extends { id: string }>(items: T[]): Prom
       count: sql<number>`count(*)::int`,
     })
     .from(serverReviews)
-    .where(and(inArray(serverReviews.serverId, items.map((item) => item.id)), eq(serverReviews.status, "published")))
+    .where(and(inArray(serverReviews.serverId, items.map((item) => item.id)), eq(serverReviews.status, "published"), isNull(serverReviews.withheldAt)))
     .groupBy(serverReviews.serverId);
   const summaries = new Map(rows.map((row) => [row.serverId, { reviewAverage: row.average === null ? null : Number(row.average), reviewCount: row.count }]));
 

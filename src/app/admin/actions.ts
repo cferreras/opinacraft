@@ -8,7 +8,7 @@ import { grantPlatformRole, moderateReport, moderateReviewReport } from "@/lib/a
 import { ReportAlreadyOpenError } from "@/lib/servers/reports";
 import { ReviewReportAlreadyOpenError } from "@/lib/servers/reviews";
 import { getServerIdBySlug } from "@/lib/servers/queries";
-import { invalidateReviewCache } from "@/lib/servers/cache-tags";
+import { invalidatePublicServerCache, invalidateReviewCache } from "@/lib/servers/cache-tags";
 
 export async function moderateReportAction(formData: FormData) {
   const session = await getServerSession();
@@ -16,7 +16,7 @@ export async function moderateReportAction(formData: FormData) {
   const reportId = String(formData.get("reportId") ?? "");
   const decision = String(formData.get("decision") ?? "");
   if (!reportId || !["dismissed", "hidden", "restored", "reopened"].includes(decision)) redirect("/admin?error=invalid");
-  let transitioned = false;
+  let transitioned: Awaited<ReturnType<typeof moderateReport>> = null;
   try {
     transitioned = await moderateReport(session.user.id, reportId, decision as "dismissed" | "hidden" | "restored" | "reopened");
   } catch (error) {
@@ -24,8 +24,12 @@ export async function moderateReportAction(formData: FormData) {
     redirect("/admin?error=forbidden");
   }
   if (!transitioned) redirect("/admin?error=transition");
+  // Blocking or restoring a server changes who may read it, so the cached
+  // public detail must be dropped before the moderator is redirected.
+  invalidatePublicServerCache(transitioned.serverId, transitioned.slug ?? undefined);
   revalidatePath("/admin");
   revalidatePath("/");
+  if (transitioned.slug) revalidatePath(`/servers/${transitioned.slug}`);
   redirect("/admin?updated=1");
 }
 

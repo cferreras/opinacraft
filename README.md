@@ -65,7 +65,7 @@ Production migrations can be applied with the manual `Production database migrat
 
 The workflow serializes migration runs, rejects Neon pooler URLs, applies all pending migrations, and inspects the resulting schema. The Vercel `DATABASE_URL` remains the pooled runtime connection and is not needed by this workflow.
 
-The repository currently contains migrations for Better Auth, server management, Java/Bedrock MOTD verification, verified endpoint claims, tags/media, pg_trgm search, endpoint health, availability hiding, Blob quota counters, notification outbox, moderation/reporting and the canonical server monitor worker. Review every generated migration before applying it to a database.
+The repository currently contains migrations for Better Auth, server management, Java/Bedrock MOTD verification, verified endpoint claims, tags/media, pg_trgm search, endpoint health, availability hiding, Blob quota counters, notification outbox, moderation/reporting, the canonical server monitor worker, per-account media budgets and withheld reviews. Review every generated migration before applying it to a database.
 
 ### Automatic PostgreSQL backups
 
