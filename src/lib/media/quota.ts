@@ -1,7 +1,7 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { mediaUsageCounters, notificationJobs } from "@/schema";
+import { mediaAccountUsage, mediaUsageCounters, notificationJobs } from "@/schema";
 import { serverEnv } from "@/env/server";
 
 const DEFAULT_STORAGE_LIMIT = 1_000_000_000;
@@ -15,6 +15,20 @@ export class MediaQuotaExceededError extends Error {
   }
 }
 
+export class MediaAccountQuotaExceededError extends Error {
+  constructor() {
+    super("Has alcanzado tu límite de subidas de imágenes. Inténtalo de nuevo más tarde.");
+    this.name = "MediaAccountQuotaExceededError";
+  }
+}
+
+// A single account may consume at most this fraction of the shared monthly
+// operation budget, and only this many uploads inside a short burst window.
+const ACCOUNT_PERIOD_SHARE = 0.05;
+const ACCOUNT_MIN_PERIOD_OPERATIONS = 20;
+const ACCOUNT_WINDOW_MS = 10 * 60_000;
+const ACCOUNT_WINDOW_OPERATIONS = 10;
+
 function period() {
   return new Date().toISOString().slice(0, 7);
 }
@@ -24,6 +38,52 @@ function limits() {
     storage: Number(process.env.BLOB_STORAGE_LIMIT_BYTES) || DEFAULT_STORAGE_LIMIT,
     advanced: Number(process.env.BLOB_ADVANCED_OPERATION_LIMIT) || DEFAULT_ADVANCED_LIMIT,
   };
+}
+
+function accountLimits() {
+  const { advanced } = limits();
+  return {
+    period: Math.max(ACCOUNT_MIN_PERIOD_OPERATIONS, Math.floor(advanced * ACCOUNT_PERIOD_SHARE)),
+    window: ACCOUNT_WINDOW_OPERATIONS,
+  };
+}
+
+/**
+ * Claims one upload against the account's own share of the shared monthly
+ * budget. A single atomic upsert does the counting, so parallel requests from
+ * the same account cannot race past the limit. Called before image processing
+ * so an abusive caller cannot even spend CPU on decoding.
+ *
+ * There is deliberately no refund. The shared `advancedOperations` counter is
+ * charged on reservation and never given back, because the provider operation
+ * and the processing work are spent whatever happens next. Refunding the
+ * account slice would break that symmetry: an account could fail its uploads
+ * on purpose, stay under its own cap forever and still drain the shared
+ * monthly budget. What this counts is attempts, not successes.
+ */
+export async function reserveAccountMediaOperation(userId: string, now = new Date()) {
+  const key = period();
+  const caps = accountLimits();
+  const windowFloor = new Date(now.getTime() - ACCOUNT_WINDOW_MS);
+  const [row] = await db
+    .insert(mediaAccountUsage)
+    .values({ userId, period: key, advancedOperations: 1, windowStartedAt: now, windowOperations: 1, updatedAt: now })
+    .onConflictDoUpdate({
+      target: [mediaAccountUsage.userId, mediaAccountUsage.period],
+      set: {
+        advancedOperations: sql`${mediaAccountUsage.advancedOperations} + 1`,
+        windowStartedAt: sql`case when ${mediaAccountUsage.windowStartedAt} < ${windowFloor} then ${now} else ${mediaAccountUsage.windowStartedAt} end`,
+        windowOperations: sql`case when ${mediaAccountUsage.windowStartedAt} < ${windowFloor} then 1 else ${mediaAccountUsage.windowOperations} + 1 end`,
+        updatedAt: now,
+      },
+      // A refused upload must not spend budget. When a cap is already reached
+      // the update is skipped and no row comes back, so repeated rejections
+      // cannot inflate the counters and lock the account out for the period.
+      setWhere: sql`${mediaAccountUsage.advancedOperations} < ${caps.period} and (${mediaAccountUsage.windowStartedAt} < ${windowFloor} or ${mediaAccountUsage.windowOperations} < ${caps.window})`,
+    })
+    .returning({ advancedOperations: mediaAccountUsage.advancedOperations, windowOperations: mediaAccountUsage.windowOperations });
+  if (!row) throw new MediaAccountQuotaExceededError();
+  return { period: key, operations: row.advancedOperations, operationLimit: caps.period };
 }
 
 export async function reserveMediaQuota(bytes: number) {

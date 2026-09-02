@@ -94,7 +94,10 @@ misma transacción de Neon. Después intentan entregarlo inmediatamente; la ruta
 `/api/internal/monitor/sync` queda disponible para reintentos manuales y la
 reconciliación `/api/internal/monitor/reconcile` vuelve a comparar el catálogo
 una vez al día. Vercel solo programa esta reconciliación diaria para mantener la
-compatibilidad con el plan Hobby.
+compatibilidad con el plan Hobby. La reconciliación lee el inventario completo
+de Neon por páginas y vuelve a comprobar cada supuesto huérfano antes de
+borrarlo: si el inventario no se puede leer entero, no borra ningún objetivo ni
+su historial.
 
 El endpoint `/api/internal/monitor/events` conserva la misma barrera como
 compatibilidad o ejecución manual, pero ya no tiene un cron de Vercel. El

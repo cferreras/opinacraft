@@ -274,10 +274,12 @@ async function main() {
         "rating" smallint NOT NULL CHECK ("rating" between 1 and 5),
         "content" text NOT NULL CHECK (char_length(btrim("content")) between 10 and 2000),
         "status" "server_review_status" DEFAULT 'published'::"server_review_status" NOT NULL,
+        "withheld_at" timestamp with time zone,
         "created_at" timestamp with time zone DEFAULT now() NOT NULL,
         "updated_at" timestamp with time zone DEFAULT now() NOT NULL
       )
     `);
+    await client.query('ALTER TABLE "server_reviews" ADD COLUMN IF NOT EXISTS "withheld_at" timestamp with time zone');
     await client.query(`
       CREATE TABLE IF NOT EXISTS "review_replies" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -369,6 +371,17 @@ async function main() {
       )
     `);
     await createIndex(client, 'CREATE INDEX IF NOT EXISTS "media_cleanup_jobs_queue_idx" ON "media_cleanup_jobs" ("status", "next_attempt_at")');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "media_account_usage" (
+        "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+        "period" varchar(7) NOT NULL,
+        "advanced_operations" integer DEFAULT 0 NOT NULL,
+        "window_started_at" timestamp with time zone DEFAULT now() NOT NULL,
+        "window_operations" integer DEFAULT 0 NOT NULL,
+        "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+        CONSTRAINT "media_account_usage_user_id_period_pk" PRIMARY KEY ("user_id", "period")
+      )
+    `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS "media_usage_counters" (
         "period" varchar(7) PRIMARY KEY,

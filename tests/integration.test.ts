@@ -399,7 +399,7 @@ test("reviews create, aggregate, edit, hide, restore and delete safely", testOpt
   await assert.rejects(() => updateReview(reviewerId, created!.id, { rating: 4, content: "No debería editarse" }), ReviewStateError);
 });
 
-test("adding a player to the server team invalidates their review", testOptions, async () => {
+test("adding a player to the server team withholds their review without destroying it", testOptions, async () => {
   const ownerId = await createUser();
   const reviewerId = await createUser();
   const serverId = await createServerRecord({ ownerId, endpoint: { host: `member-review-${randomUUID()}.example.invalid`, port: 25565 } });
@@ -408,13 +408,202 @@ test("adding a player to the server team invalidates their review", testOptions,
   const { rows: reviewerRows } = await database().query('select email from "user" where id = $1', [reviewerId]);
 
   const review = await createReview(reviewerId, serverId, { rating: 5, content: "Una comunidad excelente" });
-  const { addServerMember } = await import("../src/lib/servers/members.ts");
+  const { addServerMember, removeServerMember } = await import("../src/lib/servers/members.ts");
   await addServerMember(serverId, ownerId, reviewerRows[0].email, "editor");
 
-  const summary = await getReviewSummary(serverId);
-  assert.equal(summary.total, 0);
-  const deleted = await database().query("select status from server_reviews where id = $1", [review?.id]);
-  assert.equal(deleted.rows[0].status, "deleted");
+  assert.equal((await getReviewSummary(serverId)).total, 0);
+  const withheld = await database().query("select status, content, withheld_at from server_reviews where id = $1", [review?.id]);
+  assert.equal(withheld.rows[0].status, "published");
+  assert.equal(withheld.rows[0].content, "Una comunidad excelente");
+  assert.ok(withheld.rows[0].withheld_at);
+
+  // The reviewer never accepted the membership, so the change must be reversible.
+  await removeServerMember(serverId, ownerId, reviewerId);
+  assert.equal((await getReviewSummary(serverId)).total, 1);
+  const restored = await database().query("select content, withheld_at from server_reviews where id = $1", [review?.id]);
+  assert.equal(restored.rows[0].withheld_at, null);
+  assert.equal(restored.rows[0].content, "Una comunidad excelente");
+});
+
+test("a server admin cannot delete the server while the owner can", testOptions, async () => {
+  const ownerId = await createUser();
+  const adminId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `admin-delete-${randomUUID()}.example.invalid`, port: 25565 } });
+  await database().query(
+    "insert into server_members (server_id, user_id, role) values ($1, $2, 'admin')",
+    [serverId, adminId],
+  );
+  const { deleteServer } = await loadServerServices();
+  const { ServerPermissionError } = await import("../src/lib/servers/permissions.ts");
+
+  await assert.rejects(() => deleteServer(adminId, serverId, "DELETE"), ServerPermissionError);
+  const survived = await database().query("select id from servers where id = $1", [serverId]);
+  assert.equal(survived.rowCount, 1);
+
+  await deleteServer(ownerId, serverId, "DELETE");
+  const removed = await database().query("select id from servers where id = $1", [serverId]);
+  assert.equal(removed.rowCount, 0);
+});
+
+test("deleting a server never refunds media bytes that were already released", testOptions, async () => {
+  const ownerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `media-refund-${randomUUID()}.example.invalid`, port: 25565 } });
+  await database().query(
+    `insert into server_media (server_id, kind, blob_key, blob_url, content_type, bytes, width, height, status)
+     values ($1, 'logo', $2, 'https://blob.invalid/a', 'image/webp', 1000, 64, 64, 'deleted'),
+            ($1, 'banner', $3, 'https://blob.invalid/b', 'image/webp', 500, 128, 64, 'active')`,
+    [serverId, `key-${randomUUID()}`, `key-${randomUUID()}`],
+  );
+  await database().query(
+    "insert into media_usage_counters (period, stored_bytes) values ('total', 500) on conflict (period) do update set stored_bytes = 500",
+  );
+
+  const { deleteServer } = await loadServerServices();
+  await deleteServer(ownerId, serverId, "DELETE");
+
+  const counter = await database().query("select stored_bytes from media_usage_counters where period = 'total'");
+  assert.equal(Number(counter.rows[0].stored_bytes), 0);
+});
+
+test("one account cannot exhaust the shared monthly upload budget", testOptions, async () => {
+  const firstUserId = await createUser();
+  const secondUserId = await createUser();
+  process.env.DATABASE_URL = testDatabaseUrl;
+  const { MediaAccountQuotaExceededError, reserveAccountMediaOperation } = await import("../src/lib/media/quota.ts");
+
+  const outcomes = await Promise.allSettled(
+    Array.from({ length: 14 }, () => reserveAccountMediaOperation(firstUserId)),
+  );
+  const accepted = outcomes.filter((outcome) => outcome.status === "fulfilled").length;
+  const refused = outcomes.filter(
+    (outcome) => outcome.status === "rejected" && outcome.reason instanceof MediaAccountQuotaExceededError,
+  ).length;
+
+  assert.ok(accepted <= 10, `expected at most 10 accepted uploads, got ${accepted}`);
+  assert.equal(accepted + refused, 14);
+
+  // A refused upload must not spend budget, or repeated 429s would lock the
+  // account out of its own monthly allowance.
+  const { rows } = await database().query(
+    "select advanced_operations, window_operations from media_account_usage where user_id = $1",
+    [firstUserId],
+  );
+  assert.equal(Number(rows[0].advanced_operations), accepted);
+  assert.equal(Number(rows[0].window_operations), accepted);
+
+  // A throttled account must never block anybody else.
+  await reserveAccountMediaOperation(secondUserId);
+});
+
+test("failed uploads still spend the account's share of the shared budget", testOptions, async () => {
+  const userId = await createUser();
+  process.env.DATABASE_URL = testDatabaseUrl;
+  const { MediaAccountQuotaExceededError, reserveAccountMediaOperation } = await import("../src/lib/media/quota.ts");
+
+  // Every attempt fails after its reservation, the way an upload does when the
+  // blob lands but the transaction loses the one-active-kind race. The shared
+  // operation counter stays charged for those, so the account slice must too:
+  // if failures were refunded, an account could drain the shared monthly budget
+  // forever while never reaching its own cap.
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await reserveAccountMediaOperation(userId);
+    // ... the upload fails here; nothing gives the slot back.
+  }
+
+  await assert.rejects(() => reserveAccountMediaOperation(userId), MediaAccountQuotaExceededError);
+  const { rows } = await database().query(
+    "select advanced_operations, window_operations from media_account_usage where user_id = $1",
+    [userId],
+  );
+  assert.equal(Number(rows[0].advanced_operations), 10);
+  assert.equal(Number(rows[0].window_operations), 10);
+});
+
+test("moderating a report reports the server whose public cache must be dropped", testOptions, async () => {
+  const ownerId = await createUser();
+  const reporterId = await createUser();
+  const moderatorId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `moderation-cache-${randomUUID()}.example.invalid`, port: 25565 } });
+  await publishServer(serverId);
+  const reportId = randomUUID();
+  await database().query(
+    "insert into server_reports (id, server_id, reporter_user_id, reason, status) values ($1, $2, $3, 'other', 'open')",
+    [reportId, serverId, reporterId],
+  );
+  await database().query("insert into platform_roles (user_id, role) values ($1, 'moderator')", [moderatorId]);
+
+  const { moderateReport } = await loadAdminServices();
+  const transitioned = await moderateReport(moderatorId, reportId, "hidden");
+
+  const { rows } = await database().query("select slug, moderation_status from servers where id = $1", [serverId]);
+  assert.equal(rows[0].moderation_status, "blocked");
+  assert.deepEqual(transitioned, { serverId, slug: rows[0].slug });
+});
+
+test("public player history stays private for a server that is not publicly visible", testOptions, async () => {
+  const ownerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `private-history-${randomUUID()}.example.invalid`, port: 25565 } });
+  process.env.DATABASE_URL = testDatabaseUrl;
+  const previousUrl = process.env.MONITOR_API_URL;
+  const previousSecret = process.env.MONITOR_API_SECRET;
+  const originalFetch = globalThis.fetch;
+  let monitorCalls = 0;
+  process.env.MONITOR_API_URL = "https://monitor-api.example.test";
+  process.env.MONITOR_API_SECRET = "integration-monitor-secret";
+  globalThis.fetch = (async () => {
+    monitorCalls += 1;
+    return Response.json({ period: "24h", series: [] });
+  }) as typeof fetch;
+
+  try {
+    const { getPublicPlayerHistory } = await import("../src/lib/servers/player-history.ts");
+    // Draft server: the Monitor API must never be asked for its history.
+    assert.equal(await getPublicPlayerHistory(serverId, "24h"), null);
+    assert.equal(monitorCalls, 0);
+
+    await publishServer(serverId);
+    assert.ok(await getPublicPlayerHistory(serverId, "24h"));
+    assert.equal(monitorCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousUrl === undefined) delete process.env.MONITOR_API_URL;
+    else process.env.MONITOR_API_URL = previousUrl;
+    if (previousSecret === undefined) delete process.env.MONITOR_API_SECRET;
+    else process.env.MONITOR_API_SECRET = previousSecret;
+  }
+});
+
+test("reconciliation never deletes monitor targets from a truncated inventory", testOptions, async () => {
+  const ownerId = await createUser();
+  await createServerRecord({ ownerId, endpoint: { host: `reconcile-a-${randomUUID()}.example.invalid`, port: 25565 } });
+  await createServerRecord({ ownerId, endpoint: { host: `reconcile-b-${randomUUID()}.example.invalid`, port: 25565 } });
+  process.env.DATABASE_URL = testDatabaseUrl;
+  const previousUrl = process.env.MONITOR_API_URL;
+  const previousSecret = process.env.MONITOR_API_SECRET;
+  const originalFetch = globalThis.fetch;
+  const deletions: string[] = [];
+  process.env.MONITOR_API_URL = "https://monitor-api.example.test";
+  process.env.MONITOR_API_SECRET = "integration-monitor-secret";
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === "DELETE") deletions.push(url);
+    if (url.endsWith("/v1/targets")) return Response.json({ serverIds: [randomUUID()] });
+    return Response.json({ ok: true });
+  }) as typeof fetch;
+
+  try {
+    const { reconcileMonitorTargets } = await import("../src/lib/servers/monitor-sync.ts");
+    const result = await reconcileMonitorTargets({ pageSize: 1, maxPages: 1 });
+    assert.equal(result.complete, false);
+    assert.equal(result.removed, 0);
+    assert.deepEqual(deletions, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousUrl === undefined) delete process.env.MONITOR_API_URL;
+    else process.env.MONITOR_API_URL = previousUrl;
+    if (previousSecret === undefined) delete process.env.MONITOR_API_SECRET;
+    else process.env.MONITOR_API_SECRET = previousSecret;
+  }
 });
 
 test("the unique review constraint wins a concurrent duplicate", testOptions, async () => {

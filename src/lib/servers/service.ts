@@ -468,16 +468,18 @@ export async function updateServer(
 export async function deleteServer(userId: string, serverId: string, confirmation: string) {
   if (confirmation !== "DELETE") throw new Error("Type DELETE to confirm server deletion.");
   const media = await db.transaction(async (tx) => {
-    await requireServerCapability(serverId, userId, "identity:edit", tx);
+    await requireServerCapability(serverId, userId, "server:delete", tx);
     const rows = await tx
-      .select({ blobKey: serverMedia.blobKey, bytes: serverMedia.bytes })
+      .select({ blobKey: serverMedia.blobKey, bytes: serverMedia.bytes, status: serverMedia.status })
       .from(serverMedia)
       .where(eq(serverMedia.serverId, serverId));
     await enqueueMonitorSync(tx, serverId, "delete");
     await tx.delete(servers).where(eq(servers.id, serverId));
     return {
       rows,
-      mediaBytes: rows.reduce((total, row) => total + row.bytes, 0),
+      // Media already marked deleted had its bytes released when it was
+      // replaced or removed; refunding them again would understate real usage.
+      mediaBytes: rows.reduce((total, row) => total + (row.status === "deleted" ? 0 : row.bytes), 0),
     };
   });
   await tryFlushMonitorSync(serverId);

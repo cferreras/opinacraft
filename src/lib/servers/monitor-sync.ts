@@ -1,4 +1,4 @@
-import { and, eq, lte, lt, or } from "drizzle-orm";
+import { and, asc, eq, gt, lte, lt, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
 import { db } from "@/db";
@@ -119,34 +119,77 @@ export async function processMonitorSyncOutbox({ limit = 25, serverId }: { limit
   return { configured: true, processed, failed };
 }
 
-export async function reconcileMonitorTargets(limit = 1_000) {
-  if (!isMonitorApiConfigured()) return { configured: false, synced: 0, failed: 0 };
-  const [rows, monitorTargetIds] = await Promise.all([
-    db.select({ id: servers.id }).from(servers).limit(limit),
+const RECONCILE_PAGE_SIZE = 1_000;
+const RECONCILE_MAX_PAGES = 1_000;
+
+/**
+ * Reads the whole authoritative inventory with keyset pagination. `complete` is
+ * false when the page budget runs out, which makes absence from the returned
+ * set meaningless for deletion decisions.
+ */
+async function readAllServerIds(pageSize: number, maxPages: number) {
+  const serverIds = new Set<string>();
+  let cursor: string | null = null;
+  for (let page = 0; page < maxPages; page += 1) {
+    const rows: { id: string }[] = await db
+      .select({ id: servers.id })
+      .from(servers)
+      .where(cursor ? gt(servers.id, cursor) : undefined)
+      .orderBy(asc(servers.id))
+      .limit(pageSize);
+    for (const row of rows) serverIds.add(row.id);
+    if (rows.length < pageSize) return { serverIds, complete: true };
+    cursor = rows[rows.length - 1]!.id;
+  }
+  return { serverIds, complete: false };
+}
+
+async function serverExists(serverId: string) {
+  const [row] = await db.select({ id: servers.id }).from(servers).where(eq(servers.id, serverId)).limit(1);
+  return Boolean(row);
+}
+
+export async function reconcileMonitorTargets({
+  pageSize = RECONCILE_PAGE_SIZE,
+  maxPages = RECONCILE_MAX_PAGES,
+}: { pageSize?: number; maxPages?: number } = {}) {
+  if (!isMonitorApiConfigured()) return { configured: false, synced: 0, failed: 0, removed: 0, complete: true };
+  const [inventory, monitorTargetIds] = await Promise.all([
+    readAllServerIds(pageSize, maxPages),
     fetchMonitorTargetIds(),
   ]);
-  if (!monitorTargetIds) return { configured: true, synced: 0, failed: 1 };
+  if (!monitorTargetIds) return { configured: true, synced: 0, failed: 1, removed: 0, complete: inventory.complete };
   let synced = 0;
   let failed = 0;
-  const serverIds = new Set(rows.map((row) => row.id));
-  for (const row of rows) {
+  let removed = 0;
+  for (const serverId of inventory.serverIds) {
     try {
-      await syncServerToMonitor(row.id);
+      await syncServerToMonitor(serverId);
       synced += 1;
     } catch (error) {
       failed += 1;
-      console.error("[monitor] reconciliation failed", row.id, error instanceof Error ? error.name : "unknown");
+      console.error("[monitor] reconciliation failed", serverId, error instanceof Error ? error.name : "unknown");
     }
   }
+  if (!inventory.complete) {
+    // Absence from a truncated inventory is not evidence that a target is an
+    // orphan, and deleting one cascades away its whole monitoring history.
+    console.error("[monitor] reconciliation inventory incomplete; skipping orphan deletion");
+    return { configured: true, synced, failed: failed + 1, removed, complete: false };
+  }
   for (const serverId of monitorTargetIds) {
-    if (serverIds.has(serverId)) continue;
+    if (inventory.serverIds.has(serverId)) continue;
     try {
+      // Re-confirm against the authoritative database: a server created after
+      // the inventory snapshot must never be treated as an orphan.
+      if (await serverExists(serverId)) continue;
       await removeMonitorTarget(serverId);
+      removed += 1;
       synced += 1;
     } catch (error) {
       failed += 1;
       console.error("[monitor] orphan reconciliation failed", serverId, error instanceof Error ? error.name : "unknown");
     }
   }
-  return { configured: true, synced, failed };
+  return { configured: true, synced, failed, removed, complete: true };
 }

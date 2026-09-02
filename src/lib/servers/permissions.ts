@@ -12,7 +12,8 @@ export type ServerCapability =
   | "publication:edit"
   | "members:view"
   | "members:manage"
-  | "verification:manage";
+  | "verification:manage"
+  | "server:delete";
 
 const roleCapabilities: Record<ServerRole, readonly ServerCapability[]> = {
   owner: [
@@ -23,6 +24,8 @@ const roleCapabilities: Record<ServerRole, readonly ServerCapability[]> = {
     "members:view",
     "members:manage",
     "verification:manage",
+    // Destructive lifecycle operation: never granted to admins or editors.
+    "server:delete",
   ],
   admin: [
     "identity:edit",

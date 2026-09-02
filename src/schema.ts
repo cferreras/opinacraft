@@ -449,6 +449,9 @@ export const serverReviews = pgTable(
     rating: smallint("rating").notNull(),
     content: text("content").notNull(),
     status: serverReviewStatus("status").default("published").notNull(),
+    // Set when the author joins the server team: the review is withheld from
+    // public surfaces without destroying it, and clearing the column restores it.
+    withheldAt: timestamp("withheld_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -577,6 +580,24 @@ export const mediaUsageCounters = pgTable(
     blockedAt: timestamp("blocked_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
+);
+
+// Per-account slice of the shared monthly media budget. The global counters in
+// `media_usage_counters` protect provider cost; this table stops one account
+// from consuming the whole allowance and blocking everyone else.
+export const mediaAccountUsage = pgTable(
+  "media_account_usage",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    period: varchar("period", { length: 7 }).notNull(),
+    advancedOperations: integer("advanced_operations").default(0).notNull(),
+    windowStartedAt: timestamp("window_started_at", { withTimezone: true }).defaultNow().notNull(),
+    windowOperations: integer("window_operations").default(0).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.period] })],
 );
 
 export const notificationJobStatus = pgEnum("notification_job_status", ["pending", "processing", "sent", "failed"]);

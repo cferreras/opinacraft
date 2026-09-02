@@ -1,8 +1,8 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { user } from "@/auth-schema";
-import { reviewReplies, serverMembers, serverReviews, servers } from "@/schema";
+import { serverMembers, serverReviews, servers } from "@/schema";
 import {
   requireServerCapability,
 } from "@/lib/servers/permissions";
@@ -83,25 +83,21 @@ export async function addServerMember(
       throw error;
     }
 
-    const reviewsToInvalidate = await tx
-      .select({ id: serverReviews.id })
-      .from(serverReviews)
+    // Team membership creates a conflict of interest, so the member's own
+    // reviews stop being public. Granting membership is not consent from the
+    // target to lose their content, so nothing is destroyed here: the reviews
+    // and their replies are withheld and come back if the membership ends.
+    await tx
+      .update(serverReviews)
+      .set({ withheldAt: new Date(), updatedAt: new Date() })
       .where(
         and(
           eq(serverReviews.serverId, serverId),
           eq(serverReviews.userId, target.id),
           inArray(serverReviews.status, ["published", "hidden"]),
+          isNull(serverReviews.withheldAt),
         ),
-      )
-      .for("update");
-    if (reviewsToInvalidate.length) {
-      const reviewIds = reviewsToInvalidate.map((review) => review.id);
-      await tx
-        .update(serverReviews)
-        .set({ status: "deleted", content: "Opinión eliminada al unirse al equipo", updatedAt: new Date() })
-        .where(inArray(serverReviews.id, reviewIds));
-      await tx.delete(reviewReplies).where(inArray(reviewReplies.reviewId, reviewIds));
-    }
+      );
 
     return target.id;
   });
@@ -180,6 +176,19 @@ export async function removeServerMember(
         and(
           eq(serverMembers.serverId, serverId),
           eq(serverMembers.userId, targetUserId),
+        ),
+      );
+
+    // The conflict of interest ends with the membership, so the reviews that
+    // were withheld on joining become public again.
+    await tx
+      .update(serverReviews)
+      .set({ withheldAt: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(serverReviews.serverId, serverId),
+          eq(serverReviews.userId, targetUserId),
+          isNotNull(serverReviews.withheldAt),
         ),
       );
   });

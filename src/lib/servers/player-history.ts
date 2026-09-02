@@ -10,7 +10,7 @@ import {
   servers,
 } from "@/schema";
 import { getMonitorCadenceMinutes, getMonitorFreshness, PUBLIC_MONITOR_CADENCE_MINUTES, type MonitorFreshness } from "./monitor-scheduling";
-import { fetchMonitorHistory, isMonitorApiConfigured } from "./monitor-api-client";
+import { fetchMonitorHistory, isMonitorApiConfigured, isMonitorServerId } from "./monitor-api-client";
 
 export const historyPeriods = ["24h", "7d", "30d", "90d"] as const;
 export const historyEditionFilters = ["all", "java", "bedrock"] as const;
@@ -388,11 +388,13 @@ async function publicServerExists(serverId: string) {
 }
 
 export async function getPublicPlayerHistory(serverId: string, period: HistoryPeriod, edition: HistoryEditionFilter = "all", now = new Date()) {
+  // The public eligibility policy lives in Neon and applies to both providers:
+  // swapping the history source must never widen who can read a server's history.
+  if (!isMonitorServerId(serverId) || !(await publicServerExists(serverId))) return null;
   if (isMonitorApiConfigured()) {
     // Once the Monitor API is configured, public history never falls back to Neon.
     return fetchMonitorHistory(serverId, period);
   }
-  if (!(await publicServerExists(serverId))) return null;
   return queryPlayerHistory(serverId, period, edition, now);
 }
 

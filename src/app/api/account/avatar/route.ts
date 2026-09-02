@@ -10,7 +10,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { removeMediaOrEnqueue } from "@/lib/media/cleanup";
 import { MediaValidationError, optimizeImage } from "@/lib/media/optimize";
-import { getMediaQuota, MediaQuotaExceededError, releaseMediaQuota, reserveMediaQuota } from "@/lib/media/quota";
+import { getMediaQuota, MediaAccountQuotaExceededError, MediaQuotaExceededError, releaseMediaQuota, reserveAccountMediaOperation, reserveMediaQuota } from "@/lib/media/quota";
 import { mediaStorage, MediaStorageNotConfiguredError } from "@/lib/media/storage";
 import { userAvatarsTag } from "@/lib/servers/cache-tags";
 
@@ -33,6 +33,11 @@ export async function POST(request: Request) {
     const body = await request.formData();
     const file = body.get("file");
     if (!(file instanceof File)) return NextResponse.json({ error: "Choose an image." }, { status: 400 });
+
+    // Claim the account's own share of the shared monthly budget before any
+    // image processing, so one account cannot block uploads for everyone else.
+    // The claim is never refunded: see reserveAccountMediaOperation.
+    await reserveAccountMediaOperation(session.user.id);
 
     const optimized = await optimizeImage(file, "avatar");
     await reserveMediaQuota(optimized.bytes);
@@ -88,6 +93,7 @@ export async function POST(request: Request) {
     if (!committed && reservedBytes > 0) await releaseMediaQuota(reservedBytes).catch(() => undefined);
     if (error instanceof MediaValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof MediaStorageNotConfiguredError) return NextResponse.json({ error: "Media storage is not configured." }, { status: 503 });
+    if (error instanceof MediaAccountQuotaExceededError) return NextResponse.json({ error: error.message }, { status: 429 });
     if (error instanceof MediaQuotaExceededError) return NextResponse.json({ error: error.message }, { status: 429 });
     console.error("Failed to upload account avatar", error instanceof Error ? error.name : "unknown");
     return NextResponse.json({ error: "Unable to upload avatar." }, { status: 500 });

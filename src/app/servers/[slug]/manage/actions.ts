@@ -42,7 +42,7 @@ import {
 import { parseEnabledPort } from "@/lib/servers/endpoint-fields";
 import { serverValidationField } from "@/lib/servers/form-validation";
 import { processMonitorSyncOutbox } from "@/lib/servers/monitor-sync";
-import { invalidatePublicServerCache } from "@/lib/servers/cache-tags";
+import { invalidatePublicServerCache, invalidateReviewCache } from "@/lib/servers/cache-tags";
 
 export type VerificationOutcome =
   | "started"
@@ -196,6 +196,10 @@ export async function addMemberAction(formData: FormData) {
     redirect(`/servers/${slug}/manage?memberError=${reason}`);
   }
 
+  // Joining the team withholds the new member's own review, so the public
+  // review list and rating average change with it.
+  invalidateReviewCache(serverId);
+  revalidatePath(`/servers/${slug}`);
   revalidatePath(`/servers/${slug}/manage`);
   redirect(`/servers/${slug}/manage?memberUpdated=1`);
 }
@@ -233,6 +237,9 @@ export async function removeMemberAction(formData: FormData) {
     if (reason === "unknown") console.error("Failed to remove server member", error);
     redirect(`/servers/${slug}/manage?memberError=${reason}`);
   }
+  // Leaving the team restores any review that was withheld on joining.
+  invalidateReviewCache(serverId);
+  revalidatePath(`/servers/${slug}`);
   revalidatePath(`/servers/${slug}/manage`);
   redirect(`/servers/${slug}/manage?memberUpdated=1`);
 }

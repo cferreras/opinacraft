@@ -45,7 +45,7 @@ export async function moderateReport(userId: string, reportId: string, decision:
       .where(and(eq(serverReports.id, reportId), inArray(serverReports.status, decision === "reopened" ? ["dismissed"] : decision === "restored" ? ["open", "actioned"] : ["open"])))
       .for("update")
       .limit(1);
-    if (!report) return false;
+    if (!report) return null;
     if (decision === "reopened" && report.reporterUserId) {
       const [newerOpenReport] = await tx
         .select({ id: serverReports.id })
@@ -73,7 +73,10 @@ export async function moderateReport(userId: string, reportId: string, decision:
     if (reporterEmail) await tx.insert(notificationJobs).values({ dedupeKey: `report:${reportId}:${decision}`, recipientUserId: report.reporterUserId, recipientEmail: reporterEmail, template: "report_decision", payload: { decision, serverId: report.serverId } }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
     const [owner] = await tx.select({ userId: serverMembers.userId, email: user.email }).from(serverMembers).innerJoin(user, eq(serverMembers.userId, user.id)).where(and(eq(serverMembers.serverId, report.serverId), eq(serverMembers.role, "owner"))).limit(1);
     if (owner?.email && owner.userId !== report.reporterUserId) await tx.insert(notificationJobs).values({ dedupeKey: `report-owner:${reportId}:${decision}`, recipientUserId: owner.userId, recipientEmail: owner.email, template: "report_decision", payload: { decision, serverId: report.serverId } }).onConflictDoNothing({ target: notificationJobs.dedupeKey });
-    return true;
+    // The caller needs the affected server to invalidate its cached public
+    // detail: a blocked server must stop being readable straight away.
+    const [moderatedServer] = await tx.select({ slug: servers.slug }).from(servers).where(eq(servers.id, report.serverId)).limit(1);
+    return { serverId: report.serverId, slug: moderatedServer?.slug ?? null };
   });
 }
 

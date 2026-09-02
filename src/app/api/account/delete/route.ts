@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const owned = await tx.select({ id: servers.id }).from(servers).innerJoin(serverMembers, eq(serverMembers.serverId, servers.id)).where(and(eq(serverMembers.userId, session.user.id), eq(serverMembers.role, "owner")));
     const keys = owned.length
       ? await tx
-        .select({ blobKey: serverMedia.blobKey, bytes: serverMedia.bytes })
+        .select({ blobKey: serverMedia.blobKey, bytes: serverMedia.bytes, status: serverMedia.status })
         .from(serverMedia)
         .where(inArray(serverMedia.serverId, owned.map((server) => server.id)))
       : [];
@@ -38,7 +38,9 @@ export async function POST(request: Request) {
     await tx.delete(user).where(eq(user.id, session.user.id));
     return {
       media: keys.map((row) => row.blobKey),
-      mediaBytes: keys.reduce((total, row) => total + row.bytes, 0),
+      // Rows already marked deleted were refunded when they were replaced or
+      // removed, so counting them again would understate real stored usage.
+      mediaBytes: keys.reduce((total, row) => total + (row.status === "deleted" ? 0 : row.bytes), 0),
       avatar,
     };
   });
