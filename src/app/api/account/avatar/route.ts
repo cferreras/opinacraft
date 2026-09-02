@@ -10,7 +10,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { removeMediaOrEnqueue } from "@/lib/media/cleanup";
 import { MediaValidationError, optimizeImage } from "@/lib/media/optimize";
-import { getMediaQuota, MediaAccountQuotaExceededError, MediaQuotaExceededError, releaseAccountMediaOperation, releaseMediaQuota, reserveAccountMediaOperation, reserveMediaQuota } from "@/lib/media/quota";
+import { getMediaQuota, MediaAccountQuotaExceededError, MediaQuotaExceededError, releaseMediaQuota, reserveAccountMediaOperation, reserveMediaQuota } from "@/lib/media/quota";
 import { mediaStorage, MediaStorageNotConfiguredError } from "@/lib/media/storage";
 import { userAvatarsTag } from "@/lib/servers/cache-tags";
 
@@ -22,7 +22,6 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
   let reservedBytes = 0;
-  let reservedOperation = false;
   let committed = false;
 
   try {
@@ -37,8 +36,8 @@ export async function POST(request: Request) {
 
     // Claim the account's own share of the shared monthly budget before any
     // image processing, so one account cannot block uploads for everyone else.
+    // The claim is never refunded: see reserveAccountMediaOperation.
     await reserveAccountMediaOperation(session.user.id);
-    reservedOperation = true;
 
     const optimized = await optimizeImage(file, "avatar");
     await reserveMediaQuota(optimized.bytes);
@@ -92,7 +91,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, url: stored.url, quota: await getMediaQuota() });
   } catch (error) {
     if (!committed && reservedBytes > 0) await releaseMediaQuota(reservedBytes).catch(() => undefined);
-    if (!committed && reservedOperation) await releaseAccountMediaOperation(session.user.id).catch(() => undefined);
     if (error instanceof MediaValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof MediaStorageNotConfiguredError) return NextResponse.json({ error: "Media storage is not configured." }, { status: 503 });
     if (error instanceof MediaAccountQuotaExceededError) return NextResponse.json({ error: error.message }, { status: 429 });

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createServer as createHttpServer, request as httpRequest } from "node:http";
 import { createServer as createTcpServer } from "node:net";
 import test from "node:test";
@@ -230,6 +231,26 @@ test("only canonical UUIDs reach the authenticated Monitor history endpoint", as
   assert.deepEqual(requestedUrls, [
     "https://monitor-api.example.test/v1/servers/00000000-0000-0000-0000-000000000001/history?period=24h",
   ]);
+});
+
+test("nothing can give an account back its share of the shared media budget", async () => {
+  // The shared advancedOperations counter is charged on reservation and never
+  // refunded, so the per-account slice must not be refundable either: an
+  // account that failed its uploads on purpose would otherwise drain the shared
+  // monthly budget while staying under its own cap forever.
+  const quota = await import("../src/lib/media/quota.ts");
+  assert.equal("releaseAccountMediaOperation" in quota, false);
+
+  const sources = [
+    "src/lib/media/quota.ts",
+    "src/app/api/account/avatar/route.ts",
+    "src/app/api/servers/[serverId]/media/route.ts",
+  ];
+  for (const path of sources) {
+    const source = readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /advancedOperations[^\n]*-\s*1/, `${path} decrements the account operation counter`);
+    assert.doesNotMatch(source, /windowOperations[^\n]*-\s*1/, `${path} decrements the account window counter`);
+  }
 });
 
 test("only the owner holds the destructive server:delete capability", () => {

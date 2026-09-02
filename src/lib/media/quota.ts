@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { mediaAccountUsage, mediaUsageCounters, notificationJobs } from "@/schema";
@@ -53,6 +53,13 @@ function accountLimits() {
  * budget. A single atomic upsert does the counting, so parallel requests from
  * the same account cannot race past the limit. Called before image processing
  * so an abusive caller cannot even spend CPU on decoding.
+ *
+ * There is deliberately no refund. The shared `advancedOperations` counter is
+ * charged on reservation and never given back, because the provider operation
+ * and the processing work are spent whatever happens next. Refunding the
+ * account slice would break that symmetry: an account could fail its uploads
+ * on purpose, stay under its own cap forever and still drain the shared
+ * monthly budget. What this counts is attempts, not successes.
  */
 export async function reserveAccountMediaOperation(userId: string, now = new Date()) {
   const key = period();
@@ -77,19 +84,6 @@ export async function reserveAccountMediaOperation(userId: string, now = new Dat
     .returning({ advancedOperations: mediaAccountUsage.advancedOperations, windowOperations: mediaAccountUsage.windowOperations });
   if (!row) throw new MediaAccountQuotaExceededError();
   return { period: key, operations: row.advancedOperations, operationLimit: caps.period };
-}
-
-export async function releaseAccountMediaOperation(userId: string, now = new Date()) {
-  // Only refunds work that never happened (a failed upload), never a completed
-  // one: the provider operation itself is spent whether or not it is kept.
-  await db
-    .update(mediaAccountUsage)
-    .set({
-      advancedOperations: sql`greatest(0, ${mediaAccountUsage.advancedOperations} - 1)`,
-      windowOperations: sql`greatest(0, ${mediaAccountUsage.windowOperations} - 1)`,
-      updatedAt: now,
-    })
-    .where(and(eq(mediaAccountUsage.userId, userId), eq(mediaAccountUsage.period, period())));
 }
 
 export async function reserveMediaQuota(bytes: number) {

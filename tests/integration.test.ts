@@ -495,6 +495,30 @@ test("one account cannot exhaust the shared monthly upload budget", testOptions,
   await reserveAccountMediaOperation(secondUserId);
 });
 
+test("failed uploads still spend the account's share of the shared budget", testOptions, async () => {
+  const userId = await createUser();
+  process.env.DATABASE_URL = testDatabaseUrl;
+  const { MediaAccountQuotaExceededError, reserveAccountMediaOperation } = await import("../src/lib/media/quota.ts");
+
+  // Every attempt fails after its reservation, the way an upload does when the
+  // blob lands but the transaction loses the one-active-kind race. The shared
+  // operation counter stays charged for those, so the account slice must too:
+  // if failures were refunded, an account could drain the shared monthly budget
+  // forever while never reaching its own cap.
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await reserveAccountMediaOperation(userId);
+    // ... the upload fails here; nothing gives the slot back.
+  }
+
+  await assert.rejects(() => reserveAccountMediaOperation(userId), MediaAccountQuotaExceededError);
+  const { rows } = await database().query(
+    "select advanced_operations, window_operations from media_account_usage where user_id = $1",
+    [userId],
+  );
+  assert.equal(Number(rows[0].advanced_operations), 10);
+  assert.equal(Number(rows[0].window_operations), 10);
+});
+
 test("moderating a report reports the server whose public cache must be dropped", testOptions, async () => {
   const ownerId = await createUser();
   const reporterId = await createUser();

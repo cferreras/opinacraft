@@ -11,7 +11,7 @@ import { requireServerCapability, ServerPermissionError } from "@/lib/servers/pe
 import { MediaValidationError, optimizeImage } from "@/lib/media/optimize";
 import { mediaStorage, MediaStorageNotConfiguredError } from "@/lib/media/storage";
 import { enqueueMediaCleanup } from "@/lib/media/cleanup";
-import { getMediaQuota, MediaAccountQuotaExceededError, MediaQuotaExceededError, releaseAccountMediaOperation, releaseMediaQuota, reserveAccountMediaOperation, reserveMediaQuota } from "@/lib/media/quota";
+import { getMediaQuota, MediaAccountQuotaExceededError, MediaQuotaExceededError, releaseMediaQuota, reserveAccountMediaOperation, reserveMediaQuota } from "@/lib/media/quota";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ serverId: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -33,7 +33,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ser
   if (!session.user.emailVerified) return NextResponse.json({ error: "Verify your email before uploading media." }, { status: 403 });
   const { serverId } = await params;
   let reservedBytes = 0;
-  let reservedOperation = false;
   let committed = false;
 
   try {
@@ -46,8 +45,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ ser
 
     // Claim the account's own share of the shared monthly budget before any
     // image processing, so one account cannot block uploads for everyone else.
+    // The claim is never refunded: see reserveAccountMediaOperation.
     await reserveAccountMediaOperation(session.user.id);
-    reservedOperation = true;
 
     const optimized = await optimizeImage(file, kind);
     await reserveMediaQuota(optimized.bytes);
@@ -83,7 +82,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ser
     return NextResponse.json({ ok: true, kind, url: stored.url, active: { kind, url: stored.url, bytes: optimized.bytes, width: optimized.width, height: optimized.height }, quota: await getMediaQuota() });
   } catch (error) {
     if (!committed && reservedBytes > 0) await releaseMediaQuota(reservedBytes).catch(() => undefined);
-    if (!committed && reservedOperation) await releaseAccountMediaOperation(session.user.id).catch(() => undefined);
     if (error instanceof MediaValidationError) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof MediaStorageNotConfiguredError) return NextResponse.json({ error: "Media storage is not configured." }, { status: 503 });
     if (error instanceof MediaAccountQuotaExceededError) return NextResponse.json({ error: error.message }, { status: 429 });
