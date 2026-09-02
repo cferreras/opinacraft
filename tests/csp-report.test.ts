@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
+import { POST } from "@/app/api/csp-report/route";
 import { normalizeCspReports } from "@/lib/security/csp-report";
 
 function readProjectFile(filePath: string) {
@@ -94,9 +95,107 @@ test("fields are stripped of control characters and clipped", () => {
   assert.equal(normalizeCspReports({ "effective-directive": "script-src-elem" })[0]?.directive, "script-src-elem");
 });
 
+// `/reset-password?token=…` holds a live credential in the query, and the spec's report-stripping
+// keeps query strings. A violation raised there must not copy the token into the log.
+test("a reported URL keeps its page and drops its query", () => {
+  const violations = normalizeCspReports({
+    "csp-report": {
+      "effective-directive": "script-src",
+      "document-uri": "https://www.opinacraft.com/reset-password?token=live-secret-token#frag",
+      "blocked-uri": "https://cdn.example.com/tag.js?key=another-secret",
+    },
+  });
+  const violation = violations[0];
+  assert.ok(violation);
+  assert.equal(violation.documentUrl, "https://www.opinacraft.com/reset-password");
+  assert.equal(violation.blockedUrl, "https://cdn.example.com/tag.js");
+  assert.ok(!violation.documentUrl.includes("live-secret-token"));
+  assert.ok(!violation.blockedUrl.includes("another-secret"));
+  // Credentials in the URL itself go the same way.
+  assert.equal(
+    normalizeCspReports({ "effective-directive": "img-src", "blocked-uri": "https://user:pass@example.com/a.png?q=1" })[0]?.blockedUrl,
+    "https://example.com/a.png",
+  );
+});
+
+test("a reported source that is not a URL survives as itself", () => {
+  const source = (blocked: string) => normalizeCspReports({ "effective-directive": "script-src", "blocked-uri": blocked })[0]?.blockedUrl;
+  // CSP names some sources by keyword rather than URL.
+  assert.equal(source("inline"), "inline");
+  assert.equal(source("eval"), "eval");
+  assert.equal(source(""), "");
+  // A data URL is all payload; the scheme is what identifies it.
+  assert.equal(source("data:image/svg+xml;base64,PHN2Zw=="), "data");
+  assert.equal(source("blob:https://www.opinacraft.com/8f7c"), "blob");
+});
+
 test("a batch is capped", () => {
   const entry = { type: "csp-violation", body: { effectiveDirective: "img-src" } };
   assert.equal(normalizeCspReports(Array.from({ length: 50 }, () => entry)).length, 20);
+});
+
+function postReport(body: BodyInit, headers: Record<string, string>, init: RequestInit = {}) {
+  return POST(new Request("https://www.opinacraft.com/api/csp-report", { method: "POST", headers, body, ...init }));
+}
+
+// The endpoint answers the same way to everything, so what it does is visible only in what it logs.
+function captureWarnings(run: () => Promise<unknown>) {
+  const warnings: unknown[][] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => { warnings.push(args); };
+  return run().finally(() => { console.warn = original; }).then(() => warnings);
+}
+
+test("the endpoint reads a report and answers 204 to everything", async () => {
+  const body = JSON.stringify({ "csp-report": { "effective-directive": "script-src-elem", "blocked-uri": "https://evil.example/x.js" } });
+  const warnings = await captureWarnings(async () => {
+    const response = await postReport(body, { "content-type": "application/csp-report", "content-length": String(body.length) });
+    assert.equal(response.status, 204);
+  });
+  assert.equal(warnings.length, 1);
+  assert.equal((warnings[0]?.[1] as { directive: string }).directive, "script-src-elem");
+});
+
+test("a body that is not a report is dropped without a word", async () => {
+  const warnings = await captureWarnings(async () => {
+    // Wrong content type.
+    assert.equal((await postReport("junk", { "content-type": "text/plain", "content-length": "4" })).status, 204);
+    // Honest oversized length.
+    assert.equal((await postReport("{}", { "content-type": "application/json", "content-length": String(200 * 1024) })).status, 204);
+    // Malformed JSON.
+    assert.equal((await postReport("not-json", { "content-type": "application/json", "content-length": "8" })).status, 204);
+  });
+  assert.deepEqual(warnings, []);
+});
+
+// A chunked request carries no `Content-Length`, so a guard that only reads the header waves it
+// through and buffers the whole body. The limit has to be counted against the bytes arriving.
+test("an oversized body is refused even with no Content-Length to declare it", async () => {
+  const oversized = `{"csp-report":{"effective-directive":"script-src","script-sample":"${"a".repeat(100 * 1024)}"}}`;
+  const stream = new ReadableStream({
+    start(controller) {
+      const encoded = new TextEncoder().encode(oversized);
+      for (let offset = 0; offset < encoded.byteLength; offset += 8192) controller.enqueue(encoded.slice(offset, offset + 8192));
+      controller.close();
+    },
+  });
+  const warnings = await captureWarnings(async () => {
+    const response = await postReport(stream, { "content-type": "application/csp-report" }, { duplex: "half" } as RequestInit);
+    assert.equal(response.status, 204);
+  });
+  // Nothing logged: the read gave up before the body was whole.
+  assert.deepEqual(warnings, []);
+});
+
+test("a chunked body within the limit is still read", async () => {
+  const body = JSON.stringify([{ type: "csp-violation", body: { effectiveDirective: "font-src" } }]);
+  const stream = new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode(body)); controller.close(); },
+  });
+  const warnings = await captureWarnings(async () => {
+    assert.equal((await postReport(stream, { "content-type": "application/reports+json" }, { duplex: "half" } as RequestInit)).status, 204);
+  });
+  assert.equal(warnings.length, 1);
 });
 
 // A Report-Only policy that names no endpoint is evaluated and thrown away. Both directives are

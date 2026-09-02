@@ -10,9 +10,10 @@
  *
  * The endpoint is necessarily unauthenticated -- browsers send reports without credentials -- so
  * everything in a report is untrusted text from an arbitrary poster. Fields are clipped and
- * stripped of control characters before they reach a log line, and only the handful worth reading
- * is kept: `original-policy` is our own header echoed back on every single report, and the rest of
- * the envelope says nothing a violation is diagnosed from.
+ * stripped of control characters before they reach a log line, URLs lose their query strings
+ * (which is where this site's one credential travels), and only the handful worth reading is kept:
+ * `original-policy` is our own header echoed back on every single report, and the rest of the
+ * envelope says nothing a violation is diagnosed from.
  */
 export type CspViolation = {
   directive: string;
@@ -28,12 +29,47 @@ const MAX_FIELD_LENGTH = 300;
 /** One page can violate a policy many times; a batch beyond this says nothing the first few didn't. */
 const MAX_REPORTS = 20;
 
+/**
+ * Newlines and escape sequences are collapsed rather than kept: a report is attacker-supplied
+ * text on its way to a log line, and one violation should occupy one line.
+ */
+function scrub(value: unknown): string {
+  return typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim() : "";
+}
+
+function clip(value: string): string {
+  return value.length > MAX_FIELD_LENGTH ? `${value.slice(0, MAX_FIELD_LENGTH - 1)}…` : value;
+}
+
 function field(value: unknown): string {
-  if (typeof value !== "string") return "";
-  // Newlines and escape sequences are collapsed rather than kept: a report is attacker-supplied
-  // text on its way to a log line, and one violation should occupy one line.
-  const clean = value.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
-  return clean.length > MAX_FIELD_LENGTH ? `${clean.slice(0, MAX_FIELD_LENGTH - 1)}…` : clean;
+  return clip(scrub(value));
+}
+
+/**
+ * A URL from a report, reduced to origin and path.
+ *
+ * The spec's "strip url for use in reports" drops the fragment and any credentials but keeps the
+ * query string, and `/reset-password?token=…` carries a live password-reset token in exactly that
+ * position. A violation raised on that page while the token is still valid would copy it into the
+ * platform log, so the query goes before the value is logged. The path stays: it is what says which
+ * page violated the policy.
+ */
+function reportedUrl(value: unknown): string {
+  // Reduced before it is clipped: clipping first would truncate a long URL mid-path and leave the
+  // ellipsis to be percent-encoded back into it.
+  const raw = scrub(value);
+  if (!raw) return "";
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    // CSP reports keywords rather than URLs for some sources -- "inline", "eval", "self".
+    return clip(raw);
+  }
+  // Only http(s) has an origin and path worth keeping. A `data:`/`blob:` URL is all payload, and
+  // the scheme alone is what identifies it.
+  if (url.protocol !== "http:" && url.protocol !== "https:") return url.protocol.replace(":", "");
+  return clip(`${url.origin}${url.pathname}`);
 }
 
 function violationFrom(body: Record<string, unknown>): CspViolation | null {
@@ -43,8 +79,8 @@ function violationFrom(body: Record<string, unknown>): CspViolation | null {
   if (!directive) return null;
   return {
     directive,
-    blockedUrl: field(body.blockedURL ?? body["blocked-uri"]),
-    documentUrl: field(body.documentURL ?? body["document-uri"]),
+    blockedUrl: reportedUrl(body.blockedURL ?? body["blocked-uri"]),
+    documentUrl: reportedUrl(body.documentURL ?? body["document-uri"]),
     sample: field(body.sample ?? body["script-sample"]),
     disposition: field(body.disposition) || "report",
   };
