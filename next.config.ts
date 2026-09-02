@@ -21,7 +21,15 @@ const discordEnabled = Boolean(
  * enforced policy without nonces breaks the page; run it in report mode, read the violations, then
  * decide. `unsafe-inline` is listed so the report describes real problems rather than every
  * framework script.
+ *
+ * Report mode only means something if the reports are collected somewhere, so the policy names an
+ * endpoint twice: `report-uri` for Safari and Firefox, and `report-to` -- paired with the
+ * `Reporting-Endpoints` header that defines the name -- for Chrome, which deprecated the first.
+ * Both are relative, so a report is same-origin by construction on production, preview and local
+ * alike; an absolute URL would make every preview deployment post cross-origin and need CORS.
  */
+const cspReportPath = "/api/csp-report";
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -34,6 +42,8 @@ const contentSecurityPolicy = [
   "font-src 'self' data:",
   "connect-src 'self' https:",
   "upgrade-insecure-requests",
+  `report-uri ${cspReportPath}`,
+  "report-to csp-endpoint",
 ].join("; ");
 
 const securityHeaders = [
@@ -41,6 +51,7 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), browsing-topics=()" },
+  { key: "Reporting-Endpoints", value: `csp-endpoint="${cspReportPath}"` },
   { key: "Content-Security-Policy-Report-Only", value: contentSecurityPolicy },
 ];
 
