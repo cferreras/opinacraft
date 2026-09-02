@@ -67,18 +67,29 @@ export async function requestFromNode(request: IncomingMessage) {
 export function createMonitorApiNodeListener({
   secret,
   handler,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 }: {
   secret: string | undefined;
   handler: (request: Request) => Promise<Response>;
+  timeoutMs?: number;
 }) {
   return async function monitorApiNodeListener(request: IncomingMessage, response: ServerResponse) {
+    let settled = false;
     const refuse = (status: number, error: string) => {
+      if (settled || response.headersSent) return;
+      settled = true;
       response.statusCode = status;
       response.setHeader("content-type", "application/json; charset=utf-8");
       response.setHeader("connection", "close");
       response.end(JSON.stringify({ error }));
     };
-    request.setTimeout(REQUEST_TIMEOUT_MS, () => refuse(408, "Request timed out."));
+    // `IncomingMessage.setTimeout` only measures inactivity, so a client that
+    // dribbles one byte before every deadline could hold a connection open for
+    // as long as it liked. This is an absolute ceiling on request lifetime.
+    const deadline = setTimeout(() => {
+      refuse(408, "Request timed out.");
+      request.destroy();
+    }, timeoutMs);
     try {
       const isHealthCheck = request.method === "GET" && requestPathname(request) === "/healthz";
       if (!isHealthCheck && !isAuthorizedMonitorRequest(request.headers.authorization, secret)) {
@@ -86,6 +97,8 @@ export function createMonitorApiNodeListener({
         return;
       }
       const result = await handler(await requestFromNode(request));
+      if (settled || response.headersSent) return;
+      settled = true;
       response.statusCode = result.status;
       result.headers.forEach((value, key) => response.setHeader(key, value));
       response.end(Buffer.from(await result.arrayBuffer()));
@@ -94,8 +107,12 @@ export function createMonitorApiNodeListener({
         refuse(error.status, error.message);
         return;
       }
+      if (settled || response.headersSent) return;
+      settled = true;
       response.statusCode = 500;
       response.end(JSON.stringify({ error: error instanceof Error ? error.message : "Monitor API failed." }));
+    } finally {
+      clearTimeout(deadline);
     }
   };
 }

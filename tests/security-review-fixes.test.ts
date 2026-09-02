@@ -75,8 +75,9 @@ async function withMonitorApiListener(
   secret: string,
   handler: (request: Request) => Promise<Response>,
   run: (baseUrl: string) => Promise<void>,
+  timeoutMs?: number,
 ) {
-  const server = createHttpServer(createMonitorApiNodeListener({ secret, handler }));
+  const server = createHttpServer(createMonitorApiNodeListener({ secret, handler, timeoutMs }));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   assert.ok(address && typeof address !== "string");
@@ -153,6 +154,49 @@ test("the Monitor API refuses unauthenticated requests without reading their bod
   // Only the authenticated, in-bounds request ever reached the API handler.
   assert.equal(handled, 1);
   assert.equal(bodyBytesRead, JSON.stringify({ serverIds: [] }).length);
+});
+
+test("a slow client cannot hold a Monitor API request open past the deadline", async () => {
+  let handled = 0;
+
+  await withMonitorApiListener("monitor-secret", async (request) => {
+    handled += 1;
+    await request.arrayBuffer();
+    return Response.json({ ok: true });
+  }, async (baseUrl) => {
+    const url = new URL("/v1/status/batch", baseUrl);
+    let dribble: ReturnType<typeof setInterval> | undefined;
+    let guard: ReturnType<typeof setTimeout> | undefined;
+    const status = await new Promise<number>((resolve) => {
+      const outgoing = httpRequest({
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          authorization: "Bearer monitor-secret",
+          "content-type": "application/json",
+          // Chunked, so the adapter cannot know when the body ends.
+          "transfer-encoding": "chunked",
+        },
+      }, (response) => {
+        response.resume();
+        response.once("end", () => resolve(response.statusCode ?? 0));
+      });
+      outgoing.once("error", () => resolve(0));
+      // A tiny chunk well inside the byte cap, sent far more often than the
+      // deadline and never stopping: an inactivity timeout alone never fires,
+      // so only an absolute deadline can end this request.
+      dribble = setInterval(() => outgoing.write("."), 40);
+      guard = setTimeout(() => resolve(0), 3_000);
+    });
+    if (dribble) clearInterval(dribble);
+    if (guard) clearTimeout(guard);
+    assert.equal(status, 408);
+  }, 300);
+
+  // The request was cut off before the handler could see a complete body.
+  assert.equal(handled, 0);
 });
 
 test("only canonical UUIDs reach the authenticated Monitor history endpoint", async () => {

@@ -481,6 +481,16 @@ test("one account cannot exhaust the shared monthly upload budget", testOptions,
 
   assert.ok(accepted <= 10, `expected at most 10 accepted uploads, got ${accepted}`);
   assert.equal(accepted + refused, 14);
+
+  // A refused upload must not spend budget, or repeated 429s would lock the
+  // account out of its own monthly allowance.
+  const { rows } = await database().query(
+    "select advanced_operations, window_operations from media_account_usage where user_id = $1",
+    [firstUserId],
+  );
+  assert.equal(Number(rows[0].advanced_operations), accepted);
+  assert.equal(Number(rows[0].window_operations), accepted);
+
   // A throttled account must never block anybody else.
   await reserveAccountMediaOperation(secondUserId);
 });

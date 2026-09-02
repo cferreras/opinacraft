@@ -69,11 +69,13 @@ export async function reserveAccountMediaOperation(userId: string, now = new Dat
         windowOperations: sql`case when ${mediaAccountUsage.windowStartedAt} < ${windowFloor} then 1 else ${mediaAccountUsage.windowOperations} + 1 end`,
         updatedAt: now,
       },
+      // A refused upload must not spend budget. When a cap is already reached
+      // the update is skipped and no row comes back, so repeated rejections
+      // cannot inflate the counters and lock the account out for the period.
+      setWhere: sql`${mediaAccountUsage.advancedOperations} < ${caps.period} and (${mediaAccountUsage.windowStartedAt} < ${windowFloor} or ${mediaAccountUsage.windowOperations} < ${caps.window})`,
     })
     .returning({ advancedOperations: mediaAccountUsage.advancedOperations, windowOperations: mediaAccountUsage.windowOperations });
-  if (!row || row.advancedOperations > caps.period || row.windowOperations > caps.window) {
-    throw new MediaAccountQuotaExceededError();
-  }
+  if (!row) throw new MediaAccountQuotaExceededError();
   return { period: key, operations: row.advancedOperations, operationLimit: caps.period };
 }
 
