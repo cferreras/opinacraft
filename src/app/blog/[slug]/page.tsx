@@ -94,7 +94,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             <h1 className="mt-4 max-w-[43.75rem] text-[1.75rem] font-bold leading-[2.125rem] tracking-[-0.025em] sm:text-4xl sm:leading-[2.75rem]">{post.title}</h1>
             <p className="mt-3.5 max-w-[43.75rem] text-base leading-[1.6875rem] text-muted-foreground">{post.excerpt}</p>
 
-            <Image src={post.cover} alt={post.coverAlt} width={blogCoverWidth} height={blogCoverHeight} priority sizes="(min-width: 1024px) 50rem, 100vw" className="mt-7 aspect-video w-full rounded-xl object-cover" />
+            <Image src={post.cover} alt={post.coverAlt} width={blogCoverWidth} height={blogCoverHeight} priority sizes="(min-width: 1024px) 50rem, 100vw" className="mt-7 aspect-video w-full rounded-xl object-cover ring-1 ring-foreground/10" />
 
             {post.sections.map((section, index) => (
               <section key={section.heading}>
