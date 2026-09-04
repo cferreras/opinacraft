@@ -169,7 +169,7 @@ function VerificationSteps({ edition }: { edition: VerificationEdition }) {
                 <li>
                   <span className="font-medium text-foreground">Con MiniMOTD (Paper, Velocity, BungeeCord, Spigot o mod):</span>{" "}
                   abre <code className="rounded bg-muted px-1 py-0.5 text-xs">plugins/MiniMOTD/main.conf</code>,
-                  añade el código al final de uno de tus textos en la lista de MOTDs, por ejemplo{" "}
+                  añade el código al final de todos tus textos en la lista de MOTDs (si rotan, solo lo vemos cuando toca el que lo lleva), por ejemplo{" "}
                   <code className="rounded bg-muted px-1 py-0.5 text-xs">&lt;gray&gt;Mi servidor OPINACRAFT-XXXXX-XXXXX</code>,
                   guarda y ejecuta <code className="rounded bg-muted px-1 py-0.5 text-xs">/minimotd reload</code> o
                   reinicia. Vale con colores, degradados y MiniMessage.
