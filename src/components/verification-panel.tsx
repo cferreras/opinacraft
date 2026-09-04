@@ -31,9 +31,9 @@ type VerificationPanelProps = {
 type Feedback = { tone: "success" | "warning"; text: string };
 
 const outcomeFeedback: Record<VerificationOutcome, Feedback> = {
-  started: { tone: "success", text: "Código generado. Añádelo al MOTD y vuelve a comprobar la dirección." },
+  started: { tone: "success", text: "Código generado. Pégalo al final de tu MOTD y pulsa «Comprobar MOTD»." },
   verified: { tone: "success", text: "Identidad verificada. Ya puedes retirar el código del MOTD." },
-  code_not_found: { tone: "warning", text: "No se encontró el código en el MOTD." },
+  code_not_found: { tone: "warning", text: "No se encontró el código en el MOTD de esa dirección. Comprueba que lo añadiste al final, que guardaste y recargaste (por ejemplo, con /minimotd reload si usas MiniMOTD) y vuelve a intentarlo." },
   offline: { tone: "warning", text: "El servidor está fuera de línea o no respondió a tiempo." },
   timeout: { tone: "warning", text: "La comprobación agotó el tiempo de espera." },
   blocked_target: { tone: "warning", text: "Este destino está bloqueado porque no es una dirección pública." },
@@ -46,7 +46,7 @@ const outcomeFeedback: Record<VerificationOutcome, Feedback> = {
 
 const errorFeedback: Record<VerificationErrorReason, Feedback> = {
   "already-verified": { tone: "success", text: "La identidad de este servidor ya está verificada; no necesitas generar otro código." },
-  pending: { tone: "warning", text: "Ya hay un código pendiente para esta dirección. Añádelo al MOTD antes de comprobarla." },
+  pending: { tone: "warning", text: "Ya hay un código pendiente para esta dirección. Pégalo al final del MOTD antes de comprobarla." },
   "no-endpoint": { tone: "warning", text: "Añade una dirección pública de Minecraft antes de verificar la identidad de este servidor." },
   "rate-limit": { tone: "warning", text: "Demasiados intentos seguidos. Espera un momento antes de volver a comprobar." },
   unavailable: { tone: "warning", text: "El servicio de verificación no está disponible ahora mismo. Inténtalo de nuevo en unos minutos." },
@@ -73,17 +73,19 @@ export function VerificationPanel({ serverId, slug, verification, targetEdition,
   const verified = verification?.status === "verified";
   const feedback = feedbackFor(checkState ?? startState, verification?.lastFailureCode ?? null);
 
+  const helpId = `motd-ayuda-${targetEdition}`;
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-primary" /> Verificar identidad</CardTitle>
-        <CardDescription>Demuestra que controlas la comunidad añadiendo un código temporal al MOTD de una dirección pública.</CardDescription>
+        <CardDescription>Pega un código temporal en el mensaje que aparece en la lista de servidores (el MOTD) para demostrar que lo controlas. Funciona con el MOTD normal y con plugins o mods como MiniMOTD.</CardDescription>
         <Badge variant={verified ? "default" : active ? "secondary" : "outline"} className="w-fit">{verified && <Check className="mr-1 size-3" />}{verificationStatusLabel(verification?.status)}</Badge>
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="rounded-lg border bg-muted/30 p-3">
           <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Dirección que se verificará</p>
           <code className="mt-1 block truncate text-sm text-foreground">{targetAddress}</code>
+          <p className="mt-1 text-xs leading-4 text-muted-foreground">El código tiene que aparecer en el MOTD de esta dirección ({targetEdition === "bedrock" ? "Bedrock" : "Java"}).</p>
         </div>
         {verified ? (
           <p className="rounded-lg bg-success/10 p-4 text-sm leading-5 text-success">La identidad de este servidor ya está verificada.</p>
@@ -104,15 +106,22 @@ export function VerificationPanel({ serverId, slug, verification, targetEdition,
               </form>
               <Button type="button" variant="outline" onClick={() => navigator.clipboard?.writeText(verification.code ?? "")}><Copy className="size-4" /> Copiar código</Button>
             </div>
+            <VerificationSteps edition={targetEdition} />
           </div>
         ) : (
-          <form action={startAction} className="grid gap-3 rounded-lg bg-muted/50 p-4">
-            <p className="text-sm leading-5 text-muted-foreground">Genera un código y colócalo en el MOTD antes de comprobar esta dirección.</p>
-            <input type="hidden" name="serverId" value={serverId} />
-            <input type="hidden" name="slug" value={slug} />
-            <input type="hidden" name="edition" value={targetEdition} />
-            <Button type="submit" className="w-fit" disabled={starting}>{starting ? "Generando…" : "Generar código de verificación"}</Button>
-          </form>
+          <div className="grid gap-3">
+            <form action={startAction} className="grid gap-3 rounded-lg bg-muted/50 p-4">
+              <p className="text-sm leading-5 text-muted-foreground">Genera un código y pégalo en cualquier parte de tu MOTD actual, sin borrar tu mensaje. Después vuelve aquí y compruébalo.</p>
+              <input type="hidden" name="serverId" value={serverId} />
+              <input type="hidden" name="slug" value={slug} />
+              <input type="hidden" name="edition" value={targetEdition} />
+              <Button type="submit" className="w-fit" disabled={starting}>{starting ? "Generando…" : "Generar código de verificación"}</Button>
+            </form>
+            <details id={helpId} className="group rounded-lg border bg-background p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">¿Dónde se pone el código? Ver ejemplos para MOTD y MiniMOTD</summary>
+              <div className="mt-3"><VerificationSteps edition={targetEdition} /></div>
+            </details>
+          </div>
         )}
         {feedback ? (
           <Alert aria-live="polite" className={feedback.tone === "warning" ? "border-warning/30 bg-warning/10" : "border-success/30 bg-success/10"}>
@@ -121,6 +130,66 @@ export function VerificationPanel({ serverId, slug, verification, targetEdition,
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function VerificationSteps({ edition }: { edition: VerificationEdition }) {
+  const isBedrock = edition === "bedrock";
+  return (
+    <div className="grid gap-3 rounded-lg border bg-background p-4">
+      <p className="text-sm font-semibold text-foreground">Cómo poner el código en el MOTD</p>
+      <p className="text-sm leading-5 text-muted-foreground">
+        El MOTD es el mensaje que se ve en la lista de servidores, debajo del nombre.
+        No tienes que borrar tu mensaje: basta con añadir el código al final y guardar.
+      </p>
+      <ol className="grid list-decimal gap-2.5 pl-5 text-sm leading-5 text-muted-foreground marker:font-semibold marker:text-foreground">
+        <li>
+          <span className="font-medium text-foreground">Copia el código</span> con el botón de copiar.
+          Lo detectamos aunque uses mayúsculas, minúsculas, colores o formato.
+        </li>
+        <li>
+          {isBedrock ? (
+            <>
+              <span className="font-medium text-foreground">Pégalo en el MOTD de Bedrock.</span>{" "}
+              En <code className="rounded bg-muted px-1 py-0.5 text-xs">server.properties</code> edita{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">server-name=Mi servidor OPINACRAFT-XXXXX-XXXXX</code>,
+              guarda y reinicia el servidor.
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-foreground">Pégalo en el MOTD de Java.</span> Elige según
+              cómo tengas configurado el mensaje:
+              <ul className="mt-2 grid list-disc gap-1.5 pl-5">
+                <li>
+                  <span className="font-medium text-foreground">Vanilla, Paper, Spigot o Purpur sin plugins de MOTD:</span>{" "}
+                  abre <code className="rounded bg-muted px-1 py-0.5 text-xs">server.properties</code>, edita{" "}
+                  <code className="rounded bg-muted px-1 py-0.5 text-xs">motd=Mi servidor OPINACRAFT-XXXXX-XXXXX</code>,
+                  guarda y reinicia.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Con MiniMOTD (Paper, Velocity, BungeeCord o Spigot):</span>{" "}
+                  abre <code className="rounded bg-muted px-1 py-0.5 text-xs">plugins/MiniMOTD/main.conf</code>
+                  (con mod en Fabric: <code className="rounded bg-muted px-1 py-0.5 text-xs">config/MiniMOTD/main.conf</code>),
+                  añade el código al final de todos tus textos en la lista de MOTDs (si rotan, solo lo vemos cuando toca el que lo lleva), por ejemplo{" "}
+                  <code className="rounded bg-muted px-1 py-0.5 text-xs">&lt;gray&gt;Mi servidor OPINACRAFT-XXXXX-XXXXX</code>,
+                  guarda y ejecuta <code className="rounded bg-muted px-1 py-0.5 text-xs">/minimotd reload</code> o
+                  reinicia. Vale con colores, degradados y MiniMessage.
+                </li>
+              </ul>
+            </>
+          )}
+        </li>
+        <li>
+          <span className="font-medium text-foreground">Vuelve aquí y pulsa «Comprobar MOTD».</span>{" "}
+          Nos conectamos a tu dirección pública como un jugador más y buscamos el código.
+          Cuando termines, puedes quitarlo del MOTD.
+        </li>
+      </ol>
+      <p className="rounded-md bg-muted/50 px-3 py-2 text-xs leading-4 text-muted-foreground">
+        Compatible con el MOTD normal y con MiniMOTD y plugins similares. Si usas proxy (Velocity o BungeeCord),
+        pon el código en el MOTD del proxy, que es el que responde a la dirección pública.
+      </p>
+    </div>
   );
 }
 

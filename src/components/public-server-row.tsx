@@ -91,7 +91,7 @@ function AddressCell({ value }: { value: string }) {
   return (
     <div className="hidden h-7 min-w-0 items-center rounded-md border bg-muted/70 pl-2.5 pr-px transition-colors group-hover:border-foreground/15 group-hover:bg-card lg:flex">
       <code className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground transition-colors group-hover:text-foreground">{value}</code>
-      <CopyAddressButton value={value} iconOnly className="size-6 shrink-0 rounded-sm text-muted-foreground/65 group-hover:text-foreground" />
+      <CopyAddressButton value={value} iconOnly className="relative z-1 size-6 shrink-0 rounded-sm text-muted-foreground/65 group-hover:text-foreground" />
     </div>
   );
 }
@@ -100,7 +100,7 @@ function AddressField({ value, className = "" }: { value: string; className?: st
   return (
     <div className={`flex h-11 min-w-0 items-center gap-1 rounded-lg border bg-muted/40 pl-3 pr-1 ${className}`}>
       <code className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground">{value}</code>
-      <CopyAddressButton value={value} iconOnly className="size-9" />
+      <CopyAddressButton value={value} iconOnly className="relative z-1 size-9" />
     </div>
   );
 }
@@ -135,7 +135,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
   return (
     // `minmax(0,1fr)` rather than the implicit `auto` track: a long address would otherwise widen
     // the card past the viewport instead of truncating inside its field.
-    <article className={`group grid grid-cols-[minmax(0,1fr)] gap-2.5 rounded-xl border-none bg-card p-3.5 ring-1 ring-foreground/10 transition-colors sm:p-4 ${tableGridTemplate} lg:h-16 lg:items-center lg:gap-x-3.5 lg:gap-y-0 lg:rounded-none lg:border-t lg:border-solid lg:bg-transparent lg:px-4.5 lg:py-0 lg:ring-0 lg:first-of-type:border-t-0 lg:hover:bg-muted/55`}>
+    <article className={`group relative grid grid-cols-[minmax(0,1fr)] gap-2.5 rounded-xl border-none bg-card p-3.5 ring-1 ring-foreground/10 transition-colors has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-ring/50 sm:p-4 ${tableGridTemplate} lg:h-16 lg:items-center lg:gap-x-3.5 lg:gap-y-0 lg:rounded-none lg:border-t lg:border-solid lg:bg-transparent lg:px-4.5 lg:py-0 lg:ring-0 lg:first-of-type:border-t-0 lg:hover:bg-muted/55`}>
       <div className="flex min-w-0 items-start gap-3 lg:items-center lg:gap-2.5">
         <ServerLogo name={server.name} media={server.media} className="size-11 rounded-md lg:size-8.5 lg:rounded-lg" />
         <div className="min-w-0 flex-1">
@@ -145,7 +145,10 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
               <span aria-hidden="true" className={`size-1.5 rounded-full ${statusDot(server.aggregateStatus)}`} />
               <span className="sr-only">{statusLabel(server.aggregateStatus)}</span>
             </span>
-            <h3 className="truncate text-sm font-semibold lg:font-bold lg:tracking-[-0.01em]"><Link href={`/servers/${server.slug}`} className="hover:text-primary">{server.name}</Link></h3>
+            {/* The name's link stretches over the whole row, so anywhere that is not the address,
+                its copy button or the card's button opens the server. One named link still, not a
+                row full of them: the overlay is a pseudo-element, so nothing is added to the page. */}
+            <h3 className="truncate text-sm font-semibold lg:font-bold lg:tracking-[-0.01em]"><Link href={`/servers/${server.slug}`} className="transition-colors after:absolute after:inset-0 hover:text-primary focus-visible:text-primary focus-visible:outline-none">{server.name}</Link></h3>
             <ServerCountryCode code={server.country} className="hidden lg:inline" />
           </div>
 
@@ -179,7 +182,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
       <p className="hidden items-baseline justify-end gap-1 tabular-nums lg:flex"><PlayersMetric monitor={server.monitor} /></p>
       <p className="hidden items-baseline justify-end gap-1 tabular-nums lg:flex"><LatencyMetric latencyMs={server.monitor.latencyMs} /></p>
       <Rating server={server} emptyLabel="Sin valorar" className="hidden items-center justify-end gap-1 whitespace-nowrap lg:flex" />
-      {/* Decoration, not navigation: the name already links to the same page. It used to be an
+      {/* Decoration, not navigation: the name's link already covers the row. It used to be an
           anchor with no text and no accessible name, which is a link as far as a crawler is
           concerned -- a second, nameless vote for the same URL from every row. */}
       <span aria-hidden="true" className="hidden items-center justify-end text-muted-foreground/45 transition-colors group-hover:text-primary lg:flex">
@@ -197,7 +200,7 @@ export function PublicServerRow({ server }: { server: CatalogServer }) {
 
       <div className="flex items-center gap-2 lg:hidden">
         <AddressField value={endpointAddress} className="flex-1 bg-background/55" />
-        <Button asChild variant="outline" size="lg" className="h-11 shrink-0 px-3.5"><Link href={`/servers/${server.slug}`}>Ver ficha</Link></Button>
+        <Button asChild variant="outline" size="lg" className="relative z-1 h-11 shrink-0 px-3.5"><Link href={`/servers/${server.slug}`}>Ver ficha</Link></Button>
       </div>
     </article>
   );
