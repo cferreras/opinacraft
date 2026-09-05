@@ -16,6 +16,24 @@ const VERSION_PATTERN = /\d+\.\d+/g;
 /** The same expression in POSIX form, for the catalog's `regexp_matches` filter. */
 export const MINECRAFT_VERSION_SQL_PATTERN = "([0-9]+\\.[0-9]+)";
 
+/**
+ * Padding a server's software can leave around its reported version. The set is spelled out
+ * instead of leaning on `String.trim()` (or SQL's `btrim`, which strips ordinary spaces only)
+ * because the same normalization runs twice: here, to build the option the filter bar shows, and
+ * in the SQL predicate that matches that option back against the stored report. A character the
+ * two disagreed on would be an option that matches no server.
+ */
+const REPORTED_PADDING_CHARACTERS = " \t\n\r\f\v";
+const REPORTED_PADDING = new RegExp(`^[${REPORTED_PADDING_CHARACTERS}]+|[${REPORTED_PADDING_CHARACTERS}]+$`, "g");
+
+/** The same expression in POSIX form, for the catalog's `regexp_replace` filter. */
+export const REPORTED_PADDING_SQL_PATTERN = `^[${REPORTED_PADDING_CHARACTERS}]+|[${REPORTED_PADDING_CHARACTERS}]+$`;
+
+/** Strips exactly the padding {@link REPORTED_PADDING_SQL_PATTERN} strips in Postgres. */
+export function withoutReportedPadding(value: string) {
+  return value.replace(REPORTED_PADDING, "");
+}
+
 /** Every distinct major version named in a reported version string, in the order they appear. */
 export function minecraftVersionsIn(raw: string | null | undefined) {
   if (!raw) return [];
@@ -67,7 +85,7 @@ export function isFullMinecraftVersion(value: string | undefined): value is stri
  * reported string ("Purpur 26.2") narrows to that exact report. Anything else means no filter.
  */
 export function parseVersionParam(value: string | undefined) {
-  const version = value?.trim();
+  const version = value === undefined ? undefined : withoutReportedPadding(value);
   if (!version) return undefined;
   if (isMinecraftVersion(version)) return version;
   return isFullMinecraftVersion(version) ? version : undefined;

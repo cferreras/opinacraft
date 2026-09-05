@@ -12,7 +12,7 @@ import {
 } from "@/schema";
 import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } from "./monitor-scheduling";
 import { catalogAccessCondition, type CatalogAccessFilter } from "./catalog-filters";
-import { MINECRAFT_VERSION_SQL_PATTERN, catalogVersionOptions, isMinecraftVersion } from "./minecraft-version";
+import { MINECRAFT_VERSION_SQL_PATTERN, REPORTED_PADDING_SQL_PATTERN, catalogVersionOptions, isMinecraftVersion } from "./minecraft-version";
 import { normalizeGameModeInputs } from "./game-modes";
 import { reviewScoreSql } from "./review-score";
 import { fetchMonitorStatuses, isMonitorApiConfigured, queryMonitorCatalog } from "./monitor-api-client";
@@ -583,9 +583,9 @@ function catalogFacetConditions({ mode, country, version, access, edition }: Cat
     version
       ? isMinecraftVersion(version)
         ? sql`exists (select 1 from regexp_matches(coalesce(${servers.monitorVersion}, ''), ${MINECRAFT_VERSION_SQL_PATTERN}, 'g') as m(parts) where m.parts[1] = ${version})`
-        // Reports keep whatever padding the server software sent, so the exact match compares the
-        // trimmed string the option list was built from.
-        : sql`btrim(coalesce(${servers.monitorVersion}, '')) = ${version}`
+        // Reports keep whatever padding the server software sent, so the exact match strips it the
+        // same way the option list did — `btrim` would cover ordinary spaces only.
+        : sql`regexp_replace(coalesce(${servers.monitorVersion}, ''), ${REPORTED_PADDING_SQL_PATTERN}, '', 'g') = ${version}`
       : undefined,
     edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition} and se.verification_status = 'verified')` : undefined,
   ];

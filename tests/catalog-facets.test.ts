@@ -15,6 +15,7 @@ import {
 import { normalizeCountryInput, parseCountryParam, serverCountries } from "@/lib/servers/countries";
 import * as catalogFilters from "@/lib/servers/catalog-filters";
 import {
+  REPORTED_PADDING_SQL_PATTERN,
   catalogVersionOptions,
   compareMinecraftVersions,
   isFullMinecraftVersion,
@@ -23,6 +24,7 @@ import {
   parseVersionParam,
   primaryMinecraftVersion,
   sortMinecraftVersions,
+  withoutReportedPadding,
 } from "@/lib/servers/minecraft-version";
 
 const readProjectFile = (filePath: string) => readFileSync(path.resolve(filePath), "utf8");
@@ -192,11 +194,25 @@ test("the version options are exactly what the query string accepts back", () =>
   }
 });
 
-test("the exact version filter matches the trimmed report the option was built from", () => {
+test("the exact version filter strips the same padding the option list stripped", () => {
   const source = readProjectFile("src/lib/servers/queries.ts");
 
-  assert.match(source, /btrim\(coalesce\(\$\{servers\.monitorVersion\}, ''\)\) = \$\{version\}/);
-  assert.doesNotMatch(source, /eq\(servers\.monitorVersion, version\)/);
+  // The predicate has to share the pattern, not restate it: `btrim` covers ordinary spaces only,
+  // so a report padded with a tab would show an option that then matches no server.
+  assert.match(source, /regexp_replace\(coalesce\(\$\{servers\.monitorVersion\}, ''\), \$\{REPORTED_PADDING_SQL_PATTERN\}, '', 'g'\) = \$\{version\}/);
+  assert.doesNotMatch(source, /btrim\(coalesce|eq\(servers\.monitorVersion, version\)/);
+
+  for (const padded of ["Purpur 26.2 ", "Purpur 26.2\t", "\nPurpur 26.2\r", "\fPurpur 26.2\v"]) {
+    assert.equal(withoutReportedPadding(padded), "Purpur 26.2");
+    assert.deepEqual(catalogVersionOptions([padded]), ["Purpur 26.2"]);
+  }
+  // Every padding character the JS side strips is in the pattern Postgres gets, and no other.
+  assert.equal(REPORTED_PADDING_SQL_PATTERN, "^[ \t\n\r\f\v]+|[ \t\n\r\f\v]+$");
+  // Padding the SQL side would keep must not become an option either: a non-breaking space
+  // survives both sides, and the facet's charset then rejects it instead of offering a filter
+  // that matches nothing.
+  assert.equal(withoutReportedPadding("Purpur 26.2\u00a0"), "Purpur 26.2\u00a0");
+  assert.deepEqual(catalogVersionOptions(["Purpur 26.2\u00a0"]), []);
 });
 
 test("the filter bar offers exactly the five facets of the catalog", () => {
