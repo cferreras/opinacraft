@@ -1,17 +1,38 @@
 /**
  * Version is the one catalog facet nobody types: it comes from the monitor's own ping, which
- * reports strings like "Paper 1.21.4", "1.20.1" or "Requires MC 1.8" depending on the software.
+ * reports strings like "Paper 1.21.4", "Purpur 26.2", "1.20.1" or "Requires MC 1.8" depending
+ * on the software.
  *
- * We only ever expose the major version ("1.21"), because that is what a player checks before
- * joining and it keeps the filter from splitting a server into a new option on every patch.
- * A multiversion proxy that advertises "1.8-1.21" belongs to both ends of its range, so every
- * version found in the string counts — {@link minecraftVersionsIn} and the SQL predicate in
- * `queries.ts` share that rule.
+ * The filter bar offers the full strings the monitor has actually seen ("Purpur 26.2" next to
+ * "26.2"), because collapsing them to the bare major ("26.2") hides the software players look
+ * for in the dropdown. A bare major still matches every string that names it, so filtering by
+ * "26.2" keeps including "Purpur 26.2" — selecting the full string only narrows to that exact
+ * report. A multiversion proxy that advertises "1.8-1.21" belongs to both ends of its range,
+ * so every version found in the string counts — {@link minecraftVersionsIn} and the SQL
+ * predicate in `queries.ts` share that rule.
  */
 const VERSION_PATTERN = /\d+\.\d+/g;
 
 /** The same expression in POSIX form, for the catalog's `regexp_matches` filter. */
 export const MINECRAFT_VERSION_SQL_PATTERN = "([0-9]+\\.[0-9]+)";
+
+/**
+ * Padding a server's software can leave around its reported version. The set is spelled out
+ * instead of leaning on `String.trim()` (or SQL's `btrim`, which strips ordinary spaces only)
+ * because the same normalization runs twice: here, to build the option the filter bar shows, and
+ * in the SQL predicate that matches that option back against the stored report. A character the
+ * two disagreed on would be an option that matches no server.
+ */
+const REPORTED_PADDING_CHARACTERS = " \t\n\r\f\v";
+const REPORTED_PADDING = new RegExp(`^[${REPORTED_PADDING_CHARACTERS}]+|[${REPORTED_PADDING_CHARACTERS}]+$`, "g");
+
+/** The same expression in POSIX form, for the catalog's `regexp_replace` filter. */
+export const REPORTED_PADDING_SQL_PATTERN = `^[${REPORTED_PADDING_CHARACTERS}]+|[${REPORTED_PADDING_CHARACTERS}]+$`;
+
+/** Strips exactly the padding {@link REPORTED_PADDING_SQL_PATTERN} strips in Postgres. */
+export function withoutReportedPadding(value: string) {
+  return value.replace(REPORTED_PADDING, "");
+}
 
 /** Every distinct major version named in a reported version string, in the order they appear. */
 export function minecraftVersionsIn(raw: string | null | undefined) {
@@ -44,8 +65,53 @@ export function isMinecraftVersion(value: string | undefined): value is string {
   return value !== undefined && /^\d{1,3}\.\d{1,3}$/.test(value);
 }
 
-/** Guards the query string: only a bare major version reaches the SQL filter. */
+/**
+ * Full strings the monitor can plausibly report: letters, digits, spaces, dots, dashes and
+ * underscores, always naming at least one major version so query-string junk never reaches SQL.
+ * Covers "26.2", "Purpur 26.2", "Paper 1.21.7" and ranges like "1.8-1.21".
+ */
+export function isFullMinecraftVersion(value: string | undefined): value is string {
+  return (
+    value !== undefined &&
+    value.length >= 1 &&
+    value.length <= 100 &&
+    /^[A-Za-z0-9 ._\-]+$/.test(value) &&
+    minecraftVersionsIn(value).length > 0
+  );
+}
+
+/**
+ * Guards the query string: a bare major ("26.2") keeps its compatibility grouping, and a full
+ * reported string ("Purpur 26.2") narrows to that exact report. Anything else means no filter.
+ */
 export function parseVersionParam(value: string | undefined) {
-  const version = value?.trim();
-  return isMinecraftVersion(version) ? version : undefined;
+  const version = value === undefined ? undefined : withoutReportedPadding(value);
+  if (!version) return undefined;
+  if (isMinecraftVersion(version)) return version;
+  return isFullMinecraftVersion(version) ? version : undefined;
+}
+
+/**
+ * The options the filter bar offers, out of whatever the monitor reported. Every candidate goes
+ * through {@link parseVersionParam}, the same guard the query string passes, so no option can be
+ * offered that the page would then discard — a filter that silently does nothing is worse than a
+ * missing one. Newest first: compare by the headline (newest) major each string names, then
+ * alphabetically so "26.2" and "Purpur 26.2" stay stable side by side instead of collapsing into
+ * a single option.
+ */
+export function catalogVersionOptions(versions: readonly (string | null)[]) {
+  const parsed = versions.map((version) => parseVersionParam(version ?? undefined)).filter((version): version is string => version !== undefined);
+  return [...new Set(parsed)].sort((a, b) => {
+    const primaryA = primaryMinecraftVersion(a);
+    const primaryB = primaryMinecraftVersion(b);
+    if (primaryA && primaryB) {
+      const byPrimary = compareMinecraftVersions(primaryB, primaryA);
+      if (byPrimary !== 0) return byPrimary;
+    } else if (primaryA) {
+      return -1;
+    } else if (primaryB) {
+      return 1;
+    }
+    return a.localeCompare(b);
+  });
 }

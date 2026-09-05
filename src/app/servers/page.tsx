@@ -224,7 +224,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                   {status ? <input type="hidden" name="status" value={status} /> : null}
 
                   <CatalogFilterBar
-                    defaultQuery={query.q ?? ""}
+                    query={query.q ?? ""}
                     mode={mode}
                     version={version}
                     country={country}

@@ -3,6 +3,7 @@
 import type { ChangeEvent, ReactNode } from "react";
 
 import { useFilterFormNavigation } from "@/hooks/use-filter-form-navigation";
+import { useSyncedFieldValue } from "@/hooks/use-synced-field-value";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { NativeSelect } from "@/components/ui/native-select";
 
@@ -11,7 +12,8 @@ type FilterSelectProps = {
   name: string;
   label: string;
   accessibleLabel?: string;
-  defaultValue: string;
+  /** The value the URL currently carries; the control follows it across client-side navigations. */
+  value: string;
   submitOnChange?: boolean;
   /** "pill" puts the label inside the control, for the catalog's single-row filter bar. */
   variant?: "stacked" | "pill";
@@ -23,16 +25,18 @@ export function FilterSelect({
   name,
   label,
   accessibleLabel,
-  defaultValue,
+  value: incomingValue,
   submitOnChange = false,
   variant = "stacked",
   children,
 }: FilterSelectProps) {
   const navigate = useFilterFormNavigation();
+  const [value, setValue] = useSyncedFieldValue(incomingValue);
 
   function handleChange(event: ChangeEvent<HTMLSelectElement>) {
+    setValue(event.currentTarget.value);
     const form = event.currentTarget.form;
-    if (form) navigate(form);
+    if (form && submitOnChange) navigate(form);
   }
 
   const ariaLabel = accessibleLabel && accessibleLabel !== label ? accessibleLabel : undefined;
@@ -49,8 +53,8 @@ export function FilterSelect({
           id={id}
           name={name}
           aria-label={ariaLabel}
-          defaultValue={defaultValue}
-          onChange={submitOnChange ? handleChange : undefined}
+          value={value}
+          onChange={handleChange}
           className="min-w-0 flex-1 [&>select]:h-9 [&>select]:border-0 [&>select]:bg-transparent [&>select]:pl-1.5 [&>select]:font-medium [&>select]:shadow-none [&>select]:focus-visible:ring-0 dark:[&>select]:bg-transparent dark:[&>select]:hover:bg-transparent"
         >
           {children}
@@ -69,8 +73,8 @@ export function FilterSelect({
         name={name}
         size="lg"
         aria-label={ariaLabel}
-        defaultValue={defaultValue}
-        onChange={submitOnChange ? handleChange : undefined}
+        value={value}
+        onChange={handleChange}
         className="w-full"
       >
         {children}

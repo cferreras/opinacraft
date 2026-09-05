@@ -73,7 +73,26 @@ test("public catalog searches and filters by text, mode, edition and health", as
   await expect(page.getByRole("heading", { name: alphaName })).toHaveCount(0);
 });
 
-test("syncs the mode filter and its chip after client-side catalog navigation", async ({ page }) => {
+test("clearing the filters empties an unsent search draft, narrowing by a facet keeps it", async ({ page }) => {
+  const searchBox = page.locator("#server-search");
+
+  // The draft sits on a `q` the URL never carried, so nothing about the incoming value says the
+  // bar was emptied — clearing has to say so itself.
+  await page.goto("/?mode=survival");
+  await searchBox.fill("borrame");
+  await page.getByRole("link", { name: "Borrar filtros", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(searchBox).toHaveValue("");
+
+  // Narrowing by a facet is not clearing: losing what the visitor typed there would be worse than
+  // carrying it to the next search.
+  await searchBox.fill("consérvame");
+  await page.getByLabel("Modo de juego", { exact: true }).selectOption("survival");
+  await expect(page).toHaveURL(/mode=survival/);
+  await expect(searchBox).toHaveValue("consérvame");
+});
+
+test("syncs every filter control and its chips after client-side catalog navigation", async ({ page }) => {
   const owner = await createAccount(page, "catalog-mode-chip");
   createdEmails.push(owner.email);
 
@@ -86,13 +105,28 @@ test("syncs the mode filter and its chip after client-side catalog navigation", 
   await markServerVerified(server.slug);
   await publishServer(page, server.slug);
 
-  await page.goto("/?mode=survival");
-  await expect(page.getByLabel("Modo", { exact: true })).toHaveValue("survival");
+  const searchBox = page.locator("#server-search");
+  const facets = [
+    // Each select is addressed by its accessible name, which is the aria-label where the visible
+    // pill label is too terse to stand on its own.
+    { label: "Modo de juego", value: "survival" },
+    { label: "Versión de Minecraft", value: "1.21" },
+    { label: "País", value: "es" },
+    { label: "Tipo de acceso", value: "premium" },
+    { label: "Edición", value: "java" },
+  ] as const;
+
+  await page.goto("/?q=alpha&mode=survival&version=1.21&country=es&access=premium&edition=java");
+  await expect(searchBox).toHaveValue("alpha");
+  for (const facet of facets) await expect(page.getByLabel(facet.label, { exact: true })).toHaveValue(facet.value);
   await expect(page.getByText("Modo: Survival")).toBeVisible();
 
+  // Clearing navigates within the same route, so the controls re-render rather than remount: every
+  // one of them has to drop the value the URL no longer carries.
   await page.getByRole("link", { name: "Borrar filtros", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByLabel("Modo", { exact: true })).toHaveValue("");
+  await expect(searchBox).toHaveValue("");
+  for (const facet of facets) await expect(page.getByLabel(facet.label, { exact: true })).toHaveValue("");
   await expect(page.getByText("Modo: Survival")).toHaveCount(0);
 });
 
@@ -111,11 +145,11 @@ test("the mode filter narrows the catalog to the servers that advertise it", asy
   await publishServer(page, skyblock.slug);
 
   await page.goto("/");
-  await page.getByLabel("Modo", { exact: true }).selectOption("skyblock");
+  await page.getByLabel("Modo de juego", { exact: true }).selectOption("skyblock");
   await expect(page).toHaveURL(/mode=skyblock/);
   await expect(page.getByRole("heading", { name: skyblockName })).toBeVisible();
 
-  await page.getByLabel("Modo", { exact: true }).selectOption("anarquia");
+  await page.getByLabel("Modo de juego", { exact: true }).selectOption("anarquia");
   await expect(page).toHaveURL(/mode=anarquia/);
   await expect(page.getByRole("heading", { name: skyblockName })).toHaveCount(0);
 });
