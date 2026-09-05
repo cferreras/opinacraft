@@ -445,3 +445,21 @@ test("answers the verification forms in place instead of redirecting to the top 
   assert.match(panelSource, /useActionState\(startVerificationAction, null\)/);
   assert.doesNotMatch(pageSource, /query\.verification/, "the verification result now renders inside the panel");
 });
+
+test("keeps the catalog filter controls following the URL across client-side navigation", () => {
+  const hookSource = readProjectFile("src/hooks/use-synced-field-value.ts");
+  const selectSource = readProjectFile("src/components/filter-select.tsx");
+  const searchSource = readProjectFile("src/components/server-search-input.tsx");
+  const barSource = readProjectFile("src/components/catalog-filter-bar.tsx");
+
+  // "Borrar filtros" and the active-filter chips navigate within the same route, so the controls
+  // re-render instead of remounting: uncontrolled fields would keep the value the URL just dropped.
+  assert.match(hookSource, /if \(incoming !== lastIncoming\)/);
+  assert.match(hookSource, /setValue\(incoming\)/);
+  for (const source of [selectSource, searchSource]) {
+    assert.match(source, /useSyncedFieldValue\(incomingValue\)/);
+    assert.match(source, /value=\{value\}/);
+    assert.doesNotMatch(source, /defaultValue/);
+  }
+  assert.doesNotMatch(barSource, /defaultValue|defaultQuery/);
+});
