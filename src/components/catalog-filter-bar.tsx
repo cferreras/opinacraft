@@ -34,13 +34,18 @@ export function CatalogFilterBar({
   versionOptions,
   clearHref,
 }: CatalogFilterBarProps) {
+  // "Borrar filtros" promises an empty bar, but the URL it lands on says nothing about the text
+  // the visitor had typed without sending it, so the search box is told the catalog is unfiltered
+  // again instead of inferring it from a value that never changed.
+  const cleared = !query && !mode && !version && !country && !access && !edition;
+
   return (
     <Card className="gap-3 px-4 py-4">
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative min-w-0 flex-1">
           <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <label htmlFor="server-search" className="sr-only">Buscar</label>
-          <ServerSearchInput value={query} />
+          <ServerSearchInput value={query} cleared={cleared} />
         </div>
         <FilterFormSubmitButton>Buscar</FilterFormSubmitButton>
       </div>

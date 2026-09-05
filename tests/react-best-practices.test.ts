@@ -454,12 +454,17 @@ test("keeps the catalog filter controls following the URL across client-side nav
 
   // "Borrar filtros" and the active-filter chips navigate within the same route, so the controls
   // re-render instead of remounting: uncontrolled fields would keep the value the URL just dropped.
-  assert.match(hookSource, /if \(incoming !== lastIncoming\)/);
-  assert.match(hookSource, /setValue\(incoming\)/);
+  assert.match(hookSource, /if \(incoming !== last\.incoming \|\| \(resetWhen && !last\.resetWhen\)\)/);
+  assert.match(hookSource, /setValue\(incoming\);/);
   for (const source of [selectSource, searchSource]) {
-    assert.match(source, /useSyncedFieldValue\(incomingValue\)/);
+    assert.match(source, /useSyncedFieldValue\(incomingValue/);
     assert.match(source, /value=\{value\}/);
     assert.doesNotMatch(source, /defaultValue/);
   }
+  // Clearing leaves an unsent draft sitting on an incoming value that never changed, so the box is
+  // told the catalog is unfiltered rather than inferring it from the value.
+  assert.match(hookSource, /useSyncedFieldValue\(incoming: string, resetWhen = false\)/);
+  assert.match(searchSource, /useSyncedFieldValue\(incomingValue, cleared\)/);
+  assert.match(barSource, /const cleared = !query && !mode && !version && !country && !access && !edition;/);
   assert.doesNotMatch(barSource, /defaultValue|defaultQuery/);
 });

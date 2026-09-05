@@ -73,6 +73,25 @@ test("public catalog searches and filters by text, mode, edition and health", as
   await expect(page.getByRole("heading", { name: alphaName })).toHaveCount(0);
 });
 
+test("clearing the filters empties an unsent search draft, narrowing by a facet keeps it", async ({ page }) => {
+  const searchBox = page.locator("#server-search");
+
+  // The draft sits on a `q` the URL never carried, so nothing about the incoming value says the
+  // bar was emptied — clearing has to say so itself.
+  await page.goto("/?mode=survival");
+  await searchBox.fill("borrame");
+  await page.getByRole("link", { name: "Borrar filtros", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(searchBox).toHaveValue("");
+
+  // Narrowing by a facet is not clearing: losing what the visitor typed there would be worse than
+  // carrying it to the next search.
+  await searchBox.fill("consérvame");
+  await page.getByLabel("Modo de juego", { exact: true }).selectOption("survival");
+  await expect(page).toHaveURL(/mode=survival/);
+  await expect(searchBox).toHaveValue("consérvame");
+});
+
 test("syncs every filter control and its chips after client-side catalog navigation", async ({ page }) => {
   const owner = await createAccount(page, "catalog-mode-chip");
   createdEmails.push(owner.email);

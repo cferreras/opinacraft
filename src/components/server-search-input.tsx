@@ -6,9 +6,9 @@ import { useFilterFormNavigation } from "@/hooks/use-filter-form-navigation";
 import { useSyncedFieldValue } from "@/hooks/use-synced-field-value";
 import { Input } from "@/components/ui/input";
 
-export function ServerSearchInput({ value: incomingValue }: { value: string }) {
+export function ServerSearchInput({ value: incomingValue, cleared }: { value: string; cleared: boolean }) {
   const navigate = useFilterFormNavigation();
-  const [value, setValue] = useSyncedFieldValue(incomingValue);
+  const [value, setValue] = useSyncedFieldValue(incomingValue, cleared);
 
   function submitOnEnter(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
