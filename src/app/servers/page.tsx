@@ -138,7 +138,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const activeTableSort = tableSort ?? presetTableSort;
   const activeTableDirection: PublicServerSortDirection = tableSort ? tableDirection : "desc";
   const listArgs = { page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", mode, version, country, access, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection } as const;
-  const monitorDependent = isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, sort, tableSort: activeTableSort });
+  const monitorDependent = isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, version, sort, tableSort: activeTableSort });
   const monitorResult = monitorDependent
     ? await getCachedMonitorCatalogPage(listArgs).catch((error) => {
       console.error("[monitor] catalog query unavailable", error instanceof Error ? error.name : "unknown");

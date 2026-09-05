@@ -12,7 +12,7 @@ import {
 } from "@/schema";
 import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } from "./monitor-scheduling";
 import { catalogAccessCondition, type CatalogAccessFilter } from "./catalog-filters";
-import { MINECRAFT_VERSION_SQL_PATTERN, REPORTED_PADDING_SQL_PATTERN, catalogVersionOptions, isMinecraftVersion } from "./minecraft-version";
+import { MINECRAFT_VERSION_SQL_PATTERN, REPORTED_PADDING_SQL_PATTERN, catalogVersionOptions, isMinecraftVersion, reportedVersionMatches } from "./minecraft-version";
 import { normalizeGameModeInputs } from "./game-modes";
 import { reviewScoreSql } from "./review-score";
 import { fetchMonitorStatuses, isMonitorApiConfigured, queryMonitorCatalog } from "./monitor-api-client";
@@ -461,25 +461,52 @@ export async function countPublishedServers(): Promise<number> {
   return row?.total ?? 0;
 }
 
+/** Published, active, verified and visible: the servers a facet is allowed to speak for. */
+function visibleCatalogServerCondition() {
+  return and(
+    eq(servers.publicationStatus, "published"),
+    eq(servers.moderationStatus, "active"),
+    eq(servers.verificationStatus, "verified"),
+    isNull(servers.availabilityHiddenAt),
+    sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
+  );
+}
+
+/** The batch status endpoint refuses more ids than this, so a large catalog asks in slices. */
+const MONITOR_STATUS_BATCH_SIZE = 500;
+
+async function fetchMonitorStatusesForAll(serverIds: readonly string[]) {
+  const states: MonitorStatusView[] = [];
+  for (let index = 0; index < serverIds.length; index += MONITOR_STATUS_BATCH_SIZE) {
+    const batch = await fetchMonitorStatuses(serverIds.slice(index, index + MONITOR_STATUS_BATCH_SIZE));
+    if (batch) states.push(...batch);
+  }
+  return states;
+}
+
 /**
  * The versions the filter bar offers: the full strings the monitor has actually seen on a
  * visible server ("Purpur 26.2" next to "26.2"). A hardcoded list would keep offering versions
  * nobody runs and would miss the next release the week it ships, and an option that matches
  * nothing is worse than a missing one. Collapsing to bare majors would hide the software
  * prefix players look for, so every distinct report stays its own option.
+ *
+ * The reports come from the monitor itself wherever it is configured. `servers.monitor_version`
+ * is a copy from before the monitor moved to its own database, and nothing has written to it
+ * since, so a catalog reading it offers the versions servers ran back then — it stays only as the
+ * source for the Neon-only path, where there is no monitor to ask.
  */
 export async function listCatalogVersions() {
+  if (isMonitorApiConfigured()) {
+    const rows = await db.select({ id: servers.id }).from(servers).where(visibleCatalogServerCondition());
+    const states = await fetchMonitorStatusesForAll(rows.map((row) => row.id));
+    return catalogVersionOptions(states.map((state) => state.version));
+  }
+
   const rows = await db
     .selectDistinct({ version: servers.monitorVersion })
     .from(servers)
-    .where(and(
-      eq(servers.publicationStatus, "published"),
-      eq(servers.moderationStatus, "active"),
-      eq(servers.verificationStatus, "verified"),
-      isNull(servers.availabilityHiddenAt),
-      isNotNull(servers.monitorVersion),
-      sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
-    ));
+    .where(and(visibleCatalogServerCondition(), isNotNull(servers.monitorVersion)));
 
   return catalogVersionOptions(rows.map((row) => row.version));
 }
@@ -489,8 +516,9 @@ export async function getServerIdBySlug(slug: string) {
   return row?.id ?? null;
 }
 
-export function isMonitorDependentCatalogQuery({ status, sort, tableSort }: { status?: AggregateHealthStatus; sort: PublicServerSort; tableSort?: PublicServerTableSort }) {
-  return Boolean(status || sort === "players" || tableSort === "players" || tableSort === "version" || tableSort === "latency");
+export function isMonitorDependentCatalogQuery({ status, version, sort, tableSort }: { status?: AggregateHealthStatus; version?: string; sort: PublicServerSort; tableSort?: PublicServerTableSort }) {
+  // Version joins health here because the live report is the monitor's, not Neon's stale copy.
+  return Boolean(status || version || sort === "players" || tableSort === "players" || tableSort === "version" || tableSort === "latency");
 }
 
 async function hydratePublishedCatalogServers(ids: string[], edition?: "java" | "bedrock"): Promise<CatalogServer[]> {
@@ -569,8 +597,10 @@ export type PublishedServerListArgs = CatalogFacets & {
 };
 
 /**
- * Every facet is resolved in Postgres, including version: the monitor API only narrows by health,
- * so the candidate ids it receives are already filtered against Neon's synced copy of the ping.
+ * Every facet is resolved in Postgres except version wherever a monitor answers: that one is
+ * settled against the live report before the candidate ids are handed over (see
+ * {@link listPublishedServersWithMonitor}). The SQL branch below stays for the Neon-only path,
+ * which has no monitor to ask and only `servers.monitor_version` to go on.
  */
 function catalogFacetConditions({ mode, country, version, access, edition }: CatalogFacets) {
   return [
@@ -602,6 +632,19 @@ function catalogSearchCondition(queryText: string) {
 function catalogRelevanceOrder(queryText: string) {
   const needle = queryText.slice(0, 80);
   return desc(sql`greatest(similarity(lower(${servers.name}), lower(${needle})) * 3, coalesce((select max(similarity(gm.mode, lower(${needle}))) * 2 from server_game_modes gm where gm.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${needle})))`);
+}
+
+/**
+ * The ids whose live report answers to the version the visitor picked. A failure to reach the
+ * monitor throws instead of returning everything: the catalog would silently drop the filter and
+ * show servers the visitor asked to exclude, and the page has an honest "monitor unavailable"
+ * state for exactly this.
+ */
+async function narrowCandidatesByReportedVersion(candidateIds: readonly string[], version: string) {
+  if (candidateIds.length === 0) return [];
+  const states = await fetchMonitorStatusesForAll(candidateIds);
+  const versionById = new Map(states.map((state) => [state.serverId, state.version]));
+  return candidateIds.filter((id) => reportedVersionMatches(versionById.get(id), version));
 }
 
 export async function listPublishedServersWithMonitor({
@@ -637,13 +680,21 @@ export async function listPublishedServersWithMonitor({
       eq(servers.verificationStatus, "verified"),
       isNull(servers.availabilityHiddenAt),
       catalogSearchCondition(queryText),
-      ...catalogFacetConditions(facets),
+      // Version is left out on purpose: Postgres would answer it from a copy that stopped being
+      // written when the monitor moved to its own database.
+      ...catalogFacetConditions({ ...facets, version: undefined }),
       sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
     ))
     .orderBy(...catalogOrder, desc(servers.createdAt), desc(servers.id));
+  // Narrowing here rather than inside the monitor query keeps its paging honest: it pages over the
+  // ids that already match the version, so the count and the last page are the visitor's, not the
+  // unfiltered catalog's.
+  const candidateIds = facets.version
+    ? await narrowCandidatesByReportedVersion(candidates.map((candidate) => candidate.id), facets.version)
+    : candidates.map((candidate) => candidate.id);
   const monitorSort = tableSort === "players" || sort === "players" ? "players" : tableSort === "latency" ? "latency" : tableSort === "version" ? "version" : "catalog";
   const result = await queryMonitorCatalog({
-    candidateIds: candidates.map((candidate) => candidate.id),
+    candidateIds,
     status,
     sort: monitorSort,
     direction: tableDirection,
