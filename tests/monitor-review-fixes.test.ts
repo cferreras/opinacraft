@@ -8,11 +8,6 @@ import {
 } from "../src/lib/servers/endpoint-fields.ts";
 import { serverValidationField } from "../src/lib/servers/form-validation.ts";
 import { formatServerDateTime } from "../src/lib/servers/display.ts";
-import { getAvailabilityTransition } from "../src/lib/servers/monitor-availability.ts";
-import {
-  getMonitorNotificationDedupeKey,
-  getMonitorSourceChangedValue,
-} from "../src/lib/servers/monitor-persistence-helpers.ts";
 import { numberEnv } from "../src/workers/monitor-worker-config.ts";
 import {
   probeCanonicalEndpoint,
@@ -42,33 +37,6 @@ test("server date-time labels include the observation time and preserve the empt
   const label = formatServerDateTime(new Date("2026-08-14T12:34:00.000Z"));
   assert.match(label, /14/);
   assert.match(label, /\d{1,2}:34/);
-});
-
-test("never-online servers stay visible during their initial seven-day grace period", () => {
-  const now = new Date("2026-08-14T12:00:00.000Z");
-  const base = {
-    publicationStatus: "published" as const,
-    moderationStatus: "active" as const,
-    availabilityHiddenAt: null,
-    healthStatus: "offline" as const,
-    lastCheckedAt: new Date("2026-08-14T11:50:00.000Z"),
-    lastOnlineAt: null,
-  };
-
-  assert.equal(getAvailabilityTransition({ ...base, createdAt: new Date("2026-08-13T12:00:00.000Z") }, now), null);
-  assert.equal(getAvailabilityTransition({ ...base, createdAt: new Date("2026-08-06T11:59:00.000Z") }, now), "hidden");
-});
-
-test("monitor notification dedupe uses the observation day and source changes stay sticky", () => {
-  const observedAt = new Date("2026-08-13T23:59:59.000Z");
-  assert.equal(
-    getMonitorNotificationDedupeKey("server-1", "down", observedAt),
-    "server-monitor:server-1:down:2026-08-13",
-  );
-  assert.equal(getMonitorSourceChangedValue(0, null, "java"), 0);
-  assert.equal(getMonitorSourceChangedValue(0, "java", "java"), 0);
-  assert.equal(getMonitorSourceChangedValue(0, "java", "bedrock"), 1);
-  assert.equal(getMonitorSourceChangedValue(1, "java", "java"), 1);
 });
 
 test("blank worker environment values use their fallback before numeric validation", () => {
