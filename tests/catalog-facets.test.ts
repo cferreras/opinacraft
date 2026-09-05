@@ -15,13 +15,13 @@ import {
 import { normalizeCountryInput, parseCountryParam, serverCountries } from "@/lib/servers/countries";
 import * as catalogFilters from "@/lib/servers/catalog-filters";
 import {
+  catalogVersionOptions,
   compareMinecraftVersions,
   isFullMinecraftVersion,
   isMinecraftVersion,
   minecraftVersionsIn,
   parseVersionParam,
   primaryMinecraftVersion,
-  sortFullMinecraftVersions,
   sortMinecraftVersions,
 } from "@/lib/servers/minecraft-version";
 
@@ -179,8 +179,24 @@ test("bare majors and full reported versions reach the SQL filter", () => {
 });
 
 test("full reported versions stay side by side instead of collapsing", () => {
-  assert.deepEqual(sortFullMinecraftVersions(["26.2", "Purpur 26.2", "Purpur 26.2 "]), ["26.2", "Purpur 26.2"]);
-  assert.deepEqual(sortFullMinecraftVersions(["1.21.8", "Paper 1.21.7", "1.8-1.21"]), ["1.21.8", "1.8-1.21", "Paper 1.21.7"]);
+  assert.deepEqual(catalogVersionOptions(["26.2", "Purpur 26.2", "Purpur 26.2 "]), ["26.2", "Purpur 26.2"]);
+  assert.deepEqual(catalogVersionOptions(["1.21.8", "Paper 1.21.7", "1.8-1.21"]), ["1.21.8", "1.8-1.21", "Paper 1.21.7"]);
+});
+
+test("the version options are exactly what the query string accepts back", () => {
+  // A report the parser would reject must never become an option: selecting it would drop the
+  // filter and run the unfiltered catalog, so the dropdown would offer a filter that does nothing.
+  assert.deepEqual(catalogVersionOptions(["Java", "desconocida", null, "", "  ", "§aPaper 1.21", "Purpur 26.2"]), ["Purpur 26.2"]);
+  for (const option of catalogVersionOptions(["Paper 1.21.7 ", "1.8-1.21", "Vanilla 1.20.1"])) {
+    assert.equal(parseVersionParam(option), option, `${option} should survive the query-string guard unchanged`);
+  }
+});
+
+test("the exact version filter matches the trimmed report the option was built from", () => {
+  const source = readProjectFile("src/lib/servers/queries.ts");
+
+  assert.match(source, /btrim\(coalesce\(\$\{servers\.monitorVersion\}, ''\)\) = \$\{version\}/);
+  assert.doesNotMatch(source, /eq\(servers\.monitorVersion, version\)/);
 });
 
 test("the filter bar offers exactly the five facets of the catalog", () => {

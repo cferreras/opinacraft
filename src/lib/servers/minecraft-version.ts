@@ -74,13 +74,16 @@ export function parseVersionParam(value: string | undefined) {
 }
 
 /**
- * Newest first for the filter bar's full reported strings: compare by the headline (newest)
- * major each string names, then alphabetically so "26.2" and "Purpur 26.2" stay stable side by
- * side instead of collapsing into a single option.
+ * The options the filter bar offers, out of whatever the monitor reported. Every candidate goes
+ * through {@link parseVersionParam}, the same guard the query string passes, so no option can be
+ * offered that the page would then discard — a filter that silently does nothing is worse than a
+ * missing one. Newest first: compare by the headline (newest) major each string names, then
+ * alphabetically so "26.2" and "Purpur 26.2" stay stable side by side instead of collapsing into
+ * a single option.
  */
-export function sortFullMinecraftVersions(versions: readonly string[]) {
-  const unique = [...new Set(versions.map((version) => version.trim()).filter(Boolean))];
-  return unique.sort((a, b) => {
+export function catalogVersionOptions(versions: readonly (string | null)[]) {
+  const parsed = versions.map((version) => parseVersionParam(version ?? undefined)).filter((version): version is string => version !== undefined);
+  return [...new Set(parsed)].sort((a, b) => {
     const primaryA = primaryMinecraftVersion(a);
     const primaryB = primaryMinecraftVersion(b);
     if (primaryA && primaryB) {
