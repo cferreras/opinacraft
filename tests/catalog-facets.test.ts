@@ -23,6 +23,7 @@ import {
   minecraftVersionsIn,
   parseVersionParam,
   primaryMinecraftVersion,
+  reportedVersionMatches,
   sortMinecraftVersions,
   withoutReportedPadding,
 } from "@/lib/servers/minecraft-version";
@@ -213,6 +214,43 @@ test("the exact version filter strips the same padding the option list stripped"
   // that matches nothing.
   assert.equal(withoutReportedPadding("Purpur 26.2\u00a0"), "Purpur 26.2\u00a0");
   assert.deepEqual(catalogVersionOptions(["Purpur 26.2\u00a0"]), []);
+});
+
+test("a version filter is answered by the report the monitor has now, not by Neon's old copy", () => {
+  const queriesSource = readProjectFile("src/lib/servers/queries.ts");
+
+  // `servers.monitor_version` stopped being written when the monitor moved to its own database:
+  // `applyCanonicalObservation` is the only writer left and nothing calls it, so a catalog that
+  // filtered on that column would answer with the versions servers ran back then.
+  assert.match(queriesSource, /catalogFacetConditions\(\{ \.\.\.facets, version: undefined \}\)/);
+  assert.match(queriesSource, /narrowCandidatesByReportedVersion\(candidates\.map\(\(candidate\) => candidate\.id\), facets\.version\)/);
+  const versionOptionsSource = queriesSource.slice(
+    queriesSource.indexOf("export async function listCatalogVersions"),
+    queriesSource.indexOf("export async function getServerIdBySlug"),
+  );
+  assert.match(versionOptionsSource, /if \(isMonitorApiConfigured\(\)\)/);
+  assert.match(versionOptionsSource, /catalogVersionOptions\(states\.map\(\(state\) => state\.version\)\)/);
+  // The Neon-only path keeps the column, because there is no monitor to ask there.
+  assert.match(queriesSource, /regexp_replace\(coalesce\(\$\{servers\.monitorVersion\}/);
+
+  const pageSource = readProjectFile("src/app/servers/page.tsx");
+  assert.match(pageSource, /isMonitorDependentCatalogQuery\(\{ status, version, sort, tableSort: activeTableSort \}\)/);
+});
+
+test("the filter matches a reported version the way the option list groups it", () => {
+  // A bare major keeps its compatibility grouping, a full report narrows to itself, and padding
+  // is stripped on both sides so the option and the report agree.
+  assert.equal(reportedVersionMatches("Purpur 26.2", "26.2"), true);
+  assert.equal(reportedVersionMatches("1.8-1.21", "1.21"), true);
+  assert.equal(reportedVersionMatches("1.8-1.21", "1.8"), true);
+  assert.equal(reportedVersionMatches("Purpur 26.2", "Purpur 26.2"), true);
+  assert.equal(reportedVersionMatches("Purpur 26.2\t", "Purpur 26.2"), true);
+  assert.equal(reportedVersionMatches("Paper 1.21.7", "Purpur 26.2"), false);
+  assert.equal(reportedVersionMatches("Purpur 26.2", "1.21"), false);
+  // No fresh report means no version: listing the server under an option it cannot match would
+  // put the dropdown and the results in disagreement.
+  assert.equal(reportedVersionMatches(null, "26.2"), false);
+  assert.equal(reportedVersionMatches("", "26.2"), false);
 });
 
 test("the filter bar offers exactly the five facets of the catalog", () => {

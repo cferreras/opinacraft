@@ -92,6 +92,19 @@ export function parseVersionParam(value: string | undefined) {
 }
 
 /**
+ * Whether a reported version answers to the filter the visitor picked. A bare major ("26.2") keeps
+ * its compatibility grouping — every string that names it counts, so "Purpur 26.2" answers to
+ * "26.2" and a "1.8-1.21" proxy answers to both ends — while a full report narrows to itself. A
+ * server the monitor has no fresh version for answers to nothing: an option that lists it and a
+ * filter that hides it would disagree.
+ */
+export function reportedVersionMatches(reported: string | null | undefined, filter: string) {
+  if (!reported) return false;
+  if (isMinecraftVersion(filter)) return minecraftVersionsIn(reported).includes(filter);
+  return withoutReportedPadding(reported) === filter;
+}
+
+/**
  * The options the filter bar offers, out of whatever the monitor reported. Every candidate goes
  * through {@link parseVersionParam}, the same guard the query string passes, so no option can be
  * offered that the page would then discard — a filter that silently does nothing is worse than a
