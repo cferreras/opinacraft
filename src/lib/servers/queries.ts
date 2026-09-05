@@ -12,7 +12,7 @@ import {
 } from "@/schema";
 import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } from "./monitor-scheduling";
 import { catalogAccessCondition, type CatalogAccessFilter } from "./catalog-filters";
-import { MINECRAFT_VERSION_SQL_PATTERN, minecraftVersionsIn, sortMinecraftVersions } from "./minecraft-version";
+import { MINECRAFT_VERSION_SQL_PATTERN, isMinecraftVersion, sortFullMinecraftVersions } from "./minecraft-version";
 import { normalizeGameModeInputs } from "./game-modes";
 import { reviewScoreSql } from "./review-score";
 import { fetchMonitorStatuses, isMonitorApiConfigured, queryMonitorCatalog } from "./monitor-api-client";
@@ -462,9 +462,11 @@ export async function countPublishedServers(): Promise<number> {
 }
 
 /**
- * The versions the filter bar offers: whatever the monitor has actually seen on a visible server.
- * A hardcoded list would keep offering versions nobody runs and would miss the next release the
- * week it ships, and an option that matches nothing is worse than a missing one.
+ * The versions the filter bar offers: the full strings the monitor has actually seen on a
+ * visible server ("Purpur 26.2" next to "26.2"). A hardcoded list would keep offering versions
+ * nobody runs and would miss the next release the week it ships, and an option that matches
+ * nothing is worse than a missing one. Collapsing to bare majors would hide the software
+ * prefix players look for, so every distinct report stays its own option.
  */
 export async function listCatalogVersions() {
   const rows = await db
@@ -479,7 +481,7 @@ export async function listCatalogVersions() {
       sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified')`,
     ));
 
-  return sortMinecraftVersions(rows.flatMap((row) => minecraftVersionsIn(row.version)));
+  return sortFullMinecraftVersions(rows.map((row) => row.version).filter((version): version is string => typeof version === "string"));
 }
 
 export async function getServerIdBySlug(slug: string) {
@@ -575,8 +577,14 @@ function catalogFacetConditions({ mode, country, version, access, edition }: Cat
     mode ? sql`exists (select 1 from server_game_modes gm where gm.server_id = ${servers.id} and gm.mode = ${mode})` : undefined,
     country ? eq(servers.country, country) : undefined,
     access ? catalogAccessCondition(access) : undefined,
-    // Each major version the reported string names counts, so a "1.8-1.21" proxy answers to both.
-    version ? sql`exists (select 1 from regexp_matches(coalesce(${servers.monitorVersion}, ''), ${MINECRAFT_VERSION_SQL_PATTERN}, 'g') as m(parts) where m.parts[1] = ${version})` : undefined,
+    // A bare major ("26.2") keeps its compatibility grouping: each major version the reported
+    // string names counts, so "Purpur 26.2" answers to "26.2" and a "1.8-1.21" proxy answers to
+    // both. A full report ("Purpur 26.2") narrows to that exact string instead.
+    version
+      ? isMinecraftVersion(version)
+        ? sql`exists (select 1 from regexp_matches(coalesce(${servers.monitorVersion}, ''), ${MINECRAFT_VERSION_SQL_PATTERN}, 'g') as m(parts) where m.parts[1] = ${version})`
+        : eq(servers.monitorVersion, version)
+      : undefined,
     edition ? sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.edition = ${edition} and se.verification_status = 'verified')` : undefined,
   ];
 }

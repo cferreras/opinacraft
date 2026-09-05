@@ -16,9 +16,12 @@ import { normalizeCountryInput, parseCountryParam, serverCountries } from "@/lib
 import * as catalogFilters from "@/lib/servers/catalog-filters";
 import {
   compareMinecraftVersions,
+  isFullMinecraftVersion,
+  isMinecraftVersion,
   minecraftVersionsIn,
   parseVersionParam,
   primaryMinecraftVersion,
+  sortFullMinecraftVersions,
   sortMinecraftVersions,
 } from "@/lib/servers/minecraft-version";
 
@@ -141,6 +144,8 @@ test("countries are ISO codes plus the explicit global option", () => {
 
 test("reads every major version out of what the monitor reported", () => {
   assert.deepEqual(minecraftVersionsIn("Paper 1.21.4"), ["1.21"]);
+  assert.deepEqual(minecraftVersionsIn("Purpur 26.2"), ["26.2"]);
+  assert.deepEqual(minecraftVersionsIn("26.2"), ["26.2"]);
   assert.deepEqual(minecraftVersionsIn("1.8-1.21"), ["1.8", "1.21"]);
   assert.deepEqual(minecraftVersionsIn("Requires MC 1.20"), ["1.20"]);
   assert.deepEqual(minecraftVersionsIn(null), []);
@@ -157,10 +162,25 @@ test("versions sort by number, not by text", () => {
   assert.ok(compareMinecraftVersions("1.21", "1.9") > 0);
 });
 
-test("only a bare major version reaches the SQL filter", () => {
+test("bare majors and full reported versions reach the SQL filter", () => {
   assert.equal(parseVersionParam("1.21"), "1.21");
-  assert.equal(parseVersionParam("1.21.4"), undefined);
+  assert.equal(parseVersionParam("26.2"), "26.2");
+  // Full strings the monitor actually reports stay their own option instead of collapsing.
+  assert.equal(parseVersionParam("Purpur 26.2"), "Purpur 26.2");
+  assert.equal(parseVersionParam("Paper 1.21.7"), "Paper 1.21.7");
+  assert.equal(parseVersionParam("1.21.4"), "1.21.4");
+  assert.equal(parseVersionParam("1.8-1.21"), "1.8-1.21");
+  assert.ok(isMinecraftVersion("26.2"));
+  assert.ok(!isMinecraftVersion("Purpur 26.2"));
+  assert.ok(isFullMinecraftVersion("Purpur 26.2"));
+  assert.ok(!isFullMinecraftVersion("desconocida"));
+  assert.equal(parseVersionParam("desconocida"), undefined);
   assert.equal(parseVersionParam("'; drop table servers; --"), undefined);
+});
+
+test("full reported versions stay side by side instead of collapsing", () => {
+  assert.deepEqual(sortFullMinecraftVersions(["26.2", "Purpur 26.2", "Purpur 26.2 "]), ["26.2", "Purpur 26.2"]);
+  assert.deepEqual(sortFullMinecraftVersions(["1.21.8", "Paper 1.21.7", "1.8-1.21"]), ["1.21.8", "1.8-1.21", "Paper 1.21.7"]);
 });
 
 test("the filter bar offers exactly the five facets of the catalog", () => {
