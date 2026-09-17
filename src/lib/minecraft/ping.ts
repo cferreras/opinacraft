@@ -46,13 +46,13 @@ type PingClient = {
 // unusable status response follows the single containment path below.
 const UNPARSABLE_STATUS_RESPONSE = "[invalid]";
 
-function isUsableStatusResponse(value: unknown) {
-  if (typeof value !== "string") return false;
+function parseStatusResponse(value: unknown) {
+  if (typeof value !== "string") return null;
   try {
     const parsed: unknown = JSON.parse(value);
-    return Boolean(parsed) && typeof parsed === "object";
+    return parsed && typeof parsed === "object" ? (parsed as NewPingResult) : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -69,9 +69,14 @@ function containMinecraftClientCallbacks(
   client: PingClient,
   socket: net.Socket,
   onInvalidResponse: () => void,
+  onStatusResponse: (status: NewPingResult) => void,
 ) {
   client.prependOnceListener?.("server_info", (packet) => {
-    if (packet && typeof packet === "object" && isUsableStatusResponse(packet.response)) return;
+    const status = packet && typeof packet === "object" ? parseStatusResponse(packet.response) : null;
+    if (status) {
+      onStatusResponse(status);
+      return;
+    }
     onInvalidResponse();
     if (packet && typeof packet === "object") packet.response = UNPARSABLE_STATUS_RESPONSE;
   });
@@ -103,6 +108,7 @@ export function createMinecraftPingOptions(
   target: MinecraftTarget,
   socket: net.Socket,
   onInvalidResponse: () => void = () => undefined,
+  onStatusResponse: (status: NewPingResult) => void = () => undefined,
 ) {
   return {
     host: target.handshakeHost,
@@ -110,7 +116,7 @@ export function createMinecraftPingOptions(
     closeTimeout: CONNECT_TIMEOUT_MS,
     noPongTimeout: CONNECT_TIMEOUT_MS,
     connect: (client: PingClient) => {
-      containMinecraftClientCallbacks(client, socket, onInvalidResponse);
+      containMinecraftClientCallbacks(client, socket, onInvalidResponse, onStatusResponse);
       client.setSocket(socket);
       socket.connect({ host: target.connectHost, port: target.port });
     },
@@ -121,11 +127,21 @@ export type JavaPingResult = NewPingResult & {
   latencyMs: number | null;
 };
 
+function withLatency(result: NewPingResult | null): JavaPingResult {
+  if (!result || typeof result !== "object") throw new MinecraftResponseError();
+  const latencyMs = Number.isFinite(result.latency) && result.latency >= 0 ? result.latency : null;
+  return { ...result, latencyMs };
+}
+
 export async function pingJavaServer(target: MinecraftTarget, signal?: AbortSignal): Promise<JavaPingResult> {
   const socket = new net.Socket();
   let bytes = 0;
   let tooLarge = false;
   let invalidResponse = false;
+  // The status response is everything a probe needs. The follow-up ping only
+  // measures latency, and some servers close the connection or stay silent
+  // instead of answering it, so a received status must survive a missing pong.
+  let statusResponse: NewPingResult | null = null;
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
   let abortHandler: (() => void) | undefined;
   socket.on("error", () => undefined);
@@ -140,13 +156,23 @@ export async function pingJavaServer(target: MinecraftTarget, signal?: AbortSign
   if (signal?.aborted) throw new MinecraftAbortError();
   const ping = await getMinecraftPing();
   if (signal?.aborted) throw new MinecraftAbortError();
-  const promise = (ping(createMinecraftPingOptions(target, socket, () => { invalidResponse = true; }) as never) as Promise<NewPingResult>)
+  const promise = (ping(createMinecraftPingOptions(
+    target,
+    socket,
+    () => { invalidResponse = true; },
+    (status) => { statusResponse = status; },
+  ) as never) as Promise<NewPingResult>)
     .catch((error: unknown) => {
       if (error instanceof SyntaxError) throw new MinecraftResponseError();
       throw error;
     });
 
   try {
+    const closedAfterStatus = new Promise<NewPingResult>((resolve) => {
+      socket.once("close", () => {
+        if (statusResponse) resolve(statusResponse);
+      });
+    });
     const abortPromise = signal
       ? new Promise<never>((_, reject) => {
           abortHandler = () => {
@@ -157,19 +183,19 @@ export async function pingJavaServer(target: MinecraftTarget, signal?: AbortSign
           else signal.addEventListener("abort", abortHandler, { once: true });
         })
       : null;
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutTimer = setTimeout(
-        () => reject(tooLarge || invalidResponse ? new MinecraftResponseError() : new MinecraftTimeoutError()),
-        CONNECT_TIMEOUT_MS,
-      );
+    const timeout = new Promise<NewPingResult>((resolve, reject) => {
+      timeoutTimer = setTimeout(() => {
+        if (tooLarge || invalidResponse) reject(new MinecraftResponseError());
+        else if (statusResponse) resolve(statusResponse);
+        else reject(new MinecraftTimeoutError());
+      }, CONNECT_TIMEOUT_MS);
     });
-    const result = await Promise.race([promise, timeout, ...(abortPromise ? [abortPromise] : [])]);
+    const result = await Promise.race([promise, closedAfterStatus, timeout, ...(abortPromise ? [abortPromise] : [])]);
     if (tooLarge || invalidResponse) throw new MinecraftResponseError();
-    if (!result || typeof result !== "object") throw new MinecraftResponseError();
-    const latencyMs = Number.isFinite(result.latency) && result.latency >= 0 ? result.latency : null;
-    return { ...result, latencyMs };
+    return withLatency(result);
   } catch (error) {
     if (tooLarge || invalidResponse) throw new MinecraftResponseError();
+    if (statusResponse && !(error instanceof MinecraftAbortError)) return withLatency(statusResponse);
     if (error instanceof MinecraftResponseError || error instanceof MinecraftOfflineError || error instanceof MinecraftTimeoutError || error instanceof MinecraftAbortError) throw error;
     if (error instanceof Error && error.message === "ETIMEDOUT") throw new MinecraftTimeoutError();
     throw new MinecraftOfflineError();

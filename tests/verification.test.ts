@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import dgram from "node:dgram";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import type { AddressInfo, Server as NetServer } from "node:net";
+import { createServer as createTcpServer, type AddressInfo, type Server as NetServer } from "node:net";
 
 import { flattenMotd, normalizeMotd, motdContainsCode } from "../src/lib/minecraft/motd.ts";
 import { isPublicHost } from "../src/lib/servers/validation.ts";
@@ -165,6 +165,92 @@ test("Java ping reports the Minecraft server-list ping separately from delayed s
     });
     await Promise.all([clientsClosed, serverClosed]);
   }
+});
+
+function writeVarInt(value: number) {
+  const bytes: number[] = [];
+  let remaining = value;
+  do {
+    let byte = remaining & 0x7f;
+    remaining >>>= 7;
+    if (remaining !== 0) byte |= 0x80;
+    bytes.push(byte);
+  } while (remaining !== 0);
+  return Buffer.from(bytes);
+}
+
+function readVarInt(buffer: Buffer, offset: number) {
+  let value = 0;
+  for (let index = 0; index < 5; index += 1) {
+    if (offset + index >= buffer.length) return null;
+    const byte = buffer[offset + index]!;
+    value |= (byte & 0x7f) << (7 * index);
+    if ((byte & 0x80) === 0) return { value, size: index + 1 };
+  }
+  return null;
+}
+
+/**
+ * A Java endpoint that answers the status request but never answers the
+ * follow-up ping packet, like some Purpur/proxy setups do.
+ */
+async function withJavaEndpointWithoutPong(
+  onPing: "close" | "ignore",
+  run: (port: number) => Promise<void>,
+) {
+  const status = JSON.stringify({
+    description: "OPINACRAFT-ABCDE-FGHIJ",
+    players: { max: 50, online: 3 },
+    version: { name: "Purpur 1.21.11", protocol: 774 },
+  });
+  const server = createTcpServer((socket) => {
+    let buffered = Buffer.alloc(0);
+    let packets = 0;
+    socket.on("error", () => undefined);
+    socket.on("data", (chunk) => {
+      buffered = Buffer.concat([buffered, chunk]);
+      for (;;) {
+        const length = readVarInt(buffered, 0);
+        if (!length || buffered.length < length.size + length.value) break;
+        buffered = buffered.subarray(length.size + length.value);
+        packets += 1;
+        if (packets === 2) {
+          const json = Buffer.from(status, "utf8");
+          const payload = Buffer.concat([writeVarInt(0), writeVarInt(json.length), json]);
+          socket.write(Buffer.concat([writeVarInt(payload.length), payload]));
+        } else if (packets === 3 && onPing === "close") {
+          socket.end();
+        }
+      }
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  try {
+    await run(address.port);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+test("Java ping keeps the status response when the server closes instead of answering the pong", async () => {
+  await withJavaEndpointWithoutPong("close", async (port) => {
+    const startedAt = Date.now();
+    const result = await pingJavaServer({ connectHost: "127.0.0.1", handshakeHost: "mc.example.com", port });
+    assert.equal(result.description, "OPINACRAFT-ABCDE-FGHIJ");
+    assert.equal(result.players.online, 3);
+    assert.equal(result.latencyMs, null);
+    assert.ok(Date.now() - startedAt < 2_000);
+  });
+});
+
+test("Java ping keeps the status response when the pong never arrives", async () => {
+  await withJavaEndpointWithoutPong("ignore", async (port) => {
+    const result = await pingJavaServer({ connectHost: "127.0.0.1", handshakeHost: "mc.example.com", port });
+    assert.equal(result.description, "OPINACRAFT-ABCDE-FGHIJ");
+    assert.equal(result.latencyMs, null);
+  });
 });
 
 test("Bedrock ping reports the RakNet unconnected ping round-trip", async () => {
