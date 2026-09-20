@@ -240,7 +240,8 @@ test("Java ping keeps the status response when the server closes instead of answ
     const result = await pingJavaServer({ connectHost: "127.0.0.1", handshakeHost: "mc.example.com", port });
     assert.equal(result.description, "OPINACRAFT-ABCDE-FGHIJ");
     assert.equal(result.players.online, 3);
-    assert.equal(result.latencyMs, null);
+    assert.equal(typeof result.latencyMs, "number");
+    assert.ok((result.latencyMs ?? -1) >= 0);
     assert.ok(Date.now() - startedAt < 2_000);
   });
 });
@@ -249,7 +250,8 @@ test("Java ping keeps the status response when the pong never arrives", async ()
   await withJavaEndpointWithoutPong("ignore", async (port) => {
     const result = await pingJavaServer({ connectHost: "127.0.0.1", handshakeHost: "mc.example.com", port });
     assert.equal(result.description, "OPINACRAFT-ABCDE-FGHIJ");
-    assert.equal(result.latencyMs, null);
+    assert.equal(typeof result.latencyMs, "number");
+    assert.ok((result.latencyMs ?? -1) >= 0);
   });
 });
 

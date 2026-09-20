@@ -104,11 +104,16 @@ function containMinecraftClientCallbacks(
   };
 }
 
+function elapsedMilliseconds(startedAt: bigint) {
+  return Math.max(0, Math.round(Number(process.hrtime.bigint() - startedAt) / 1_000_000));
+}
+
 export function createMinecraftPingOptions(
   target: MinecraftTarget,
   socket: net.Socket,
   onInvalidResponse: () => void = () => undefined,
   onStatusResponse: (status: NewPingResult) => void = () => undefined,
+  onHandshakeLatency: (latencyMs: number) => void = () => undefined,
 ) {
   return {
     host: target.handshakeHost,
@@ -118,6 +123,8 @@ export function createMinecraftPingOptions(
     connect: (client: PingClient) => {
       containMinecraftClientCallbacks(client, socket, onInvalidResponse, onStatusResponse);
       client.setSocket(socket);
+      const startedAt = process.hrtime.bigint();
+      socket.once("connect", () => onHandshakeLatency(elapsedMilliseconds(startedAt)));
       socket.connect({ host: target.connectHost, port: target.port });
     },
   };
@@ -127,9 +134,13 @@ export type JavaPingResult = NewPingResult & {
   latencyMs: number | null;
 };
 
-function withLatency(result: NewPingResult | null): JavaPingResult {
+// The dependency only reports a latency when the server answers the pong. For
+// the servers that never do, the TCP handshake round-trip is the closest
+// equivalent: it is a pure network measurement, so it stays comparable to the
+// pong timings reported for every other server.
+function withLatency(result: NewPingResult | null, handshakeLatencyMs: number | null): JavaPingResult {
   if (!result || typeof result !== "object") throw new MinecraftResponseError();
-  const latencyMs = Number.isFinite(result.latency) && result.latency >= 0 ? result.latency : null;
+  const latencyMs = Number.isFinite(result.latency) && result.latency >= 0 ? result.latency : handshakeLatencyMs;
   return { ...result, latencyMs };
 }
 
@@ -142,6 +153,7 @@ export async function pingJavaServer(target: MinecraftTarget, signal?: AbortSign
   // measures latency, and some servers close the connection or stay silent
   // instead of answering it, so a received status must survive a missing pong.
   let statusResponse: NewPingResult | null = null;
+  let handshakeLatencyMs: number | null = null;
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
   let abortHandler: (() => void) | undefined;
   socket.on("error", () => undefined);
@@ -161,6 +173,7 @@ export async function pingJavaServer(target: MinecraftTarget, signal?: AbortSign
     socket,
     () => { invalidResponse = true; },
     (status) => { statusResponse = status; },
+    (latencyMs) => { handshakeLatencyMs = latencyMs; },
   ) as never) as Promise<NewPingResult>)
     .catch((error: unknown) => {
       if (error instanceof SyntaxError) throw new MinecraftResponseError();
@@ -192,10 +205,10 @@ export async function pingJavaServer(target: MinecraftTarget, signal?: AbortSign
     });
     const result = await Promise.race([promise, closedAfterStatus, timeout, ...(abortPromise ? [abortPromise] : [])]);
     if (tooLarge || invalidResponse) throw new MinecraftResponseError();
-    return withLatency(result);
+    return withLatency(result, handshakeLatencyMs);
   } catch (error) {
     if (tooLarge || invalidResponse) throw new MinecraftResponseError();
-    if (statusResponse && !(error instanceof MinecraftAbortError)) return withLatency(statusResponse);
+    if (statusResponse && !(error instanceof MinecraftAbortError)) return withLatency(statusResponse, handshakeLatencyMs);
     if (error instanceof MinecraftResponseError || error instanceof MinecraftOfflineError || error instanceof MinecraftTimeoutError || error instanceof MinecraftAbortError) throw error;
     if (error instanceof Error && error.message === "ETIMEDOUT") throw new MinecraftTimeoutError();
     throw new MinecraftOfflineError();
