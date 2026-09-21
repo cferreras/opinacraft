@@ -22,6 +22,7 @@ import {
   normalizeCreateServerInput,
   normalizeHost,
   normalizeHttpUrl,
+  ServerInputError,
   slugifyServerName,
 } from "../src/lib/servers/validation.ts";
 
@@ -102,6 +103,8 @@ test("uses the edition-specific default ports", () => {
 
   const input = normalizeCreateServerInput({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     endpoints: [
       { edition: "java", host: "PLAY.EXAMPLE.COM" },
       { edition: "bedrock", host: "play.example.com" },
@@ -134,6 +137,8 @@ test("rejects hosts containing a protocol", () => {
 test("rejects duplicate editions in a single server input", () => {
   const result = createServerInputSchema.safeParse({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     endpoints: [
       { edition: "java", host: "java.example.com" },
       { edition: "java", host: "java-2.example.com" },
@@ -156,6 +161,8 @@ test("creates an ASCII slug and validates external URLs", () => {
   assert.equal(
     normalizeCreateServerInput({
       name: "A Minecraft Community",
+      gameModes: ["survival"],
+      country: "es",
       storeUrl: "https://shop.example.com/store",
       endpoints: [{ edition: "java", host: "play.example.com" }],
     }).storeUrl,
@@ -168,6 +175,8 @@ test("creates an ASCII slug and validates external URLs", () => {
 test("normalizes omitted and blank store URLs to null", () => {
   const baseInput = {
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     endpoints: [{ edition: "java" as const, host: "play.example.com" }],
   };
 
@@ -178,6 +187,8 @@ test("normalizes omitted and blank store URLs to null", () => {
 test("compacts repeated whitespace in server descriptions", () => {
   const input = normalizeCreateServerInput({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     description: "  Una comunidad\n\n\npara\t\t jugar.  ",
     endpoints: [{ edition: "java", host: "play.example.com" }],
   });
@@ -188,6 +199,8 @@ test("compacts repeated whitespace in server descriptions", () => {
 test("keeps the server description within the two-thousand-character limit", () => {
   assert.throws(() => normalizeCreateServerInput({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     description: "a".repeat(2_001),
     endpoints: [{ edition: "java", host: "play.example.com" }],
   }));
@@ -196,6 +209,7 @@ test("keeps the server description within the two-thousand-character limit", () 
 test("keeps only known game modes and caps them at three", () => {
   const input = normalizeCreateServerInput({
     name: "A Minecraft Community",
+    country: "es",
     gameModes: ["Skyblock", "no-existe", "survival"],
     endpoints: [{ edition: "java", host: "play.example.com" }],
   });
@@ -205,25 +219,50 @@ test("keeps only known game modes and caps them at three", () => {
   assert.equal(createServerInputSchema.safeParse({ name: "A Minecraft Community", gameModes: ["survival", "pvp", "skyblock", "prison"], endpoints: [{ edition: "java", host: "play.example.com" }] }).success, false);
 });
 
-test("stores a known country and drops anything else", () => {
+test("requires a known country", () => {
   const withCountry = normalizeCreateServerInput({
     name: "A Minecraft Community",
     country: "ES",
-    endpoints: [{ edition: "java", host: "play.example.com" }],
-  });
-  const withoutCountry = normalizeCreateServerInput({
-    name: "A Minecraft Community",
-    country: "xx",
+    gameModes: ["survival"],
     endpoints: [{ edition: "java", host: "play.example.com" }],
   });
 
   assert.equal(withCountry.country, "es");
-  assert.equal(withoutCountry.country, null);
+
+  // An unknown code is a missing country, not a stored one: both are rejected rather than
+  // silently dropped, because the catalog filters by it.
+  for (const country of ["xx", "", undefined]) {
+    assert.throws(
+      () => normalizeCreateServerInput({
+        name: "A Minecraft Community",
+        country,
+        gameModes: ["survival"],
+        endpoints: [{ edition: "java", host: "play.example.com" }],
+      }),
+      (error: unknown) => error instanceof ServerInputError && error.field === "country",
+    );
+  }
+});
+
+test("requires at least one game mode", () => {
+  for (const gameModes of [undefined, [], ["no-existe"]]) {
+    assert.throws(
+      () => normalizeCreateServerInput({
+        name: "A Minecraft Community",
+        gameModes,
+        country: "es",
+        endpoints: [{ edition: "java", host: "play.example.com" }],
+      }),
+      (error: unknown) => error instanceof ServerInputError && error.field === "gameModes",
+    );
+  }
 });
 
 test("accepts a whitelist form and the mixed-account password profile", () => {
   const result = createServerInputSchema.safeParse({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     accessType: "whitelist",
     accessFormUrl: "https://forms.example.com/apply#questions",
     accountMode: "premium_and_non_premium",
@@ -237,6 +276,8 @@ test("accepts a whitelist form and the mixed-account password profile", () => {
 test("normalizes access details and strips a form URL fragment", () => {
   const input = normalizeCreateServerInput({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     accessType: "whitelist",
     accessFormUrl: " https://forms.example.com/apply#questions ",
     accountMode: "premium_and_non_premium",
@@ -263,6 +304,8 @@ test("normalizes access details and strips a form URL fragment", () => {
 test("defaults new servers to open premium-only direct access", () => {
   const input = normalizeCreateServerInput({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     endpoints: [{ edition: "java", host: "play.example.com" }],
   });
 
@@ -290,6 +333,8 @@ test("keeps access labels understandable for public server views", () => {
 test("rejects a form link when the server is open", () => {
   const result = createServerInputSchema.safeParse({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     accessType: "open",
     accessFormUrl: "https://forms.example.com/apply",
     endpoints: [{ edition: "java", host: "play.example.com" }],
@@ -304,6 +349,8 @@ test("rejects a form link when the server is open", () => {
 test("rejects an authentication profile that cannot describe premium-only access", () => {
   const result = createServerInputSchema.safeParse({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     accountMode: "premium_only",
     authMode: "password_non_premium",
     endpoints: [{ edition: "java", host: "play.example.com" }],

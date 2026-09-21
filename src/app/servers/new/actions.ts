@@ -94,7 +94,7 @@ export async function createServerAction(
     if (error instanceof DuplicateEndpointError) {
       return {
         fieldErrors: {
-          endpoints: "One of these addresses is already registered.",
+          endpoints: "Ya hay un servidor registrado con esta dirección.",
         },
       };
     }

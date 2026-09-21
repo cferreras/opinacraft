@@ -76,7 +76,7 @@ async function tryFlushMonitorSync(serverId: string) {
 
 export class UnverifiedEmailError extends Error {
   constructor() {
-    super("Verify your email before creating or publishing a server.");
+    super("Verifica tu correo antes de crear o publicar un servidor.");
     this.name = "UnverifiedEmailError";
   }
 }
@@ -105,7 +105,7 @@ async function requireVerifiedEmail(
 
 export class DuplicateEndpointError extends Error {
   constructor() {
-    super("A server with one of these addresses already exists.");
+    super("Ya hay un servidor registrado con esta dirección.");
     this.name = "DuplicateEndpointError";
   }
 }
@@ -265,6 +265,7 @@ export async function updateServer(
         id: servers.id,
         name: servers.name,
         verificationStatus: servers.verificationStatus,
+        publicationStatus: servers.publicationStatus,
       })
       .from(servers)
       .where(eq(servers.id, serverId))
@@ -447,7 +448,12 @@ export async function updateServer(
       .from(serverEndpoints)
       .where(and(eq(serverEndpoints.serverId, serverId), eq(serverEndpoints.verificationStatus, "verified")))
       .limit(1);
-    if (publicationStatus === "published" && !verifiedEndpoint) {
+    // Only the step *into* the directory needs a verified endpoint. Re-asserting it on every save
+    // made an already published listing impossible to edit: moving its host or port clears the
+    // endpoint verification in this same transaction, so the guard rolled the whole edit back. A
+    // published listing that loses its verification simply stops being served — every public query
+    // also requires `verification_status = 'verified'` — until the owner verifies the new address.
+    if (publicationStatus === "published" && server.publicationStatus !== "published" && !verifiedEndpoint) {
       throw new NoVerifiedEndpointError();
     }
 

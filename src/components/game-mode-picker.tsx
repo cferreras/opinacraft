@@ -18,6 +18,10 @@ type GameModePickerProps = {
  * picker keeps working with JavaScript off. The only thing the client adds is the cap — once
  * {@link MAX_SERVER_GAME_MODES} are picked the rest go disabled, which explains the limit better
  * than an error after saving.
+ *
+ * At least one mode is required: these are the catalog's filters, so a server with none is only
+ * reachable by searching for it by name. Checkboxes have no native "at least one" constraint, so
+ * the counter turns red at zero and the server has the last word.
  */
 export function GameModePicker({ name, label = "Modos de juego", initialModes = [], onSelectedChange }: GameModePickerProps) {
   const [selected, setSelected] = useState<string[]>([...initialModes]);
@@ -32,8 +36,8 @@ export function GameModePicker({ name, label = "Modos de juego", initialModes = 
   return (
     <Field className="gap-2">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium">{label}</span>
-        <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">{selected.length} / {MAX_SERVER_GAME_MODES}</span>
+        <span className="text-sm font-medium">{label}<span aria-hidden="true" className="text-primary">*</span></span>
+        <span className={`shrink-0 text-xs font-medium tabular-nums ${selected.length ? "text-muted-foreground" : "text-destructive"}`}>{selected.length} / {MAX_SERVER_GAME_MODES}</span>
       </div>
       {[
         { key: "popular", heading: "Más habituales", modes: popularGameModes },
@@ -70,7 +74,7 @@ export function GameModePicker({ name, label = "Modos de juego", initialModes = 
           </div>
         </fieldset>
       ))}
-      <FieldDescription>Elige hasta {MAX_SERVER_GAME_MODES}. Son los modos por los que los jugadores filtran el catálogo.</FieldDescription>
+      <FieldDescription>Elige entre 1 y {MAX_SERVER_GAME_MODES}. Son los modos por los que los jugadores filtran el catálogo.</FieldDescription>
     </Field>
   );
 }
