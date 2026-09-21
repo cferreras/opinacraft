@@ -64,7 +64,11 @@ function storedSessionIsCurrent() {
 export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }: { value: string; cleared: boolean; turnstileSiteKey?: string }) {
   const router = useRouter();
   const navigate = useFilterFormNavigation();
-  const [value, setValue] = useSyncedFieldValue(incomingValue, cleared);
+  // The box navigates on its own while the visitor types, so the URL that comes back is this
+  // field's own output. `editing` is what stops that output from being written back over the text
+  // typed since the search left.
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useSyncedFieldValue(incomingValue, cleared, editing);
   const [aiState, setAiState] = useState<AiState>(turnstileSiteKey ? "idle" : "off");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [interpreting, setInterpreting] = useState(false);
@@ -132,6 +136,7 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
    * the server rendered.
    */
   const handleFocus = useCallback(() => {
+    setEditing(true);
     if (aiState !== "idle") return;
     if (storedSessionIsCurrent()) {
       setAiState("ready");
@@ -234,6 +239,7 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
             value={value}
             onChange={handleChange}
             onFocus={handleFocus}
+            onBlur={() => setEditing(false)}
             onKeyDown={submitOnEnter}
             placeholder="Busca como hablas: «survival tranquilo en España»"
             aria-describedby="server-search-hint"

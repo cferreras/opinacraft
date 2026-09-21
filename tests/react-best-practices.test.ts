@@ -454,8 +454,9 @@ test("keeps the catalog filter controls following the URL across client-side nav
 
   // "Borrar filtros" and the active-filter chips navigate within the same route, so the controls
   // re-render instead of remounting: uncontrolled fields would keep the value the URL just dropped.
-  assert.match(hookSource, /if \(incoming !== last\.incoming \|\| \(resetWhen && !last\.resetWhen\)\)/);
-  assert.match(hookSource, /setValue\(incoming\);/);
+  assert.match(hookSource, /const incomingChanged = incoming !== state\.incoming;/);
+  assert.match(hookSource, /const clearing = resetWhen && !state\.resetWhen;/);
+  assert.match(hookSource, /value: hold && !clearing \? state\.value : incoming/);
   for (const source of [selectSource, searchSource]) {
     assert.match(source, /useSyncedFieldValue\(incomingValue/);
     assert.match(source, /value=\{value\}/);
@@ -463,8 +464,12 @@ test("keeps the catalog filter controls following the URL across client-side nav
   }
   // Clearing leaves an unsent draft sitting on an incoming value that never changed, so the box is
   // told the catalog is unfiltered rather than inferring it from the value.
-  assert.match(hookSource, /useSyncedFieldValue\(incoming: string, resetWhen = false\)/);
-  assert.match(searchSource, /useSyncedFieldValue\(incomingValue, cleared\)/);
+  assert.match(hookSource, /useSyncedFieldValue\(incoming: string, resetWhen = false, hold = false\)/);
+  // The search box navigates on a debounce while the visitor types, so the URL it produces must
+  // not be written back over the text typed since: the field is held while it has focus.
+  assert.match(searchSource, /useSyncedFieldValue\(incomingValue, cleared, editing\)/);
+  assert.match(searchSource, /onBlur=\{\(\) => setEditing\(false\)\}/);
+  assert.match(searchSource, /setEditing\(true\);/);
   assert.match(barSource, /const cleared = !query && !mode && !version && !country && !access && !edition;/);
   assert.doesNotMatch(barSource, /defaultValue|defaultQuery/);
 });
