@@ -349,12 +349,18 @@ export async function persistMonitorObservation(observation: CanonicalMonitorObs
 
 export async function getMonitorStatuses(serverIds: readonly string[], now = new Date()) {
   if (serverIds.length === 0) return [];
+  // The cadence comes from the schedule, not from the target. A target keeps a
+  // cadence column because the column cannot be null, but the schedule is what
+  // says whether this server is probed at all: `upsertMonitorTarget` deletes it
+  // as soon as no endpoint is verified. Reading the target instead made an
+  // unmonitored server advertise a cadence it was never going to meet.
   const result = await withMonitorClient((client) => client.query(`
-    select t.server_id, t.cadence_minutes, s.health_status, s.players_current, s.players_max, s.version, s.latency_ms,
+    select t.server_id, sc.cadence_minutes, s.health_status, s.players_current, s.players_max, s.version, s.latency_ms,
            s.last_checked_at, s.last_online_at, s.offline_since, s.last_recovered_at, s.last_state_change_at,
            s.consecutive_failures, s.probe_edition
     from monitor_targets t
     left join monitor_states s on s.server_id = t.server_id
+    left join monitor_schedules sc on sc.server_id = t.server_id
     where t.server_id = any($1::uuid[])
   `, [serverIds]));
   return result.rows.map((row): MonitorStatusView => {

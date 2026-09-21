@@ -465,7 +465,10 @@ export async function updateServer(
 
     await enqueueMonitorSync(tx, serverId, "upsert");
 
-    return { role, javaChanged };
+    // Losing the last verified endpoint is not a failure, so the save succeeds
+    // — but it stops the monitor and pulls the listing from the directory, and
+    // the owner has to hear that from the save itself rather than discover it.
+    return { role, javaChanged, monitoringPaused: !verifiedEndpoint };
   });
   await tryFlushMonitorSync(serverId);
   return result;

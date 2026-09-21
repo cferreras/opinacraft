@@ -105,13 +105,14 @@ export async function updateServerAction(
     return { fieldErrors: { publicationStatus: "Elige un estado de publicación válido." } };
   }
 
+  let monitoringPaused = false;
   try {
-    await updateServer(
+    ({ monitoringPaused } = await updateServer(
       session.user.id,
       serverId,
       getServerInput(formData),
       publicationStatus.success ? publicationStatus.data : undefined,
-    );
+    ));
   } catch (error) {
     if (error instanceof z.ZodError) {
       const field = serverValidationField(error.issues[0]?.path ?? []);
@@ -150,7 +151,7 @@ export async function updateServerAction(
   revalidatePath("/dashboard/servers");
   revalidatePath(`/servers/${slug}`);
   revalidatePath(`/servers/${slug}/manage`);
-  redirect(`/servers/${slug}/manage?updated=1`);
+  redirect(`/servers/${slug}/manage?updated=1${monitoringPaused ? "&monitorPaused=1" : ""}`);
 }
 
 export async function deleteServerAction(formData: FormData) {

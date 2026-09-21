@@ -81,8 +81,9 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
 
           <div className="mt-5 grid gap-2.5">
             {query.created ? <Notice>Se creó el borrador. Revísalo y publícalo cuando esté listo.</Notice> : null}
-            {query.updated ? <Notice>Se guardaron los datos del servidor.</Notice> : null}
-            {server.publicationStatus === "published" && server.verificationStatus !== "verified" ? <Notice tone="warning">La ficha está publicada, pero no aparecerá en el directorio hasta que vuelvas a verificar la conexión actual.</Notice> : null}
+            {query.updated && !query.monitorPaused ? <Notice>Se guardaron los datos del servidor.</Notice> : null}
+            {query.updated && query.monitorPaused ? <Notice tone="warning">Se guardaron los cambios, pero al tocar la dirección la ficha vuelve a estar sin verificar: la monitorización queda en pausa y la ficha no aparecerá en el directorio. <a href="#verification" className="underline underline-offset-2">Verifica la dirección nueva</a> para reanudarla.</Notice> : null}
+            {!query.monitorPaused && server.publicationStatus === "published" && server.verificationStatus !== "verified" ? <Notice tone="warning">La ficha está publicada, pero la monitorización está en pausa y no aparecerá en el directorio hasta que vuelvas a verificar la conexión actual.</Notice> : null}
             {query.memberUpdated ? <Notice>Se actualizó la lista de miembros.</Notice> : null}
             {query.memberError ? <Notice tone="warning">La acción sobre el miembro falló: {query.memberError.replaceAll("-", " ")}.</Notice> : null}
           </div>
