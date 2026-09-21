@@ -12,6 +12,8 @@ import { CatalogFilterBar } from "@/components/catalog-filter-bar";
 import { PublicServerRow } from "@/components/public-server-row";
 import { SiteHeader } from "@/components/site-header";
 import { JsonLd } from "@/components/json-ld";
+import { clientEnv } from "@/env/client";
+import { isAiSearchConfigured } from "@/lib/search/runtime";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { itemListSchema } from "@/lib/seo/structured-data";
 import { getCachedCatalogVersions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
@@ -26,9 +28,9 @@ import {
   type PublicServerTableSort,
 } from "@/lib/servers/queries";
 import { getServerResultsSummary } from "@/lib/servers/result-summary";
-import { buildCatalogHref, catalogPath } from "@/lib/servers/catalog-route";
+import { buildCatalogHref, catalogInputFrom, catalogPath } from "@/lib/servers/catalog-route";
 import { catalogAccessOptions, catalogSortOptions, catalogStatusOptions, parseCatalogAccessParam } from "@/lib/servers/catalog-filters";
-import { gameModeLabel, parseGameModeParam } from "@/lib/servers/game-modes";
+import { gameModeLabel, parseGameModeParams } from "@/lib/servers/game-modes";
 import { parseCountryParam, serverCountryLabel } from "@/lib/servers/countries";
 import { parseVersionParam } from "@/lib/servers/minecraft-version";
 
@@ -119,12 +121,12 @@ function ActiveFilterChip({ label, removeHref, removeLabel }: { label: string; r
   );
 }
 
-export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; mode?: string; version?: string; country?: string; access?: string; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
+export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; mode?: string | string[]; version?: string; country?: string; access?: string; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
   await connection();
   const query = await searchParams;
   const requestedPage = Number.parseInt(query.page ?? "1", 10);
   const hasQuery = Boolean(query.q?.trim());
-  const mode = parseGameModeParam(query.mode);
+  const modes = parseGameModeParams(query.mode);
   const version = parseVersionParam(query.version);
   const country = parseCountryParam(query.country);
   const access = parseCatalogAccessParam(query.access);
@@ -137,7 +139,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const presetTableSort = (sort === "rating" || sort === "players") && (!hasQuery || hasExplicitSort) ? sort : undefined;
   const activeTableSort = tableSort ?? presetTableSort;
   const activeTableDirection: PublicServerSortDirection = tableSort ? tableDirection : "desc";
-  const listArgs = { page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", mode, version, country, access, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection } as const;
+  const listArgs = { page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", mode: modes, version, country, access, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection } as const;
   const monitorDependent = isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, version, sort, tableSort: activeTableSort });
   const monitorResult = monitorDependent
     ? await getCachedMonitorCatalogPage(listArgs).catch((error) => {
@@ -161,7 +163,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const { hasNextPage, page, totalCount } = result;
   const baseParams = new URLSearchParams();
   if (query.q) baseParams.set("q", query.q);
-  if (mode) baseParams.set("mode", mode);
+  for (const slug of modes) baseParams.append("mode", slug);
   if (version) baseParams.set("version", version);
   if (country) baseParams.set("country", country);
   if (access) baseParams.set("access", access);
@@ -173,23 +175,27 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     baseParams.set("tableSort", tableSort);
     baseParams.set("tableDirection", tableDirection);
   }
-  const hrefWith = (overrides: Record<string, string | undefined>, { keepPage = false } = {}) => {
+  const hrefWith = (overrides: Record<string, string | readonly string[] | undefined>, { keepPage = false } = {}) => {
     const next = new URLSearchParams(baseParams);
     if (!keepPage) next.delete("page");
     for (const [key, value] of Object.entries(overrides)) {
-      if (value === undefined || value === "") next.delete(key);
-      else next.set(key, value);
+      next.delete(key);
+      if (value === undefined || value === "") continue;
+      for (const item of Array.isArray(value) ? value : [value as string]) if (item) next.append(key, item);
     }
-    return buildCatalogHref(Object.fromEntries(next.entries()));
+    return buildCatalogHref(catalogInputFrom(next));
   };
   const pageHref = (nextPage: number) => hrefWith({ page: String(nextPage) }, { keepPage: true });
   const tableSortHref = (nextSort: PublicServerTableSort) =>
     hrefWith({ sort: undefined, tableSort: nextSort, tableDirection: activeTableSort === nextSort && activeTableDirection === "asc" ? "desc" : "asc" });
-  const activeFilterCount = [hasQuery, Boolean(mode), Boolean(version), Boolean(country), Boolean(access), Boolean(edition), Boolean(status)].filter(Boolean).length;
+  const activeFilterCount = [hasQuery, modes.length > 0, Boolean(version), Boolean(country), Boolean(access), Boolean(edition), Boolean(status)].filter(Boolean).length;
   const hasActiveFilters = activeFilterCount > 0 || Boolean(query.sort && query.sort !== "rating") || Boolean(tableSort);
   // Offered even when a filter is active: the list is cheap, cached, and a facet the visitor is
   // already inside should not reorder itself under them.
   const versionOptions = await getCachedCatalogVersions().catch(() => [] as string[]);
+  // Both halves have to be configured: the widget needs its public key, and the route behind it
+  // needs the API key, the Turnstile secret and the session secret.
+  const turnstileSiteKey = isAiSearchConfigured() ? clientEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY : undefined;
   const serverResultsSummary = getServerResultsSummary({ page, pageSize: PUBLIC_SERVER_PAGE_SIZE, visibleCount: servers.length, totalCount });
   const totalPages = Math.max(1, Math.ceil(totalCount / PUBLIC_SERVER_PAGE_SIZE));
   return (
@@ -222,15 +228,21 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                   {tableSort ? <><input type="hidden" name="tableSort" value={tableSort} /><input type="hidden" name="tableDirection" value={tableDirection} /></> : null}
                   {!tableSort && hasExplicitSort ? <input type="hidden" name="sort" value={sort} /> : null}
                   {status ? <input type="hidden" name="status" value={status} /> : null}
+                  {/* The bar's picker holds one mode, so the rest ride along as hidden inputs:
+                      changing the country must not collapse a two-mode filter down to one. The
+                      picker still replaces the primary mode, and the chips below remove them one
+                      by one. */}
+                  {modes.slice(1).map((slug) => <input key={slug} type="hidden" name="mode" value={slug} />)}
 
                   <CatalogFilterBar
                     query={query.q ?? ""}
-                    mode={mode}
+                    mode={modes[0]}
                     version={version}
                     country={country}
                     access={access}
                     edition={edition}
                     versionOptions={versionOptions}
+                    turnstileSiteKey={turnstileSiteKey}
                     clearHref={hasActiveFilters ? catalogPath : undefined}
                   />
 
@@ -238,7 +250,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Filtros activos</span>
                     {hasQuery ? <ActiveFilterChip label={`Búsqueda: ${query.q?.trim()}`} removeHref={hrefWith({ q: undefined })} removeLabel="Quitar la búsqueda" /> : null}
-                    {mode ? <ActiveFilterChip label={`Modo: ${gameModeLabel(mode)}`} removeHref={hrefWith({ mode: undefined })} removeLabel="Quitar el filtro de modo" /> : null}
+                    {modes.map((slug) => <ActiveFilterChip key={slug} label={`Modo: ${gameModeLabel(slug)}`} removeHref={hrefWith({ mode: modes.filter((item) => item !== slug) })} removeLabel={`Quitar el filtro de modo ${gameModeLabel(slug)}`} />)}
                     {version ? <ActiveFilterChip label={`Versión: ${version}`} removeHref={hrefWith({ version: undefined })} removeLabel="Quitar el filtro de versión" /> : null}
                     {country ? <ActiveFilterChip label={`País: ${serverCountryLabel(country)}`} removeHref={hrefWith({ country: undefined })} removeLabel="Quitar el filtro de país" /> : null}
                     {access ? <ActiveFilterChip label={`Acceso: ${catalogAccessOptions.find((option) => option.value === access)?.label ?? access}`} removeHref={hrefWith({ access: undefined })} removeLabel="Quitar el filtro de acceso" /> : null}

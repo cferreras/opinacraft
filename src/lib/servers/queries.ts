@@ -580,7 +580,8 @@ async function hydratePublishedCatalogServers(ids: string[], edition?: "java" | 
 
 /** What the visitor picks in the catalog filter bar, apart from the search box. */
 export type CatalogFacets = {
-  mode?: string;
+  /** Any of these modes, not all of them: see {@link parseGameModeParams}. */
+  mode?: readonly string[];
   country?: string;
   version?: string;
   access?: CatalogAccessFilter;
@@ -604,7 +605,9 @@ export type PublishedServerListArgs = CatalogFacets & {
  */
 function catalogFacetConditions({ mode, country, version, access, edition }: CatalogFacets) {
   return [
-    mode ? sql`exists (select 1 from server_game_modes gm where gm.server_id = ${servers.id} and gm.mode = ${mode})` : undefined,
+    mode && mode.length > 0
+      ? sql`exists (select 1 from server_game_modes gm where gm.server_id = ${servers.id} and gm.mode in (${sql.join(mode.map((slug) => sql`${slug}`), sql`, `)}))`
+      : undefined,
     country ? eq(servers.country, country) : undefined,
     access ? catalogAccessCondition(access) : undefined,
     // A bare major ("26.2") keeps its compatibility grouping: each major version the reported

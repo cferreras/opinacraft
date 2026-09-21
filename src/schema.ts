@@ -838,3 +838,30 @@ export const serverEndpointPlayerHourly = pgTable(
     check("server_endpoint_player_hourly_counts_check", sql`${table.sampleCount} >= 0 and ${table.onlineCount} >= 0 and ${table.unknownCount} >= 0`),
   ],
 );
+
+/**
+ * What a natural-language query was understood to mean, keyed by the hash of its normalized form.
+ *
+ * This is a cache, not a record: rows may be deleted at any time and the only cost is one more
+ * Jev call. It lives in Postgres rather than in memory because the site runs as serverless
+ * functions, where an in-process map would be per instance and would not survive a cold start —
+ * the two things a cache with a TTL measured in days cannot afford.
+ *
+ * `query` keeps the normalized text next to its hash so the interpretations can be read back and
+ * the confidence bands tuned against what visitors actually typed.
+ */
+export const searchInterpretations = pgTable(
+  "search_interpretations",
+  {
+    queryHash: varchar("query_hash", { length: 64 }).primaryKey(),
+    query: varchar("query", { length: 80 }).notNull(),
+    model: varchar("model", { length: 64 }).notNull(),
+    interpretation: jsonb("interpretation").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Sweeping expired rows is a range scan over this, not a full table scan.
+    index("search_interpretations_updated_at_idx").on(table.updatedAt),
+  ],
+);

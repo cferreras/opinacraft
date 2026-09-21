@@ -72,10 +72,25 @@ export function gameModeLabel(slug: string) {
   return gameModesBySlug.get(slug)?.label ?? slug;
 }
 
-/** The catalog filters by a single mode, so anything unknown falls back to "no filter". */
+/** A single mode, for the picker in the filter bar: anything unknown falls back to "no filter". */
 export function parseGameModeParam(value: string | undefined) {
   const slug = value?.trim().toLowerCase();
   return isGameModeSlug(slug) ? slug : undefined;
+}
+
+/**
+ * The catalog accepts `?mode=` more than once, read as "any of these": natural-language search can
+ * resolve a query to two or three modes at once, and a visitor who asked for survival and economy
+ * wants both kinds of server in the results, not the handful that advertise both.
+ *
+ * Unknown slugs are dropped instead of rejected, like the single-value parser, and the list is
+ * capped at {@link MAX_SERVER_GAME_MODES}: no server can hold more than that, so a longer filter
+ * only makes the URL and the SQL array longer.
+ */
+export function parseGameModeParams(value: string | readonly string[] | undefined): string[] {
+  const values = value === undefined ? [] : Array.isArray(value) ? value : [value as string];
+  const selected = new Set(values.map((entry) => entry.trim().toLowerCase()).filter((entry) => gameModesBySlug.has(entry)));
+  return gameModes.filter((mode) => selected.has(mode.slug)).map((mode) => mode.slug).slice(0, MAX_SERVER_GAME_MODES);
 }
 
 /**

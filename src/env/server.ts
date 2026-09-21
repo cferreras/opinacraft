@@ -27,6 +27,16 @@ export const serverEnv = createEnv({
     BLOB_OPERATOR_EMAIL: z.email().optional(),
     DISCORD_CLIENT_ID: z.string().min(1).optional(),
     DISCORD_CLIENT_SECRET: z.string().min(1).optional(),
+    // Natural-language search. Everything here is optional: with no key the search box keeps
+    // working and simply never reaches Jev.
+    TYPESAFE_API_KEY: z.string().min(1).optional(),
+    JEV_SEARCH_ENABLED: z.enum(["true", "false"]).default("false"),
+    JEV_DAILY_CALL_LIMIT: z.coerce.number().int().positive().default(5000),
+    JEV_TIMEOUT_MS: z.coerce.number().int().positive().max(10_000).default(2000),
+    JEV_CACHE_TTL_HOURS: z.coerce.number().int().positive().max(720).default(72),
+    TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
+    AI_SEARCH_SESSION_SECRET: z.string().min(32).optional(),
+    AI_SEARCH_SESSION_QUOTA: z.coerce.number().int().positive().default(20),
   },
   // If you're using Next.js < 13.4.4, you'll need to specify the runtimeEnv manually
   // runtimeEnv: {
