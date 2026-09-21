@@ -55,6 +55,12 @@
       "skillPath": "better-auth/twoFactor/SKILL.md",
       "computedHash": "cfe69aad10d4d7b397fbc101630afd9361b385b5f6f83056f33f36ab3b736fcb"
     },
+    "typesafe-ai": {
+      "source": "typesafe-ai/skills",
+      "sourceType": "github",
+      "skillPath": "skills/typesafe-ai/SKILL.md",
+      "computedHash": "a6ed7d8a3d2b2d962f8e44b17663767c433b7d1fc32d1ed0349a44f7372513e8"
+    },
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
