@@ -21,3 +21,17 @@ export function buildCatalogHref(input: CatalogQueryInput) {
   const queryString = params.toString();
   return queryString ? `${catalogPath}?${queryString}` : catalogPath;
 }
+
+/**
+ * A query string as {@link buildCatalogHref} wants it. `mode` may appear more than once, so this
+ * cannot be `Object.fromEntries`: that keeps the last value and quietly drops the rest of the
+ * visitor's filter.
+ */
+export function catalogInputFrom(params: URLSearchParams): CatalogQueryInput {
+  const input: Record<string, string | string[]> = {};
+  for (const key of new Set(params.keys())) {
+    const values = params.getAll(key);
+    input[key] = values.length > 1 ? values : values[0];
+  }
+  return input;
+}

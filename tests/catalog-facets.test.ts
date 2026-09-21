@@ -11,6 +11,7 @@ import {
   MAX_SERVER_GAME_MODES,
   normalizeGameModeInputs,
   parseGameModeParam,
+  parseGameModeParams,
 } from "@/lib/servers/game-modes";
 import { normalizeCountryInput, parseCountryParam, serverCountries } from "@/lib/servers/countries";
 import * as catalogFilters from "@/lib/servers/catalog-filters";
@@ -267,9 +268,40 @@ test("the filter bar offers exactly the five facets of the catalog", () => {
 test("the catalog reads every facet back out of the query string", () => {
   const source = readProjectFile("src/app/servers/page.tsx");
 
-  assert.match(source, /const mode = parseGameModeParam\(query\.mode\)/);
+  assert.match(source, /const modes = parseGameModeParams\(query\.mode\)/);
   assert.match(source, /const version = parseVersionParam\(query\.version\)/);
   assert.match(source, /const country = parseCountryParam\(query\.country\)/);
   // The bar lost its sort control, so the form has to carry the visitor's ordering itself.
   assert.match(source, /name="sort" value=\{sort\}/);
+});
+
+test("the catalog reads a repeated mode parameter as \"any of these\"", () => {
+  assert.deepEqual(parseGameModeParams(undefined), []);
+  assert.deepEqual(parseGameModeParams("survival"), ["survival"]);
+  assert.deepEqual(parseGameModeParams([" Survival ", "ECONOMIA"]), ["survival", "economia"], "catalog order, trimmed and lowercased");
+  assert.deepEqual(parseGameModeParams(["survival", "survival"]), ["survival"], "duplicates collapse");
+  assert.deepEqual(parseGameModeParams(["no-existe"]), [], "an unknown slug drops out instead of failing the page");
+  assert.deepEqual(parseGameModeParams(["survival", "no-existe", "pvp"]), ["survival", "pvp"]);
+  // A server cannot advertise more than three modes, so a longer filter only lengthens the SQL.
+  assert.equal(parseGameModeParams(gameModes.map((mode) => mode.slug)).length, MAX_SERVER_GAME_MODES);
+});
+
+test("a multi-mode filter binds one parameter per mode and disappears when empty", () => {
+  const source = readProjectFile("src/lib/servers/queries.ts");
+
+  // Bound values, not an interpolated list: the slugs are validated, and the next filter to reach
+  // this line may not be.
+  assert.match(source, /gm\.mode in \(\$\{sql\.join\(mode\.map\(\(slug\) => sql`\$\{slug\}`\), sql`, `\)\}\)/);
+  assert.match(source, /mode && mode\.length > 0/, "an empty list must not narrow the catalog to nothing");
+});
+
+test("the catalog carries the modes its picker cannot hold", () => {
+  const source = readProjectFile("src/app/servers/page.tsx");
+
+  // The picker is single-valued, so without these hidden inputs changing any other facet would
+  // silently drop every mode but the first.
+  assert.match(source, /modes\.slice\(1\)\.map\(\(slug\) => <input key=\{slug\} type="hidden" name="mode" value=\{slug\} \/>\)/);
+  assert.match(source, /mode=\{modes\[0\]\}/);
+  // Each mode gets its own removable chip.
+  assert.match(source, /mode: modes\.filter\(\(item\) => item !== slug\)/);
 });

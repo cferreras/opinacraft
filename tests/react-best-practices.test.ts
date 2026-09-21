@@ -449,7 +449,7 @@ test("answers the verification forms in place instead of redirecting to the top 
 test("keeps the catalog filter controls following the URL across client-side navigation", () => {
   const hookSource = readProjectFile("src/hooks/use-synced-field-value.ts");
   const selectSource = readProjectFile("src/components/filter-select.tsx");
-  const searchSource = readProjectFile("src/components/server-search-input.tsx");
+  const searchSource = readProjectFile("src/components/ai-search-box.tsx");
   const barSource = readProjectFile("src/components/catalog-filter-bar.tsx");
 
   // "Borrar filtros" and the active-filter chips navigate within the same route, so the controls

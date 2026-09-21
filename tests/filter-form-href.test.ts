@@ -52,7 +52,7 @@ test("ignores the file entries a form may carry", () => {
 });
 
 test("navigates the catalog filters with the router instead of a native submit", () => {
-  for (const file of ["src/components/filter-select.tsx", "src/components/server-search-input.tsx"]) {
+  for (const file of ["src/components/filter-select.tsx", "src/components/ai-search-box.tsx"]) {
     const source = readProjectFile(file);
 
     assert.match(source, /useFilterFormNavigation/, `${file} should navigate through the shared hook`);

@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FilterFormSubmitButton } from "@/components/filter-form-submit-button";
 import { FilterSelect } from "@/components/filter-select";
-import { ServerSearchInput } from "@/components/server-search-input";
+import { AiSearchBox } from "@/components/ai-search-box";
 import { catalogAccessOptions, catalogEditionOptions, type CatalogAccessFilter } from "@/lib/servers/catalog-filters";
 import { nicheGameModes, popularGameModes } from "@/lib/servers/game-modes";
 import { serverCountries } from "@/lib/servers/countries";
@@ -19,6 +17,8 @@ type CatalogFilterBarProps = {
   edition?: string;
   versionOptions: readonly string[];
   clearHref?: string;
+  /** Absent when natural-language search is unconfigured, which leaves the plain keyword box. */
+  turnstileSiteKey?: string;
 };
 
 // Search plus the five facets a visitor picks between, on one line: mode, version, country, access
@@ -33,6 +33,7 @@ export function CatalogFilterBar({
   edition,
   versionOptions,
   clearHref,
+  turnstileSiteKey,
 }: CatalogFilterBarProps) {
   // "Borrar filtros" promises an empty bar, but the URL it lands on says nothing about the text
   // the visitor had typed without sending it, so the search box is told the catalog is unfiltered
@@ -41,14 +42,9 @@ export function CatalogFilterBar({
 
   return (
     <Card className="gap-3 px-4 py-4">
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative min-w-0 flex-1">
-          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <label htmlFor="server-search" className="sr-only">Buscar</label>
-          <ServerSearchInput value={query} cleared={cleared} />
-        </div>
-        <FilterFormSubmitButton>Buscar</FilterFormSubmitButton>
-      </div>
+      {/* The box owns the search row, the invisible challenge and the suggestion chips: they are
+          one control, and only it knows whether the last query was understood. */}
+      <AiSearchBox value={query} cleared={cleared} turnstileSiteKey={turnstileSiteKey} />
 
       <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-wrap lg:items-center">
         <div className="min-w-0 lg:flex-1">
