@@ -18,18 +18,22 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # The reconciliation runs on the OpinaCraft site, not on the Monitor API.
+    # It reads the whole catalog inventory out of Neon and pushes each target to
+    # the Monitor API, so only the site can serve it — the Monitor API is the
+    # destination, never the caller.
     env:
-      MONITOR_URL: ${{ secrets.OPINACRAFT_MONITOR_URL }}
-      CRON_MONITOR_SECRET: ${{ secrets.OPINACRAFT_MONITOR_SECRET }}
+      SITE_URL: ${{ secrets.OPINACRAFT_SITE_URL }}
+      CRON_MONITOR_SECRET: ${{ secrets.OPINACRAFT_CRON_MONITOR_SECRET }}
 
     steps:
       - name: Validate reconciliation configuration
         shell: bash
         run: |
-          test -n "$MONITOR_URL" || { echo "::error::The repository secret OPINACRAFT_MONITOR_URL is required."; exit 1; }
-          test -n "$CRON_MONITOR_SECRET" || { echo "::error::The repository secret OPINACRAFT_MONITOR_SECRET is required."; exit 1; }
-          if [[ "${MONITOR_URL,,}" != https://* ]]; then
-            echo "::error::MONITOR_URL must use HTTPS"
+          test -n "$SITE_URL" || { echo "::error::The repository secret OPINACRAFT_SITE_URL is required."; exit 1; }
+          test -n "$CRON_MONITOR_SECRET" || { echo "::error::The repository secret OPINACRAFT_CRON_MONITOR_SECRET is required."; exit 1; }
+          if [[ "${SITE_URL,,}" != https://* ]]; then
+            echo "::error::OPINACRAFT_SITE_URL must use HTTPS"
             exit 1
           fi
 
@@ -40,13 +44,20 @@ jobs:
           HTTP_STATUS=$(curl --silent --show-error --max-time 300 \
             --output "$RESPONSE_FILE" --write-out "%{http_code}" \
             --proto '=https' --proto-redir '=https' \
-            -X POST "$MONITOR_URL/api/internal/monitor/reconcile" \
+            -X POST "$SITE_URL/api/internal/monitor/reconcile" \
             -H "Authorization: Bearer $CRON_MONITOR_SECRET")
           echo "HTTP $HTTP_STATUS"
           cat "$RESPONSE_FILE"
           echo
           case "$HTTP_STATUS" in
             2*) ;;
+            # The Monitor API authenticates before it matches a path, so pointing
+            # this at it answers 404 with its own {"error":"Not found"} rather
+            # than refusing the token. That reads like a missing route and is
+            # really a URL naming the wrong service.
+            404) echo "::error::No reconciliation route at $SITE_URL. OPINACRAFT_SITE_URL must name the OpinaCraft site, not the Monitor API."; exit 1 ;;
+            401) echo "::error::$SITE_URL refused the token. OPINACRAFT_CRON_MONITOR_SECRET must match CRON_MONITOR_SECRET in the site environment, which is not the Monitor API secret."; exit 1 ;;
+            3*) echo "::error::$SITE_URL redirected with HTTP $HTTP_STATUS. Use the host that serves a 200 directly, redirects are not followed."; exit 1 ;;
             *) echo "::error::Reconciliation endpoint returned HTTP $HTTP_STATUS"; exit 1 ;;
           esac
 
