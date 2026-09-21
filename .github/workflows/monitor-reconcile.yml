@@ -1,0 +1,74 @@
+name: Monitor reconciliation
+
+run-name: Monitor reconciliation by @${{ github.actor }}
+
+on:
+  schedule:
+    - cron: "45 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: monitor-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      MONITOR_URL: ${{ secrets.OPINACRAFT_MONITOR_URL }}
+      CRON_MONITOR_SECRET: ${{ secrets.OPINACRAFT_MONITOR_SECRET }}
+
+    steps:
+      - name: Validate reconciliation configuration
+        shell: bash
+        run: |
+          test -n "$MONITOR_URL" || { echo "::error::The repository secret OPINACRAFT_MONITOR_URL is required."; exit 1; }
+          test -n "$CRON_MONITOR_SECRET" || { echo "::error::The repository secret OPINACRAFT_MONITOR_SECRET is required."; exit 1; }
+          if [[ "${MONITOR_URL,,}" != https://* ]]; then
+            echo "::error::MONITOR_URL must use HTTPS"
+            exit 1
+          fi
+
+      - name: Reconcile monitor targets over HTTP
+        shell: bash
+        run: |
+          RESPONSE_FILE="$RUNNER_TEMP/reconcile.json"
+          HTTP_STATUS=$(curl --silent --show-error --max-time 300 \
+            --output "$RESPONSE_FILE" --write-out "%{http_code}" \
+            --proto '=https' --proto-redir '=https' \
+            -X POST "$MONITOR_URL/api/internal/monitor/reconcile" \
+            -H "Authorization: Bearer $CRON_MONITOR_SECRET")
+          echo "HTTP $HTTP_STATUS"
+          cat "$RESPONSE_FILE"
+          echo
+          case "$HTTP_STATUS" in
+            2*) ;;
+            *) echo "::error::Reconciliation endpoint returned HTTP $HTTP_STATUS"; exit 1 ;;
+          esac
+
+      # The endpoint answers 200 even when it reconciled nothing, so the counts
+      # decide whether this run actually did its job. A truncated inventory
+      # deliberately skips orphan deletion, which makes the result partial.
+      - name: Check reconciliation result
+        shell: bash
+        run: |
+          RESPONSE_FILE="$RUNNER_TEMP/reconcile.json"
+          jq . "$RESPONSE_FILE" > /dev/null || { echo "::error::Reconciliation returned a body that is not JSON."; exit 1; }
+          {
+            echo "### Monitor reconciliation"
+            echo
+            echo "| synced | failed | removed | complete |"
+            echo "| --- | --- | --- | --- |"
+            jq -r '"| \(.synced // 0) | \(.failed // 0) | \(.removed // 0) | \(.complete) |"' "$RESPONSE_FILE"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          jq -e '.configured == true' "$RESPONSE_FILE" > /dev/null \
+            || { echo "::error::MONITOR_API_URL and MONITOR_API_SECRET are missing in the target environment; nothing was reconciled."; exit 1; }
+          jq -e '.complete == true' "$RESPONSE_FILE" > /dev/null \
+            || { echo "::error::The catalog inventory could not be read in full, so orphan targets were left untouched."; exit 1; }
+          jq -e '(.failed // 0) == 0' "$RESPONSE_FILE" > /dev/null \
+            || { echo "::error::Some targets failed to reconcile: $(jq -r '.failed' "$RESPONSE_FILE")"; exit 1; }
