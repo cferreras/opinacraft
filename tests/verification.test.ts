@@ -293,7 +293,11 @@ test("Bedrock ping reports the RakNet unconnected ping round-trip", async () => 
       throw new Error("Expected Bedrock latency to be measured");
     }
     assert.ok(latencyMs >= 40);
-    assert.ok(latencyMs <= elapsedMs);
+    // The ping rounds its own measurement to whole milliseconds while this window is measured in
+    // fractions, so the raw bound is not the invariant: an inner 60.6 ms is reported as 61 and can
+    // outrun an outer 60.9 ms whose extra overhead never reaches the next millisecond. Rounding
+    // both sides restores the comparison the assertion is actually making.
+    assert.ok(latencyMs <= Math.round(elapsedMs));
   } finally {
     await new Promise<void>((resolve) => socket.close(() => resolve()));
   }
