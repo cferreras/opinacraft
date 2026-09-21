@@ -82,6 +82,7 @@ export default async function ManageServerPage({ params, searchParams }: Props) 
           <div className="mt-5 grid gap-2.5">
             {query.created ? <Notice>Se creó el borrador. Revísalo y publícalo cuando esté listo.</Notice> : null}
             {query.updated ? <Notice>Se guardaron los datos del servidor.</Notice> : null}
+            {server.publicationStatus === "published" && server.verificationStatus !== "verified" ? <Notice tone="warning">La ficha está publicada, pero no aparecerá en el directorio hasta que vuelvas a verificar la conexión actual.</Notice> : null}
             {query.memberUpdated ? <Notice>Se actualizó la lista de miembros.</Notice> : null}
             {query.memberError ? <Notice tone="warning">La acción sobre el miembro falló: {query.memberError.replaceAll("-", " ")}.</Notice> : null}
           </div>

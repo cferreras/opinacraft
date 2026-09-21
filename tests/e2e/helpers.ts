@@ -118,9 +118,11 @@ export async function createServer(
     if (options.bedrockPort !== undefined) await page.locator('input[name="bedrockPort"]').fill(String(options.bedrockPort));
   }
 
-  if (options.country) await page.locator("#server-country").selectOption(options.country);
+  // Both are required by the form now. The defaults are values no spec filters on, so a server
+  // that does not care about them cannot drift into another spec's expected result set.
+  await page.locator("#server-country").selectOption(options.country ?? "global");
 
-  for (const mode of options.gameModes ?? []) {
+  for (const mode of options.gameModes ?? ["Parkour"]) {
     await page.getByRole("checkbox", { name: mode, exact: true }).check({ force: true });
   }
 

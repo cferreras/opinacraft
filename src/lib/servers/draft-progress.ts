@@ -11,6 +11,8 @@ const draftEditions = ["java", "bedrock"] as const;
 
 export type ServerDraft = {
   name: string;
+  gameModes: string[];
+  country: string;
   host: string;
   javaEnabled: boolean;
   javaPort: string;
@@ -51,6 +53,8 @@ export function serverDraftAddresses(draft: ServerDraft) {
 export function serverDraftRequiredProgress(draft: ServerDraft) {
   const requirements = [
     draft.name.trim().length >= SERVER_NAME_MIN_LENGTH,
+    draft.gameModes.length > 0,
+    draft.country.trim().length > 0,
     draft.host.trim().length > 0,
     serverDraftAddresses(draft).length > 0,
   ];
@@ -60,7 +64,8 @@ export function serverDraftRequiredProgress(draft: ServerDraft) {
 
 export function serverDraftSections(draft: ServerDraft): ServerDraftSection[] {
   return [
-    { id: "identity", number: "01", title: "Identidad y enlaces", optional: false, complete: draft.name.trim().length >= SERVER_NAME_MIN_LENGTH },
+    // The identity section owns three required fields, so it only ticks once all of them are in.
+    { id: "identity", number: "01", title: "Identidad y enlaces", optional: false, complete: draft.name.trim().length >= SERVER_NAME_MIN_LENGTH && draft.gameModes.length > 0 && draft.country.trim().length > 0 },
     { id: "logo", number: "02", title: "Logo del servidor", optional: true, complete: draft.logoName !== null },
     { id: "endpoints", number: "03", title: "Conexión del servidor", optional: false, complete: draft.host.trim().length > 0 && serverDraftAddresses(draft).length > 0 },
     { id: "access", number: "04", title: "Acceso de jugadores", optional: false, complete: true },

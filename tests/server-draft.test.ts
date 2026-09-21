@@ -9,6 +9,8 @@ const readProjectFile = (filePath: string) => readFileSync(path.resolve(filePath
 
 const emptyDraft = {
   name: "",
+  gameModes: [] as string[],
+  country: "",
   host: "",
   javaEnabled: true,
   javaPort: "25565",
@@ -25,7 +27,7 @@ async function loadHelper() {
 test("counts no required field as done in an untouched draft", async () => {
   const { serverDraftRequiredProgress } = await loadHelper();
 
-  assert.deepEqual(serverDraftRequiredProgress(emptyDraft), { completed: 0, total: 3 });
+  assert.deepEqual(serverDraftRequiredProgress(emptyDraft), { completed: 0, total: 5 });
 });
 
 test("counts each required field once the draft fills it", async () => {
@@ -33,11 +35,15 @@ test("counts each required field once the draft fills it", async () => {
 
   assert.deepEqual(
     serverDraftRequiredProgress({ ...emptyDraft, name: "Astral SMP" }),
-    { completed: 1, total: 3 },
+    { completed: 1, total: 5 },
   );
   assert.deepEqual(
-    serverDraftRequiredProgress({ ...emptyDraft, name: "Astral SMP", host: "play.astralsmp.es" }),
-    { completed: 3, total: 3 },
+    serverDraftRequiredProgress({ ...emptyDraft, name: "Astral SMP", gameModes: ["survival"], country: "es" }),
+    { completed: 3, total: 5 },
+  );
+  assert.deepEqual(
+    serverDraftRequiredProgress({ ...emptyDraft, name: "Astral SMP", gameModes: ["survival"], country: "es", host: "play.astralsmp.es" }),
+    { completed: 5, total: 5 },
   );
 });
 
@@ -48,10 +54,12 @@ test("stops counting the edition requirement when every edition is disabled", as
     serverDraftRequiredProgress({
       ...emptyDraft,
       name: "Astral SMP",
+      gameModes: ["survival"],
+      country: "es",
       host: "play.astralsmp.es",
       javaEnabled: false,
     }),
-    { completed: 2, total: 3 },
+    { completed: 4, total: 5 },
   );
 });
 
@@ -62,20 +70,25 @@ test("stops counting the edition requirement when the enabled port is out of ran
     serverDraftRequiredProgress({
       ...emptyDraft,
       name: "Astral SMP",
+      gameModes: ["survival"],
+      country: "es",
       host: "play.astralsmp.es",
       javaPort: "80",
     }),
-    { completed: 2, total: 3 },
+    { completed: 4, total: 5 },
   );
 });
 
-test("marks the identity section complete only once the name reaches its minimum length", async () => {
+test("marks the identity section complete only once its three required fields are in", async () => {
   const { serverDraftSections } = await loadHelper();
   const identityOf = (draft: typeof emptyDraft) =>
     serverDraftSections(draft).find((section: { id: string }) => section.id === "identity");
+  const filled = { ...emptyDraft, name: "Astral SMP", gameModes: ["survival"], country: "es" };
 
-  assert.equal(identityOf({ ...emptyDraft, name: "AS" })?.complete, false);
-  assert.equal(identityOf({ ...emptyDraft, name: "Astral SMP" })?.complete, true);
+  assert.equal(identityOf({ ...filled, name: "AS" })?.complete, false);
+  assert.equal(identityOf({ ...filled, gameModes: [] })?.complete, false);
+  assert.equal(identityOf({ ...filled, country: "" })?.complete, false);
+  assert.equal(identityOf(filled)?.complete, true);
 });
 
 test("keeps the logo section optional and complete only with a chosen file", async () => {

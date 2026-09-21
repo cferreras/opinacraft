@@ -203,6 +203,8 @@ test("server creation rolls back when the owner insert fails", testOptions, asyn
     () =>
       createServer(missingOwnerId, {
         name,
+        gameModes: ["survival"],
+        country: "es",
         endpoints: [{ edition: "java", host: "atomic.example.invalid", port: 25565 }],
       }),
     (error: unknown) => (error as { code?: string; name?: string }).code === "23503" || (error as { name?: string }).name === "UnverifiedEmailError",
@@ -301,6 +303,8 @@ test("changing the Java endpoint invalidates verification", testOptions, async (
   const { createServer, updateServer } = await loadServerServices();
   const created = await createServer(ownerId, {
     name: `Invalidate ${randomUUID()}`,
+    gameModes: ["survival"],
+    country: "es",
     endpoints: [{ edition: "java", host: "old-endpoint.example.invalid", port: 25565 }],
   });
   const server = await database().query("select id from servers where slug = $1", [created.slug]);
@@ -318,6 +322,8 @@ test("changing the Java endpoint invalidates verification", testOptions, async (
 
   await updateServer(ownerId, serverId, {
     name: `Invalidate ${randomUUID()}`,
+    gameModes: ["survival"],
+    country: "es",
     endpoints: [{ edition: "java", host: "new-endpoint.example.invalid", port: 25565 }],
   });
 
@@ -338,6 +344,94 @@ test("changing the Java endpoint invalidates verification", testOptions, async (
   });
 });
 
+test("a published server can move to a new host", testOptions, async () => {
+  const ownerId = await createUser();
+  const { createServer, updateServer } = await loadServerServices();
+  const name = `Relocate ${randomUUID()}`;
+  const created = await createServer(ownerId, {
+    name,
+    gameModes: ["survival"],
+    country: "es",
+    host: `old-${randomUUID()}.example.invalid`,
+    javaPort: 25565,
+  });
+  const server = await database().query("select id from servers where slug = $1", [created.slug]);
+  const serverId = server.rows[0].id as string;
+  createdServerIds.add(serverId);
+  await publishServer(serverId);
+
+  const nextHost = `new-${randomUUID()}.example.invalid`;
+  // The manage form resubmits the current publication state on every save, so the move has to
+  // survive the publish guard instead of rolling the whole edit back.
+  await updateServer(ownerId, serverId, { name, gameModes: ["survival"], country: "es", host: nextHost, javaPort: 25565 }, "published");
+
+  const result = await database().query(
+    `select servers.publication_status, servers.verification_status, server_endpoints.host, server_network_targets.host as target_host
+     from servers
+     join server_endpoints on server_endpoints.server_id = servers.id
+     join server_network_targets on server_network_targets.server_id = servers.id
+     where servers.id = $1`,
+    [serverId],
+  );
+  assert.deepEqual(result.rows[0], {
+    publication_status: "published",
+    verification_status: "unverified",
+    host: nextHost,
+    target_host: nextHost,
+  });
+});
+
+test("publishing still requires a verified endpoint", testOptions, async () => {
+  const ownerId = await createUser();
+  const { createServer, updateServer, NoVerifiedEndpointError } = await loadServerServices();
+  const name = `Unverified ${randomUUID()}`;
+  const created = await createServer(ownerId, {
+    name,
+    gameModes: ["survival"],
+    country: "es",
+    host: `unverified-${randomUUID()}.example.invalid`,
+    javaPort: 25565,
+  });
+  const server = await database().query("select id from servers where slug = $1", [created.slug]);
+  const serverId = server.rows[0].id as string;
+  createdServerIds.add(serverId);
+
+  await assert.rejects(
+    () => updateServer(ownerId, serverId, { name, gameModes: ["survival"], country: "es", host: `unverified-${randomUUID()}.example.invalid`, javaPort: 25565 }, "published"),
+    NoVerifiedEndpointError,
+  );
+
+  const result = await database().query("select publication_status from servers where id = $1", [serverId]);
+  assert.equal(result.rows[0].publication_status, "draft");
+});
+
+test("an existing server cannot be saved without a game mode or a country", testOptions, async () => {
+  const ownerId = await createUser();
+  const { createServer, updateServer } = await loadServerServices();
+  const name = `Required ${randomUUID()}`;
+  const host = `required-${randomUUID()}.example.invalid`;
+  const created = await createServer(ownerId, { name, gameModes: ["survival"], country: "es", host, javaPort: 25565 });
+  const server = await database().query("select id from servers where slug = $1", [created.slug]);
+  const serverId = server.rows[0].id as string;
+  createdServerIds.add(serverId);
+
+  const { ServerInputError } = await import("../src/lib/servers/validation.ts");
+  const cases = [
+    { field: "gameModes", input: { name, gameModes: [], country: "es", host, javaPort: 25565 } },
+    { field: "country", input: { name, gameModes: ["survival"], country: undefined, host, javaPort: 25565 } },
+  ];
+  for (const { field, input } of cases) {
+    await assert.rejects(
+      () => updateServer(ownerId, serverId, input),
+      (error: unknown) => error instanceof ServerInputError && error.field === field,
+    );
+  }
+
+  // The rejection has to leave the stored modes alone rather than blanking them on the way out.
+  const stored = await database().query("select mode from server_game_modes where server_id = $1", [serverId]);
+  assert.deepEqual(stored.rows.map((row) => row.mode), ["survival"]);
+});
+
 test("permissions are revalidated inside the update transaction", testOptions, async () => {
   const ownerId = await createUser();
   const outsiderId = await createUser();
@@ -345,6 +439,8 @@ test("permissions are revalidated inside the update transaction", testOptions, a
   const { ServerPermissionError } = await import("../src/lib/servers/permissions.ts");
   const created = await createServer(ownerId, {
     name: `Permission ${randomUUID()}`,
+    gameModes: ["survival"],
+    country: "es",
     endpoints: [{ edition: "java", host: "permission.example.invalid", port: 25565 }],
   });
   const server = await database().query("select id, name from servers where slug = $1", [created.slug]);
@@ -355,6 +451,8 @@ test("permissions are revalidated inside the update transaction", testOptions, a
     () =>
       updateServer(outsiderId, serverId, {
         name: "Unauthorized update",
+        gameModes: ["survival"],
+        country: "es",
         endpoints: [{ edition: "java", host: "permission.example.invalid", port: 25565 }],
       }),
     ServerPermissionError,

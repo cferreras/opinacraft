@@ -113,6 +113,8 @@ test("backfill locks history writes while rebuilding overlapping buckets", () =>
 test("normalizes one shared host with optional edition ports", () => {
   const normalized = normalizeCreateServerInput({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     host: " PLAY.Example.COM. ",
     javaPort: 25565,
     bedrockPort: 19132,
@@ -128,8 +130,8 @@ test("normalizes one shared host with optional edition ports", () => {
     accessFormUrl: null,
     accountMode: "premium_only",
     authMode: "direct",
-    gameModes: [],
-    country: null,
+    gameModes: ["survival"],
+    country: "es",
     host: "play.example.com",
     endpoints: [
       { edition: "java", host: "play.example.com", port: 25565 },
@@ -141,6 +143,8 @@ test("normalizes one shared host with optional edition ports", () => {
 test("requires at least one edition port for a shared host", () => {
   assert.equal(createServerInputSchema.safeParse({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     host: "play.example.com",
   }).success, false);
 });
@@ -148,11 +152,13 @@ test("requires at least one edition port for a shared host", () => {
 test("rejects legacy payloads that try to keep different hosts per edition", () => {
   assert.throws(() => normalizeCreateServerInput({
     name: "A Minecraft Community",
+    gameModes: ["survival"],
+    country: "es",
     endpoints: [
       { edition: "java", host: "java.example.com" },
       { edition: "bedrock", host: "bedrock.example.com" },
     ],
-  }), /same host/i);
+  }), /mismo host/i);
 });
 
 test("legacy history edition parameters always resolve to the canonical server view", () => {

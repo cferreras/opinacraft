@@ -102,7 +102,7 @@ export async function updateServerAction(
     .safeParse(publication);
 
   if (publication && !publicationStatus.success) {
-    return { fieldErrors: { publicationStatus: "Choose a valid publication state." } };
+    return { fieldErrors: { publicationStatus: "Elige un estado de publicación válido." } };
   }
 
   try {
@@ -116,8 +116,8 @@ export async function updateServerAction(
     if (error instanceof z.ZodError) {
       const field = serverValidationField(error.issues[0]?.path ?? []);
       return field
-        ? { fieldErrors: { [field]: error.issues[0]?.message ?? "Invalid server details." } }
-        : { formError: error.issues[0]?.message ?? "Invalid server details." };
+        ? { fieldErrors: { [field]: error.issues[0]?.message ?? "Revisa los datos del servidor." } }
+        : { formError: error.issues[0]?.message ?? "Revisa los datos del servidor." };
     }
     if (error instanceof ServerInputError) {
       const field = error.field === "host" || error.field === "port" ? "endpoints" : error.field;
@@ -127,7 +127,7 @@ export async function updateServerAction(
       return { formError: error.message };
     }
     if (error instanceof ServerNotFoundError) {
-      return { formError: "This server is no longer available." };
+      return { formError: "Este servidor ya no está disponible." };
     }
     if (error instanceof UnverifiedEmailError) {
       return { formError: `${error.message} Revisa tu perfil para reenviar el enlace.` };
@@ -136,10 +136,10 @@ export async function updateServerAction(
       return { formError: error.message };
     }
     if (error instanceof DuplicateEndpointError || (databaseErrorCode(error) === "23505" && databaseConstraint(error) === "server_endpoints_verified_edition_host_port_key")) {
-      return { fieldErrors: { endpoints: "One of these addresses is already registered." } };
+      return { fieldErrors: { endpoints: "Ya hay un servidor registrado con esta dirección." } };
     }
     console.error("Failed to update server", error instanceof Error ? error.name : "unknown");
-    return { formError: "Unable to update the server right now." };
+    return { formError: "No se han podido guardar los cambios. Inténtalo de nuevo en unos minutos." };
   }
 
   await processMonitorSyncOutbox({ serverId, limit: 1 }).catch((error) => {

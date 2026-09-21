@@ -73,16 +73,25 @@ export type NormalizedCreateServerInput = {
   accountMode: ServerAccountMode;
   authMode: ServerAuthMode;
   gameModes: string[];
-  country: string | null;
+  country: string;
   host: string;
   endpoints: NormalizedServerEndpoint[];
 };
+
+// `parseEnabledPort` turns a cleared field into NaN, so the type error needs a message of its own:
+// zod's default ("expected number, received NaN") reads like a crash next to the port input.
+const PORT_RANGE_MESSAGE = `Usa un puerto entre ${MINECRAFT_PORT_MIN} y ${MINECRAFT_PORT_MAX}.`;
+const portSchema = z
+  .number({ error: "Escribe el puerto de esta edición." })
+  .int("Escribe el puerto de esta edición.")
+  .min(MINECRAFT_PORT_MIN, PORT_RANGE_MESSAGE)
+  .max(MINECRAFT_PORT_MAX, PORT_RANGE_MESSAGE);
 
 const endpointSchema = z
   .object({
     edition: z.enum(minecraftEditions),
     host: z.string().trim().min(1).max(253),
-    port: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
+    port: portSchema.optional(),
   })
   .strict();
 
@@ -101,8 +110,8 @@ export const createServerInputSchema = z
     gameModes: z.array(z.string().trim().min(1).max(32)).max(MAX_SERVER_GAME_MODES, `Elige hasta ${MAX_SERVER_GAME_MODES} modos de juego.`).optional(),
     country: z.string().trim().max(8).optional(),
     host: z.string().trim().min(1).max(253).optional(),
-    javaPort: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
-    bedrockPort: z.number().int().min(MINECRAFT_PORT_MIN, "Use a public port between 1024 and 65535.").max(MINECRAFT_PORT_MAX).optional(),
+    javaPort: portSchema.optional(),
+    bedrockPort: portSchema.optional(),
     endpoints: z.array(endpointSchema).min(1).max(2).optional(),
   })
   .strict()
@@ -113,13 +122,13 @@ export const createServerInputSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["host"],
-        message: "Provide one shared host and its ports.",
+        message: "Indica un host compartido y sus puertos.",
       });
     } else if (usesSharedHost && input.javaPort === undefined && input.bedrockPort === undefined) {
       ctx.addIssue({
         code: "custom",
         path: ["host"],
-        message: "Enable at least one Minecraft edition.",
+        message: "Activa al menos una edición de Minecraft.",
       });
     } else if (input.endpoints) {
       const editions = new Set(input.endpoints.map((endpoint) => endpoint.edition));
@@ -127,7 +136,7 @@ export const createServerInputSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["endpoints"],
-          message: "Only one endpoint per Minecraft edition is allowed.",
+          message: "Solo se permite una dirección por edición de Minecraft.",
         });
       }
     }
@@ -165,6 +174,8 @@ export class ServerInputError extends Error {
     | "storeUrl"
     | "discordUrl"
     | "accessFormUrl"
+    | "gameModes"
+    | "country"
     | "endpoints"
     | "host"
     | "port";
@@ -178,6 +189,8 @@ export class ServerInputError extends Error {
       | "storeUrl"
       | "discordUrl"
       | "accessFormUrl"
+      | "gameModes"
+      | "country"
       | "endpoints"
       | "host"
       | "port" = "endpoints",
@@ -193,11 +206,23 @@ function emptyToUndefined(value: string | undefined) {
   return trimmed ? trimmed : undefined;
 }
 
+// Pasting the address the way players type it — with a scheme, or with the port glued on — is the
+// usual way this field fails, so each shape gets the message that says what to remove.
+function invalidHostError(candidate: string) {
+  if (candidate.includes("://")) {
+    return new ServerInputError("Escribe solo el dominio o la IP, sin http:// ni https://.", "host");
+  }
+  if (/^[^:]+:\d+$/.test(candidate)) {
+    return new ServerInputError("Escribe solo el dominio o la IP: el puerto va en su propio campo.", "host");
+  }
+  return new ServerInputError("Escribe un dominio o una IP válidos.", "host");
+}
+
 export function normalizeHost(value: string) {
   const candidate = value.trim().replace(/\.$/, "");
 
   if (!candidate || /[\s/?#@]/.test(candidate) || candidate.includes("://")) {
-    throw new ServerInputError("Enter a valid Minecraft host.", "host");
+    throw invalidHostError(candidate);
   }
 
   const ipCandidate = candidate.replace(/^\[|\]$/g, "");
@@ -207,7 +232,7 @@ export function normalizeHost(value: string) {
       const normalized = new URL(`http://[${ipCandidate}]`).hostname;
       return normalized.replace(/^\[|\]$/g, "").toLowerCase();
     } catch {
-      throw new ServerInputError("Enter a valid IPv6 address.", "host");
+      throw new ServerInputError("Escribe una dirección IPv6 válida.", "host");
     }
   }
 
@@ -224,7 +249,7 @@ export function normalizeHost(value: string) {
     ascii.length > 253 ||
     labels.some((label) => !label || !validLabel.test(label))
   ) {
-    throw new ServerInputError("Enter a valid Minecraft host.", "host");
+    throw invalidHostError(candidate);
   }
 
   return ascii;
@@ -263,7 +288,7 @@ export function normalizeHttpUrl(value: string, field: ServerUrlField) {
   try {
     parsed = new URL(candidate);
   } catch {
-    throw new ServerInputError("Enter a valid URL.", field);
+    throw new ServerInputError("Escribe una URL válida.", field);
   }
 
   if (
@@ -271,7 +296,7 @@ export function normalizeHttpUrl(value: string, field: ServerUrlField) {
     parsed.username ||
     parsed.password
   ) {
-    throw new ServerInputError("Enter a valid public HTTP(S) URL.", field);
+    throw new ServerInputError("Escribe una URL pública que empiece por http:// o https://.", field);
   }
 
   if (field === "discordUrl") {
@@ -284,7 +309,7 @@ export function normalizeHttpUrl(value: string, field: ServerUrlField) {
         path.length > "/invite/".length);
 
     if (!isInvite) {
-      throw new ServerInputError("Use a Discord invitation URL.", field);
+      throw new ServerInputError("Usa un enlace de invitación de Discord (discord.gg/…).", field);
     }
   }
 
@@ -323,7 +348,7 @@ export function normalizeCreateServerInput(
   const legacyHosts = parsed.endpoints?.map((endpoint) => normalizeHost(endpoint.host)) ?? [];
   const host = normalizeHost(parsed.host ?? legacyHosts[0] ?? "");
   if (legacyHosts.some((candidate) => candidate !== host)) {
-    throw new ServerInputError("Use the same host for Java and Bedrock.", "host");
+    throw new ServerInputError("Usa el mismo host para Java y Bedrock.", "host");
   }
 
   const endpoints = parsed.endpoints
@@ -339,9 +364,22 @@ export function normalizeCreateServerInput(
 
   if (!isPublicHost(host)) {
     throw new ServerInputError(
-      "Use a public Minecraft hostname or IP address.",
+      "Usa un dominio o una IP pública: las direcciones locales o privadas no son accesibles para los jugadores.",
       "host",
     );
+  }
+
+  const gameModes = normalizeGameModeInputs(parsed.gameModes);
+  if (!gameModes.length) {
+    throw new ServerInputError(
+      "Elige al menos un modo de juego: es como los jugadores encuentran tu servidor en el catálogo.",
+      "gameModes",
+    );
+  }
+
+  const country = normalizeCountryInput(parsed.country);
+  if (!country) {
+    throw new ServerInputError("Elige el país de la comunidad.", "country");
   }
 
   return {
@@ -362,8 +400,8 @@ export function normalizeCreateServerInput(
       : null,
     accountMode: parsed.accountMode,
     authMode: parsed.authMode,
-    gameModes: normalizeGameModeInputs(parsed.gameModes),
-    country: normalizeCountryInput(parsed.country),
+    gameModes,
+    country,
     host,
     endpoints,
   };
