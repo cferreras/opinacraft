@@ -4,16 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FilterSelect } from "@/components/filter-select";
 import { AiSearchBox } from "@/components/ai-search-box";
-import { catalogAccessOptions, catalogEditionOptions, type CatalogAccessFilter } from "@/lib/servers/catalog-filters";
+import { accessIntentLabel, catalogAccessOptions, catalogEditionOptions, isCatalogAccessFilter } from "@/lib/servers/catalog-filters";
 import { nicheGameModes, popularGameModes } from "@/lib/servers/game-modes";
-import { serverCountries } from "@/lib/servers/countries";
+import { findServerRegion, isServerCountryCode, serverCountries } from "@/lib/servers/countries";
 
 type CatalogFilterBarProps = {
   query: string;
   mode?: string;
   version?: string;
+  /** A country code, or a region code when the selection is exactly a region. */
   country?: string;
-  access?: CatalogAccessFilter;
+  /** A stored access value, or an intent code when the selection is exactly an intent. */
+  access?: string;
   edition?: string;
   versionOptions: readonly string[];
   clearHref?: string;
@@ -39,6 +41,12 @@ export function CatalogFilterBar({
   // the visitor had typed without sending it, so the search box is told the catalog is unfiltered
   // again instead of inferring it from a value that never changed.
   const cleared = !query && !mode && !version && !country && !access && !edition;
+
+  // A group the search box inferred is not one of the picker's options, so it is added as one. The
+  // alternative was showing "Todos" over an active filter, or the first of eighteen countries as if
+  // it were the whole selection — both of which would have the control lie about the results.
+  const countryRegion = country && !isServerCountryCode(country) ? findServerRegion(country) : null;
+  const accessIntent = access && !isCatalogAccessFilter(access) ? access : null;
 
   return (
     <Card className="gap-3 px-4 py-4">
@@ -69,11 +77,13 @@ export function CatalogFilterBar({
         <div className="min-w-0 lg:flex-1">
           <FilterSelect id="country-filter" name="country" label="País" value={country ?? ""} submitOnChange variant="pill">
             <option value="">Todos</option>
+            {countryRegion ? <option value={countryRegion.code}>{countryRegion.label}</option> : null}
             {serverCountries.map((option) => <option key={option.code} value={option.code}>{option.flag} {option.label}</option>)}
           </FilterSelect>
         </div>
         <div className="col-span-2 row-start-3 min-w-0 lg:col-span-1 lg:row-auto lg:flex-1">
           <FilterSelect id="access-filter" name="access" label="Acceso" accessibleLabel="Tipo de acceso" value={access ?? ""} submitOnChange variant="pill">
+            {accessIntent ? <option value={accessIntent}>{accessIntentLabel(accessIntent)}</option> : null}
             {catalogAccessOptions.map((option) => <option key={option.value || "all"} value={option.value}>{option.label}</option>)}
           </FilterSelect>
         </div>

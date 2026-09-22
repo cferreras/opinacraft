@@ -13,7 +13,7 @@ import {
   parseGameModeParam,
   parseGameModeParams,
 } from "@/lib/servers/game-modes";
-import { normalizeCountryInput, parseCountryParam, serverCountries } from "@/lib/servers/countries";
+import { countryParamValues, normalizeCountryInput, parseCountryParam, parseCountryParams, serverCountries } from "@/lib/servers/countries";
 import * as catalogFilters from "@/lib/servers/catalog-filters";
 import {
   REPORTED_PADDING_SQL_PATTERN,
@@ -146,6 +146,33 @@ test("countries are ISO codes plus the explicit global option", () => {
   assert.equal(normalizeCountryInput(""), null);
 });
 
+test("the country parameter repeats, and accepts a region that stands for many", () => {
+  assert.deepEqual(parseCountryParams(undefined), []);
+  assert.deepEqual(parseCountryParams("ES"), ["es"]);
+  // Catalog order, which puts Mexico before Argentina; not the order they were typed in.
+  assert.deepEqual(parseCountryParams([" ar ", "MX"]), ["mx", "ar"], "catalog order, trimmed and lowercased");
+  assert.deepEqual(parseCountryParams(["es", "es"]), ["es"], "duplicates collapse");
+  assert.deepEqual(parseCountryParams(["zz"]), [], "an unknown code drops out instead of failing the page");
+
+  const latam = parseCountryParams("latam");
+  assert.ok(latam.length > 10 && latam.includes("mx") && !latam.includes("es"));
+  // And back again, so the URL a region produces is the short one rather than eighteen parameters.
+  assert.deepEqual(countryParamValues(latam), ["latam"]);
+  assert.deepEqual(countryParamValues(["es", "mx"]), ["es", "mx"]);
+  assert.deepEqual(countryParamValues(["es"]), ["es"]);
+});
+
+test("the access parameter repeats, and accepts an intent that stands for two values", () => {
+  assert.deepEqual(catalogFilters.parseCatalogAccessParams("premium"), ["premium"]);
+  assert.deepEqual(catalogFilters.parseCatalogAccessParams(["whitelist", "premium"]), ["premium", "whitelist"]);
+  assert.deepEqual(catalogFilters.parseCatalogAccessParams(["nope"]), []);
+  assert.deepEqual(catalogFilters.parseCatalogAccessParams("no-premium"), ["non-premium", "semi-premium"]);
+  assert.deepEqual(catalogFilters.accessParamValues(["non-premium", "semi-premium"]), ["no-premium"]);
+  assert.deepEqual(catalogFilters.accessParamValues(["premium"]), ["premium"]);
+  // `premium` names one stored value and one intent covering only itself, so it round-trips as one.
+  assert.deepEqual(catalogFilters.parseCatalogAccessParams(catalogFilters.accessParamValues(["premium"])), ["premium"]);
+});
+
 test("reads every major version out of what the monitor reported", () => {
   assert.deepEqual(minecraftVersionsIn("Paper 1.21.4"), ["1.21"]);
   assert.deepEqual(minecraftVersionsIn("Purpur 26.2"), ["26.2"]);
@@ -270,7 +297,9 @@ test("the catalog reads every facet back out of the query string", () => {
 
   assert.match(source, /const modes = parseGameModeParams\(query\.mode\)/);
   assert.match(source, /const version = parseVersionParam\(query\.version\)/);
-  assert.match(source, /const country = parseCountryParam\(query\.country\)/);
+  assert.match(source, /const countries = parseCountryParams\(query\.country\)/);
+  assert.match(source, /const access = parseCatalogAccessParams\(query\.access\)/);
+  assert.match(source, /const edition = parseCatalogEditionParam\(query\.edition\)/);
   // The bar lost its sort control, so the form has to carry the visitor's ordering itself.
   assert.match(source, /name="sort" value=\{sort\}/);
 });
