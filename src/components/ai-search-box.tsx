@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { Check, Search, Sparkles, X } from "lucide-react";
-import type { ChangeEvent, KeyboardEvent } from "react";
+import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,10 +89,30 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
   const judging = judgingNavigation && isNavigating;
   const [interpreting, setInterpreting] = useState(false);
   const [showInteractive, setShowInteractive] = useState(false);
+  /**
+   * Whether Cloudflare has decided this visitor must answer something.
+   *
+   * The invisible widget lives in an `sr-only` box, which is 1x1px and `clip`ped. That is right up
+   * until the challenge turns interactive: Cloudflare then draws the checkbox *in that box*, where
+   * nobody can see or reach it, and waits for an answer that can never come. No error fires, because
+   * from Turnstile's side nothing is wrong — it is waiting. The box hung on "verificando" forever.
+   *
+   * So `before-interactive-callback` lifts the widget into the page, and
+   * `after-interactive-callback` puts it back.
+   */
+  const [challengeVisible, setChallengeVisible] = useState(false);
 
   const invisibleRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<string | null>(null);
+  /**
+   * A focus that happened before the widget existed.
+   *
+   * The script is loaded with `lazyOnload`, so focusing the box early found no `window.turnstile` and
+   * gave up silently — the visitor typed, nothing verified, and the AI layer never woke up until they
+   * clicked away and back. The intent is remembered here and acted on the moment the widget is ready.
+   */
+  const challengeWantedRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRef = useRef<AbortController | null>(null);
 
@@ -128,13 +148,26 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
   /** The invisible widget: created once, executed on demand, never shown unprompted. */
   const renderInvisibleWidget = useCallback(() => {
     if (!turnstileSiteKey || !window.turnstile || !invisibleRef.current || widgetRef.current) return;
-    widgetRef.current = window.turnstile.render(invisibleRef.current, {
+    const widgetId = window.turnstile.render(invisibleRef.current, {
       sitekey: turnstileSiteKey,
       execution: "execute",
       appearance: "interaction-only",
-      callback: (token: string) => { void startSession(token); },
-      "error-callback": () => { setAiState("unavailable"); return true; },
+      callback: (token: string) => {
+        setChallengeVisible(false);
+        void startSession(token);
+      },
+      "error-callback": () => { setChallengeVisible(false); setAiState("unavailable"); return true; },
+      // The challenge needs the visitor. It cannot be answered inside a clipped 1x1 box, so the box
+      // stops being one.
+      "before-interactive-callback": () => setChallengeVisible(true),
+      "after-interactive-callback": () => setChallengeVisible(false),
+      // An interactive challenge nobody solved in time. Without this the widget simply stops and the
+      // box waits on a token that is never coming; with it the visitor is told and offered the way back.
+      "timeout-callback": () => { setChallengeVisible(false); setAiState("unavailable"); },
+      // Turnstile cannot run here at all. Saying so beats spinning.
+      "unsupported-callback": () => { setChallengeVisible(false); setAiState("unavailable"); return true; },
       "expired-callback": () => {
+        setChallengeVisible(false);
         setAiState("idle");
         try {
           window.sessionStorage.removeItem(SESSION_MARKER);
@@ -143,6 +176,14 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
         }
       },
     });
+    widgetRef.current = widgetId;
+
+    // Someone focused the box while the script was still loading. Honour it now.
+    if (challengeWantedRef.current && widgetId) {
+      challengeWantedRef.current = false;
+      setAiState("verifying");
+      window.turnstile.execute(widgetId);
+    }
   }, [startSession, turnstileSiteKey]);
 
   /**
@@ -158,7 +199,12 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
       setAiState("ready");
       return;
     }
-    if (!widgetRef.current || !window.turnstile) return;
+    if (!widgetRef.current || !window.turnstile) {
+      // Not ready yet. Remembered rather than dropped, so the wait is the script's and not the
+      // visitor's second click.
+      challengeWantedRef.current = true;
+      return;
+    }
     setAiState("verifying");
     window.turnstile.execute(widgetRef.current);
   }, [aiState]);
@@ -248,6 +294,34 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
     setSuggestions((current) => current.filter((item) => !(item.kind === suggestion.kind && item.value === suggestion.value)));
   }
 
+  /**
+   * What the box has to say right now, or nothing. Derived in one place so the announced text and the
+   * shown text are the same text by construction.
+   */
+  const hint: { text: string; icon?: ReactNode; action?: ReactNode } | null =
+    judging
+      // Judging is one request per server, so it is seconds rather than milliseconds. Saying so while
+      // the wait happens is the difference between "slow" and "working".
+      ? { text: "Valorando cada servidor con lo que has escrito…", icon: <Sparkles aria-hidden="true" className="size-3.5 animate-pulse text-primary" /> }
+      : interpreting
+      ? { text: "Interpretando tu búsqueda…", icon: <Sparkles aria-hidden="true" className="size-3.5 animate-pulse" /> }
+      : aiState === "verifying" && challengeVisible
+        ? { text: "Cloudflare necesita que confirmes que eres una persona." }
+        : aiState === "unavailable"
+          ? {
+            text: "Búsqueda con IA no disponible ahora mismo. La búsqueda normal sigue funcionando.",
+            action: (
+              <button type="button" onClick={verifyInteractively} className="font-medium text-foreground underline underline-offset-2 hover:text-primary">
+                ¿Eres humano? Verifícate
+              </button>
+            ),
+          }
+          // States the capability rather than confirming an activation: nobody asked for it to be
+          // switched on, and "activada" reads like a system log.
+          : aiState === "ready"
+            ? { text: "Entiende frases enteras, no solo palabras.", icon: <Check aria-hidden="true" className="size-3.5" /> }
+            : null;
+
   return (
     <>
       {turnstileSiteKey ? (
@@ -274,26 +348,32 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
         <FilterFormSubmitButton>Buscar</FilterFormSubmitButton>
       </div>
 
-      {/* The invisible widget needs a node to live in even though it draws nothing. */}
-      <div ref={invisibleRef} className="sr-only" aria-hidden="true" />
+      {/* Hidden while the challenge is silent, and a real part of the page the moment it is not:
+          a widget the visitor must answer has to be somewhere they can see and reach. */}
+      <div
+        ref={invisibleRef}
+        aria-hidden={challengeVisible ? undefined : true}
+        className={challengeVisible ? "flex min-h-[65px] items-center" : "sr-only"}
+      />
 
-      <p id="server-search-hint" aria-live="polite" className="flex min-h-5 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        {/* Judging runs one request per server, so it is seconds rather than milliseconds. Saying so
-            before the navigation is the difference between "slow" and "working". */}
-        {judging ? <><Sparkles aria-hidden="true" className="size-3.5 animate-pulse text-primary" /> Valorando cada servidor con lo que has escrito…</> : null}
-        {interpreting && !judging ? <><Sparkles aria-hidden="true" className="size-3.5 animate-pulse" /> Interpretando tu búsqueda…</> : null}
-        {/* States the capability rather than confirming an activation: nobody asked for it to be
-            switched on, and "activada" reads like a system log. */}
-        {!interpreting && !judging && aiState === "ready" ? <><Check aria-hidden="true" className="size-3.5" /> Entiende frases enteras, no solo palabras.</> : null}
-        {!interpreting && aiState === "unavailable" ? (
-          <>
-            Búsqueda con IA no disponible ahora mismo. La búsqueda normal sigue funcionando.
-            <button type="button" onClick={verifyInteractively} className="font-medium text-foreground underline underline-offset-2 hover:text-primary">
-              ¿Eres humano? Verifícate
-            </button>
-          </>
-        ) : null}
-      </p>
+      {/*
+        Two elements rather than one, and the reason is the gap this used to leave.
+        A single `<p>` with `min-h-5` reserved its line whether or not it had anything to say, and as
+        a flex child it also cost the card's `gap-3` — so an idle box carried a visible hole. It cannot
+        simply be dropped when empty either: an `aria-live` region has to be in the document *before*
+        its content changes, or the change is never announced.
+        So the live region is permanent and weightless, and the visible line exists only when there is
+        a line. It is `aria-hidden` because the region above already says the same thing.
+      */}
+      <p id="server-search-hint" aria-live="polite" className="sr-only">{hint?.text ?? ""}</p>
+
+      {hint ? (
+        <p aria-hidden="true" className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          {hint.icon}
+          {hint.text}
+          {hint.action}
+        </p>
+      ) : null}
 
       {showInteractive ? <div ref={interactiveRef} className="min-h-[65px]" /> : null}
 
