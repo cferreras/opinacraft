@@ -12,6 +12,12 @@
  * whole query as one phrase against a name or description, so combining it with a mode filter
  * would intersect two narrow sets and usually return nothing. So: if we understood the query,
  * we filter by what we understood; if we did not, we search for what was typed.
+ *
+ * There is a third answer this module can report but never acts on: some queries ask for something
+ * no facet can express ("pocos miembros", "de chill"), and for those the honest reply is that the
+ * cheap answer is incomplete. It says so with {@link SearchInterpretation.needsSemantic} and leaves
+ * the spending decision to the caller, which is the only place that knows whether the visitor
+ * pressed Enter, whether there is budget, and what a per-server judgement would cost today.
  */
 
 import { isFullyResolved, resolveFromDictionary } from "./dictionary";
@@ -23,6 +29,13 @@ import { MAX_SERVER_GAME_MODES, gameModes } from "@/lib/servers/game-modes";
 import { serverCountries } from "@/lib/servers/countries";
 import { catalogAccessValues } from "@/lib/servers/catalog-filters";
 
+/**
+ * At or above this, the query is reported as needing per-server judgement. High on purpose and
+ * biased toward the cheap road: this is a model deciding to spend twenty requests instead of none,
+ * so it should only do so when the query plainly asks for something no facet can express.
+ */
+export const SEMANTIC_ROUTE_THRESHOLD = 0.7;
+
 /** Where the answer came from. Reported back so the route can log it and the UI can explain it. */
 export type SearchInterpretationSource = "empty" | "dictionary" | "cache" | "jev" | "keyword";
 
@@ -33,6 +46,18 @@ export type SearchInterpretation = {
   /** What belongs in `?q=`: the visitor's own text, or nothing when the filters replace it. */
   keyword: string;
   normalizedQuery: string;
+  /**
+   * The query asks for something the facets cannot express, so this answer is incomplete on its
+   * own. The caller decides whether to pay for a per-server judgement.
+   */
+  needsSemantic: boolean;
+  /**
+   * The subset of the filters that came from a literal dictionary match rather than from
+   * inference. Exact, so it can narrow a semantic search without guessing: "en latam" is a word
+   * the visitor wrote, and a Spanish server does not satisfy it however well it scores. Inferred
+   * facets are not safe that way, which is why they are not in here.
+   */
+  exactFilters: SearchFilters;
 };
 
 export type InterpretDeps = {
@@ -46,12 +71,18 @@ export type InterpretDeps = {
   bands?: ConfidenceBands;
   ttlHours?: number;
   now?: () => Date;
+  semanticThreshold?: number;
 };
 
 const emptyFilters: SearchFilters = { modes: [], countries: [], access: [] };
 
-function keywordOnly(query: string, normalizedQuery: string, source: SearchInterpretationSource, suggested: SearchSuggestion[] = []): SearchInterpretation {
-  return { source, filters: emptyFilters, suggested, keyword: query.trim(), normalizedQuery };
+type Outcome = {
+  exact: SearchFilters;
+  needsSemantic: boolean;
+};
+
+function keywordOnly(query: string, normalizedQuery: string, source: SearchInterpretationSource, { exact, needsSemantic }: Outcome, suggested: SearchSuggestion[] = []): SearchInterpretation {
+  return { source, filters: emptyFilters, suggested, keyword: query.trim(), normalizedQuery, needsSemantic, exactFilters: exact };
 }
 
 /**
@@ -62,10 +93,15 @@ function keywordOnly(query: string, normalizedQuery: string, source: SearchInter
  * as one string and found nothing, while "survival" on its own filters correctly. The word we could
  * not place is dropped rather than searched for, which is the trade the rest of the pipeline already
  * makes — we filter by what we understood instead of grepping for what we did not.
+ *
+ * `needsSemantic` is false here whatever the query asked for: with no reading there is no judgement
+ * saying it needs one, and guessing "probably yes" would spend twenty requests on the strength of
+ * a failed call.
  */
 function withoutInference(query: string, normalizedQuery: string, exact: SearchFilters): SearchInterpretation {
-  if (!hasFilters(exact)) return keywordOnly(query, normalizedQuery, "keyword");
-  return { source: "dictionary", filters: exact, suggested: [], keyword: "", normalizedQuery };
+  const outcome: Outcome = { exact, needsSemantic: false };
+  if (!hasFilters(exact)) return keywordOnly(query, normalizedQuery, "keyword", outcome);
+  return { source: "dictionary", filters: exact, suggested: [], keyword: "", normalizedQuery, needsSemantic: false, exactFilters: exact };
 }
 
 /**
@@ -107,22 +143,29 @@ function asSuggestions(filters: SearchFilters, confidence: number): SearchSugges
  * actually wants — so it runs, and everything we inferred is offered as a chip instead of being
  * imposed. Keeping that decision here rather than in the cache means it can be retuned without
  * re-inferring anything.
+ *
+ * Naming a server also settles the routing question: "hypixel" is a lookup, not a description, so
+ * it never needs every server read individually however the router answered.
  */
-function applyPolicy(query: string, normalizedQuery: string, exact: SearchFilters, reading: CachedInterpretation, source: SearchInterpretationSource): SearchInterpretation {
+function applyPolicy(query: string, normalizedQuery: string, exact: SearchFilters, reading: CachedInterpretation, source: SearchInterpretationSource, semanticThreshold: number): SearchInterpretation {
   const filters = mergeFilters(exact, reading.filters);
+  const needsSemantic = !reading.namesServer && reading.needsSemantic >= semanticThreshold;
+  const outcome: Outcome = { exact, needsSemantic };
 
-  if (!hasFilters(filters)) return keywordOnly(query, normalizedQuery, "keyword", reading.suggested);
+  if (!hasFilters(filters)) return keywordOnly(query, normalizedQuery, "keyword", outcome, reading.suggested);
   if (reading.namesServer) {
-    return keywordOnly(query, normalizedQuery, "keyword", [...asSuggestions(filters, 1), ...reading.suggested]);
+    return keywordOnly(query, normalizedQuery, "keyword", { exact, needsSemantic: false }, [...asSuggestions(filters, 1), ...reading.suggested]);
   }
 
-  return { source, filters, suggested: reading.suggested, keyword: "", normalizedQuery };
+  return { source, filters, suggested: reading.suggested, keyword: "", normalizedQuery, needsSemantic, exactFilters: exact };
 }
 
 export async function interpretSearchQuery(query: string, deps: InterpretDeps): Promise<SearchInterpretation> {
-  const { ask, cache = noSearchCache, allowInference, bands, ttlHours = 72, now = () => new Date() } = deps;
+  const { ask, cache = noSearchCache, allowInference, bands, ttlHours = 72, now = () => new Date(), semanticThreshold = SEMANTIC_ROUTE_THRESHOLD } = deps;
   const normalizedQuery = normalizeSearchQuery(query);
-  if (!normalizedQuery) return { source: "empty", filters: emptyFilters, suggested: [], keyword: "", normalizedQuery };
+  if (!normalizedQuery) {
+    return { source: "empty", filters: emptyFilters, suggested: [], keyword: "", normalizedQuery, needsSemantic: false, exactFilters: emptyFilters };
+  }
 
   const dictionary = resolveFromDictionary(normalizedQuery);
   // Spread rather than `edition: dictionary.edition`, so an unresolved edition leaves no key at
@@ -134,15 +177,16 @@ export async function interpretSearchQuery(query: string, deps: InterpretDeps): 
     ...(dictionary.edition ? { edition: dictionary.edition } : {}),
   };
 
-  // Nothing left to interpret: the whole query is already a filter.
+  // Nothing left to interpret: the whole query is already a filter. A certainty that costs nothing
+  // beats a judgement that costs a request, so the router is never asked about these.
   if (isFullyResolved(dictionary)) {
-    return { source: "dictionary", filters: exact, suggested: [], keyword: "", normalizedQuery };
+    return { source: "dictionary", filters: exact, suggested: [], keyword: "", normalizedQuery, needsSemantic: false, exactFilters: exact };
   }
 
   const hash = searchCacheKey(normalizedQuery);
   const cached = await cache.read(hash);
   if (cached && isFreshEntry(cached, { ttlHours, now: now() })) {
-    return applyPolicy(query, normalizedQuery, exact, cached.interpretation, "cache");
+    return applyPolicy(query, normalizedQuery, exact, cached.interpretation, "cache", semanticThreshold);
   }
 
   if (allowInference && !(await allowInference())) {
@@ -157,11 +201,14 @@ export async function interpretSearchQuery(query: string, deps: InterpretDeps): 
     filters: banded.applied,
     suggested: banded.suggested,
     namesServer: banded.namesServer,
+    // Stored raw rather than as a decision, so the routing threshold can be retuned against real
+    // queries without re-asking anything — the same reason the bands live outside the cache.
+    needsSemantic: reading.needsSemanticProbability,
     model: reading.model,
   };
   // Written even when it resolved to nothing: a query Jev could not turn into a filter is exactly
   // the one not worth asking about again today.
   await cache.write(hash, normalizedQuery, interpretation);
 
-  return applyPolicy(query, normalizedQuery, exact, interpretation, "jev");
+  return applyPolicy(query, normalizedQuery, exact, interpretation, "jev", semanticThreshold);
 }

@@ -7,10 +7,12 @@
  * `catalog-filters.ts` before it leaves this file, so a model that answered with something
  * inventive still cannot produce a filter the database has never heard of.
  *
- * The six questions are independent judgements over the same state, so they travel as one request
+ * The seven questions are independent judgements over the same state, so they travel as one request
  * and are answered in parallel — see the TypeSafe guidance on composing questions. Two of them,
  * access and edition, are here because they are the first two things a Minecraft player asks about
- * and the catalog has always been able to answer them.
+ * and the catalog has always been able to answer them. The last one is not about the catalog at
+ * all: it decides whether this query needs every server read individually, which is the difference
+ * between a search that costs one request and one that costs twenty.
  *
  * This function never throws. A timeout, a 429, an overloaded service or a malformed answer all
  * come back as `null`, which the pipeline reads as "fall back to the keyword search".
@@ -48,6 +50,12 @@ export type JevReading = {
    * describing how they want to play. High means the keyword search still has work to do.
    */
   nameSearchProbability: number;
+  /**
+   * Probability that the query asks for something no facet can express, and so needs each server
+   * judged on its own. This is the one answer that decides whether a search spends twenty requests
+   * instead of none.
+   */
+  needsSemanticProbability: number;
 };
 
 /** The seam the pipeline and its tests talk to. Resolves to `null` whenever Jev cannot answer. */
@@ -130,6 +138,21 @@ const searchQuestions = {
   busca_por_nombre: noul(
     "La consulta nombra un servidor, una marca o una dirección concretos (por ejemplo «hypixel» o «mc.ejemplo.net») en vez de describir cómo quiere jugar la persona.",
   ),
+  // The router. It rides here rather than in a request of its own because questions are answered in
+  // parallel and one more barely moves the latency, while a second round trip would double it just
+  // to learn which road to take.
+  //
+  // The sentinel answers above nearly decide this already — four "sin-" answers mean no facet
+  // applies — but they miss the case that matters most: "survival tranquilo" *does* resolve a
+  // modality, so by that rule it would be answered with every survival server and "tranquilo", the
+  // actual request, would be dropped on the floor.
+  pide_algo_no_categorizable: noul(
+    "La consulta describe cómo es el servidor que quiere la persona con detalles que no son ninguna de las categorías anteriores (modalidad, país, tipo de cuenta o edición): el ambiente, el tamaño o el carácter de la comunidad, la dificultad, la forma de jugar o el tipo de gente.",
+    {
+      true: "Pide algo como «tranquilo», «pocos jugadores», «comunidad pequeña», «sin tóxicos», «para construir con calma» o «de chill», que solo se puede decidir leyendo cómo es cada servidor.",
+      false: "Todo lo que pide cabe en las categorías anteriores, o la consulta solo nombra un servidor concreto.",
+    },
+  ),
 };
 
 export type SearchQuestions = typeof searchQuestions;
@@ -171,6 +194,7 @@ export function readAnswers(answers: SearchAnswers): JevReading {
   const access = choiceValue(answers.answers.acceso);
   const edition = choiceValue(answers.answers.edicion);
   const nameSearch = answers.answers.busca_por_nombre?.noul;
+  const needsSemantic = answers.answers.pide_algo_no_categorizable?.noul;
 
   const modes: JevReading["modes"] = [];
   for (const candidate of [primary, secondary]) {
@@ -187,6 +211,9 @@ export function readAnswers(answers: SearchAnswers): JevReading {
     access: access && isCatalogAccessIntent(access.value) ? { intent: access.value, confidence: access.confidence } : null,
     edition: edition && isCatalogEdition(edition.value) ? { value: edition.value, confidence: edition.confidence } : null,
     nameSearchProbability: typeof nameSearch === "number" && Number.isFinite(nameSearch) ? Math.min(Math.max(nameSearch, 0), 1) : 0,
+    // Defaults to 0, so a model that did not answer sends the search down the cheap road. Spending
+    // is opt-in.
+    needsSemanticProbability: typeof needsSemantic === "number" && Number.isFinite(needsSemantic) ? Math.min(Math.max(needsSemantic, 0), 1) : 0,
   };
 }
 

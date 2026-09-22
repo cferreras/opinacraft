@@ -1,6 +1,11 @@
 export const catalogPath = "/";
 
-const catalogQueryKeys = ["q", "mode", "version", "country", "access", "edition", "status", "sort", "tableSort", "tableDirection", "page"] as const;
+/**
+ * `relevancia` is the odd one out: every other key narrows the catalog, and that one changes who
+ * decides the order. With `relevancia=ia`, `q` stops being text to match and becomes the description
+ * each server is judged against.
+ */
+const catalogQueryKeys = ["q", "relevancia", "mode", "version", "country", "access", "edition", "status", "sort", "tableSort", "tableDirection", "page"] as const;
 
 export type CatalogQueryInput = Partial<Record<(typeof catalogQueryKeys)[number], string | readonly string[] | undefined>> & Record<string, unknown>;
 

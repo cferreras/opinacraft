@@ -97,7 +97,7 @@ test("the confidence bands apply, suggest and ignore at the documented threshold
     region: null,
     access: null,
     edition: null,
-    nameSearchProbability: 0,
+    nameSearchProbability: 0, needsSemanticProbability: 0,
   });
 
   assert.deepEqual(banded.applied.modes, ["survival"], "high confidence is applied");
@@ -110,7 +110,7 @@ test("a confident region becomes the countries it covers, and a middling one sta
   const applied = bandReading({
     model: "m", modes: [], country: null,
     region: { code: "latam", confidence: 0.95 },
-    access: null, edition: null, nameSearchProbability: 0,
+    access: null, edition: null, nameSearchProbability: 0, needsSemanticProbability: 0,
   });
   assert.ok(applied.applied.countries.length > 10, "a region is a filter over many countries");
   assert.equal(applied.applied.countries.includes("es"), false);
@@ -119,7 +119,7 @@ test("a confident region becomes the countries it covers, and a middling one sta
   const offered = bandReading({
     model: "m", modes: [], country: null,
     region: { code: "latam", confidence: 0.6 },
-    access: null, edition: null, nameSearchProbability: 0,
+    access: null, edition: null, nameSearchProbability: 0, needsSemanticProbability: 0,
   });
   assert.deepEqual(offered.applied.countries, []);
   // Eighteen dismissable country chips would be a worse offer than one region chip.
@@ -131,7 +131,7 @@ test("access and edition pass through the same bands as everything else", () => 
     model: "m", modes: [], country: null, region: null,
     access: { intent: "no-premium", confidence: 0.93 },
     edition: { value: "bedrock", confidence: 0.6 },
-    nameSearchProbability: 0,
+    nameSearchProbability: 0, needsSemanticProbability: 0,
   });
 
   assert.deepEqual(banded.applied.access, ["non-premium", "semi-premium"], "one intent, both stored values");
@@ -140,28 +140,28 @@ test("access and edition pass through the same bands as everything else", () => 
 });
 
 test("the band edges belong to the more confident outcome", () => {
-  const atApply = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: APPLY_CONFIDENCE }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0 });
+  const atApply = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: APPLY_CONFIDENCE }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0, needsSemanticProbability: 0 });
   assert.deepEqual(atApply.applied.modes, ["pvp"]);
   assert.deepEqual(atApply.suggested, []);
 
-  const atSuggest = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: SUGGEST_CONFIDENCE }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0 });
+  const atSuggest = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: SUGGEST_CONFIDENCE }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0, needsSemanticProbability: 0 });
   assert.deepEqual(atSuggest.applied.modes, []);
   assert.equal(atSuggest.suggested.length, 1);
 
-  const belowSuggest = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: SUGGEST_CONFIDENCE - 0.01 }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0 });
+  const belowSuggest = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: SUGGEST_CONFIDENCE - 0.01 }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0, needsSemanticProbability: 0 });
   assert.deepEqual(belowSuggest.suggested, []);
   assert.equal(hasFilters(belowSuggest.applied), false);
 });
 
 test("the bands can be retuned without touching the pipeline", () => {
-  const reading = { model: "m", modes: [{ slug: "survival", confidence: 0.7 }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0 };
+  const reading = { model: "m", modes: [{ slug: "survival", confidence: 0.7 }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0, needsSemanticProbability: 0 };
 
   assert.deepEqual(bandReading(reading, { apply: 0.6 }).applied.modes, ["survival"]);
   assert.deepEqual(bandReading(reading, { suggest: 0.8 }).suggested, []);
 });
 
 test("a high name probability is reported so the keyword search keeps its job", () => {
-  const banded = bandReading({ model: "m", modes: [{ slug: "skyblock", confidence: 0.99 }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0.8 });
+  const banded = bandReading({ model: "m", modes: [{ slug: "skyblock", confidence: 0.99 }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0.8, needsSemanticProbability: 0 });
 
   assert.equal(banded.namesServer, true);
   assert.deepEqual(banded.applied.modes, ["skyblock"], "the reading itself is unchanged; the policy decides what to do with it");

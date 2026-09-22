@@ -204,3 +204,114 @@ Ninguno toca la red: la frontera con Jev es `src/lib/search/jev.ts` y se inyecta
 La calibración de Jev sobre consultas reales de Minecraft en español está sin verificar. Los
 umbrales 0.9 / 0.5 son un punto de partida; con los logs de `[search] jev reading` de unas semanas
 se pueden ajustar, y el sitio para hacerlo es `src/lib/search/bands.ts`, sin tocar el resto.
+
+## Valoración servidor por servidor
+
+Las facetas no pueden expresar todo. «Pocos miembros», «de chill», «sin tóxicos» no son modalidad,
+país, acceso ni edición, y ningún vocabulario los convertirá en eso: son preguntas sobre **cómo es**
+un servidor concreto, y solo puede responderlas algo que haya leído ese servidor. Para esas consultas
+Jev puntúa cada servidor visible con un **Noul** — la probabilidad de que sea lo que se pidió — y el
+catálogo se ordena por esa puntuación.
+
+### Quién decide el camino
+
+La decisión no cuesta una petición extra: es la séptima pregunta de la petición que ya se hacía
+(`pide_algo_no_categorizable`). Antes de llegar a ella:
+
+| La consulta | El camino | Coste |
+| --- | --- | --- |
+| `español` | el diccionario la resuelve entera | 0 |
+| `cubusfera` | `busca_por_nombre` alto → texto | 1 petición |
+| `survival en españa` | facetas | 0 |
+| `survival tranquilo` | faceta **y** valoración | 1 + una por servidor |
+| `pocos miembros` | valoración pura | 1 + una por servidor |
+
+Los centinelas (`sin-modalidad`, `sin-pais`…) casi bastarían, pero se les escapa el caso importante:
+`survival tranquilo` **sí** resuelve una modalidad, así que por esa regla devolvería *todos* los
+survival y «tranquilo» se caería. La pregunta explícita lo atrapa. Su umbral es 0.7, sesgado hacia el
+camino barato: quien decide gastar es un juicio del modelo.
+
+### Sin prefiltro léxico
+
+`ilike` y `similarity` **no** eligen a quién se valora. Sería circular —usar la señal más débil para
+decidir qué puede ver la más fuerte— y en las consultas que justifican esto (`pocos miembros` contra
+«comunidad pequeña») devuelven cero. Lo único que recorta el conjunto es lo que la persona **escribió
+literalmente** y el diccionario casó: en `chill en latam con pocos jugadores`, `latam` deja fuera a
+España sin perder nada, porque un servidor español no satisface «en latam» por alta que sea su nota.
+Las facetas que *Jev infirió* no recortan: son conjeturas sobre las mismas palabras que el juicio ya
+pondera.
+
+### Lo que Jev ve, y lo que no
+
+El perfil lleva nombre, descripción, modalidades, país, acceso, ediciones, versión, jugadores y
+estado. **Las reseñas quedan fuera** (`reviewAverage`, `reviewCount` y el texto de las opiniones), y
+hay un test que lo sujeta: serializa el perfil y falla si aparece cualquier rastro de ellas. Buscar
+«survival tranquilo» no debe convertirse en «survival tranquilo que además está bien valorado» — el
+catálogo ya ordena por nota, y mezclarlo esconderría un servidor nuevo que encaja perfectamente.
+
+Los jugadores y la versión **no** salen de `servers.monitor_*`: esa copia dejó de escribirse cuando el
+monitor se mudó a su base de datos, y un recuento obsoleto respondería «pocos jugadores» con
+seguridad y mal. Se piden a la API del monitor, y si no contesta el perfil dice que no hay datos.
+
+### Medido, no estimado
+
+Contra los 60 servidores del seed, con `jev-1.13.0`:
+
+| | Medido |
+| --- | --- |
+| Latencia por petición | mediana 302 ms, p95 445 ms |
+| Tokens de entrada por servidor | 462 |
+| Coste por consulta nueva (300 servidores) | ~$0,0058 |
+| Concurrencia 25 y 50 | 60/60, **cero 429** |
+| 300 servidores a concurrencia 50 | ~5 s |
+
+**Un servidor por petición, y los lotes descartados.** Agrupar quince por petición era cuatro veces
+más rápido y barato, pero cambiaba las respuestas: con varios servidores en un estado el modelo los
+juzga **entre sí**, así que la nota de un servidor depende de con quién viajó. `pocos miembros` puso 8
+servidores sobre 0.5 en lotes de quince y **ninguno** de uno en uno; el solape de los cinco mejores
+fue 2/5. El mismo servidor sacó 0.75 acompañado y 0.32 solo. Eso es fatal para la caché: si la
+pertenencia al lote decide la nota, añadir un servidor rebaraja los lotes e invalida las 300 notas —
+justo lo que la caché existe para evitar. Uno por petición conserva la propiedad que documenta
+TypeSafe (Noul comparable entre peticiones) y con ella un umbral que significa algo.
+
+**Y por eso no hay porcentaje por servidor en la interfaz.** El valor absoluto se mueve con cuánto
+escribió la persona; el **orden** es la parte fiable. Mostrar «90 % de coincidencia» sería presumir de
+una precisión que la medición no respalda.
+
+### Cuando nada llega al umbral
+
+Juzgando en aislamiento no hay marco comparativo, así que una consulta telegráfica recibe números
+conservadores: `comunidad pequeña y tranquila` dejó once servidores sobre 0.5, y `pocos miembros` —la
+misma petición con menos palabras— se quedó en 0.44 y no habría mostrado **nada**. Así que si nada
+pasa el umbral pero hay un orden, se muestran los mejores y la interfaz dice que son aproximados. Un
+cero sí se descarta: es un «no», no un «sí débil».
+
+### La caché, y por qué expira por hash y no por reloj
+
+`search_server_scores` guarda `(query_hash, server_id) → noul`, con el **hash del perfil** que se
+envió. Editar una descripción recuesta **ese** servidor y deja en pie las otras 299; un TTL solo
+habría elegido entre retener una respuesta rancia días o tirar trescientas buenas porque una cambió.
+El hash ve *bandas* de jugadores, no el número: con el número crudo cada servidor cambiaría de hash
+varias veces por hora sin que ninguna respuesta mejorara.
+
+### Los topes
+
+Contados en **peticiones**, no en búsquedas: un tope que cuenta una búsqueda de 300 peticiones como
+una unidad no es un tope.
+
+| Tope | Por defecto |
+| --- | --- |
+| `SEMANTIC_SEARCHES_PER_MINUTE` / `_PER_HOUR` por IP | 4 / 30 |
+| `SEMANTIC_SESSION_REQUEST_QUOTA` | 900 (~3 búsquedas nuevas) |
+| `SEMANTIC_DAILY_REQUEST_LIMIT` | 30.000 (~100 búsquedas nuevas) |
+| `SEMANTIC_DEADLINE_MS` | 12.000 — lo valorado hasta ahí es lo que se ordena |
+
+El contador diario es **separado** del de facetas, para que un día de búsquedas caras no deje sin
+funcionar la búsqueda barata de la que depende todo el catálogo. Los topes se consultan **después** de
+saber cuántas peticiones faltan de verdad: cobrar 300 cuando la caché ya tiene 290 cerraría el camino
+sin motivo. Y solo se dispara **al enviar**, nunca en el debounce de 300 ms.
+
+`scripts/measure-semantic-search.mjs` reproduce la medición. Se conserva porque el umbral hay que
+recalibrarlo contra el catálogo real: 56 de los 60 servidores del seed tienen descripciones generadas
+por plantilla, así que sus conclusiones de coste, latencia y concurrencia son sólidas y las de calidad
+del ranking, limitadas.

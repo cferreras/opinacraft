@@ -579,6 +579,66 @@ async function hydratePublishedCatalogServers(ids: string[], edition?: "java" | 
 }
 
 /**
+ * Pages and hydrates a list of ids somebody else has already put in order.
+ *
+ * The catalog's own queries decide an order and then hydrate it; per-server judging decides the order
+ * outside SQL, so it needs the second half on its own. The ranking is the input, and
+ * {@link hydratePublishedCatalogServers} restores it after the fetch, so the ordering survives the
+ * round trip through Postgres.
+ */
+export async function listPublishedServersByRankedIds({ ids, page = 1, edition }: {
+  ids: readonly string[];
+  page?: number;
+  edition?: CatalogEdition;
+}) {
+  const safePage = Math.min(Math.max(Math.trunc(page) || 1, 1), MAX_PUBLIC_SERVER_PAGE);
+  const start = (safePage - 1) * PUBLIC_SERVER_PAGE_SIZE;
+  const pageIds = ids.slice(start, start + PUBLIC_SERVER_PAGE_SIZE);
+
+  return {
+    servers: await hydratePublishedCatalogServers([...pageIds], edition),
+    hasNextPage: ids.length > start + PUBLIC_SERVER_PAGE_SIZE,
+    totalCount: ids.length,
+    page: safePage,
+  };
+}
+
+/**
+ * The static half of every visible server's profile, for judging a query against the whole catalog.
+ *
+ * Deliberately not `hydratePublishedCatalogServers`: that one brings media, per-endpoint history and
+ * review summaries, all of which would be built three hundred times and thrown away. This selects
+ * only what a reader needs to decide whether a server is what somebody asked for.
+ *
+ * Live numbers are **not** here. `servers.monitor_*` is a copy that stopped being written when the
+ * monitor moved to its own database, and feeding a stale player count to a question about "pocos
+ * jugadores" would answer it wrongly rather than not at all. The caller merges the live half from the
+ * monitor API, and where the monitor cannot be reached the profile honestly says it has no data.
+ */
+export async function listServerProfileFacts() {
+  const rows = await db
+    .select({
+      id: servers.id,
+      name: servers.name,
+      description: servers.description,
+      country: servers.country,
+      accessType: servers.accessType,
+      accountMode: servers.accountMode,
+      gameModes: sql<string[]>`coalesce((select array_agg(gm.mode order by gm.position) from server_game_modes gm where gm.server_id = ${servers.id}), '{}')`,
+      editions: sql<string[]>`coalesce((select array_agg(distinct se.edition) from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified'), '{}')`,
+    })
+    .from(servers)
+    .where(visibleCatalogServerCondition())
+    // A stable order so two identical searches batch the servers the same way, which keeps the
+    // score cache hitting instead of re-asking the same question in a different grouping.
+    .orderBy(asc(servers.createdAt), asc(servers.id));
+
+  return rows;
+}
+
+export type ServerProfileFacts = Awaited<ReturnType<typeof listServerProfileFacts>>[number];
+
+/**
  * What the visitor picks in the catalog filter bar, apart from the search box.
  *
  * Three of these read as "any of these", not "all of these": one word from the search box can name
