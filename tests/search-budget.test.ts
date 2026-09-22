@@ -3,9 +3,10 @@ import test from "node:test";
 
 import { claimJevCall, jevBudgetKey, type RateLimitConsumer } from "@/lib/search/budget";
 import { APPLY_CONFIDENCE, SUGGEST_CONFIDENCE, bandReading, hasFilters } from "@/lib/search/bands";
-import { NO_COUNTRY_OPTION, NO_MODE_OPTION, readAnswers, type SearchAnswers } from "@/lib/search/jev";
+import { NO_ACCESS_OPTION, NO_COUNTRY_OPTION, NO_EDITION_OPTION, NO_MODE_OPTION, readAnswers, type SearchAnswers } from "@/lib/search/jev";
 import { isGameModeSlug } from "@/lib/servers/game-modes";
-import { isServerCountryCode } from "@/lib/servers/countries";
+import { isServerCountryCode, isServerRegionCode } from "@/lib/servers/countries";
+import { isCatalogAccessIntent, isCatalogEdition } from "@/lib/servers/catalog-filters";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -93,38 +94,74 @@ test("the confidence bands apply, suggest and ignore at the documented threshold
       { slug: "economia", confidence: 0.7 },
     ],
     country: { code: "es", confidence: 0.3 },
+    region: null,
+    access: null,
+    edition: null,
     nameSearchProbability: 0,
   });
 
   assert.deepEqual(banded.applied.modes, ["survival"], "high confidence is applied");
-  assert.equal(banded.applied.country, undefined, "low confidence is ignored");
+  assert.deepEqual(banded.applied.countries, [], "low confidence is ignored");
   assert.deepEqual(banded.suggested, [{ kind: "mode", value: "economia", confidence: 0.7 }], "the middle band is offered");
   assert.equal(banded.namesServer, false);
 });
 
+test("a confident region becomes the countries it covers, and a middling one stays one chip", () => {
+  const applied = bandReading({
+    model: "m", modes: [], country: null,
+    region: { code: "latam", confidence: 0.95 },
+    access: null, edition: null, nameSearchProbability: 0,
+  });
+  assert.ok(applied.applied.countries.length > 10, "a region is a filter over many countries");
+  assert.equal(applied.applied.countries.includes("es"), false);
+  assert.deepEqual(applied.suggested, []);
+
+  const offered = bandReading({
+    model: "m", modes: [], country: null,
+    region: { code: "latam", confidence: 0.6 },
+    access: null, edition: null, nameSearchProbability: 0,
+  });
+  assert.deepEqual(offered.applied.countries, []);
+  // Eighteen dismissable country chips would be a worse offer than one region chip.
+  assert.deepEqual(offered.suggested, [{ kind: "region", value: "latam", confidence: 0.6 }]);
+});
+
+test("access and edition pass through the same bands as everything else", () => {
+  const banded = bandReading({
+    model: "m", modes: [], country: null, region: null,
+    access: { intent: "no-premium", confidence: 0.93 },
+    edition: { value: "bedrock", confidence: 0.6 },
+    nameSearchProbability: 0,
+  });
+
+  assert.deepEqual(banded.applied.access, ["non-premium", "semi-premium"], "one intent, both stored values");
+  assert.equal(banded.applied.edition, undefined, "the middle band is offered, not applied");
+  assert.deepEqual(banded.suggested, [{ kind: "edition", value: "bedrock", confidence: 0.6 }]);
+});
+
 test("the band edges belong to the more confident outcome", () => {
-  const atApply = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: APPLY_CONFIDENCE }], country: null, nameSearchProbability: 0 });
+  const atApply = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: APPLY_CONFIDENCE }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0 });
   assert.deepEqual(atApply.applied.modes, ["pvp"]);
   assert.deepEqual(atApply.suggested, []);
 
-  const atSuggest = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: SUGGEST_CONFIDENCE }], country: null, nameSearchProbability: 0 });
+  const atSuggest = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: SUGGEST_CONFIDENCE }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0 });
   assert.deepEqual(atSuggest.applied.modes, []);
   assert.equal(atSuggest.suggested.length, 1);
 
-  const belowSuggest = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: SUGGEST_CONFIDENCE - 0.01 }], country: null, nameSearchProbability: 0 });
+  const belowSuggest = bandReading({ model: "m", modes: [{ slug: "pvp", confidence: SUGGEST_CONFIDENCE - 0.01 }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0 });
   assert.deepEqual(belowSuggest.suggested, []);
   assert.equal(hasFilters(belowSuggest.applied), false);
 });
 
 test("the bands can be retuned without touching the pipeline", () => {
-  const reading = { model: "m", modes: [{ slug: "survival", confidence: 0.7 }], country: null, nameSearchProbability: 0 };
+  const reading = { model: "m", modes: [{ slug: "survival", confidence: 0.7 }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0 };
 
   assert.deepEqual(bandReading(reading, { apply: 0.6 }).applied.modes, ["survival"]);
   assert.deepEqual(bandReading(reading, { suggest: 0.8 }).suggested, []);
 });
 
 test("a high name probability is reported so the keyword search keeps its job", () => {
-  const banded = bandReading({ model: "m", modes: [{ slug: "skyblock", confidence: 0.99 }], country: null, nameSearchProbability: 0.8 });
+  const banded = bandReading({ model: "m", modes: [{ slug: "skyblock", confidence: 0.99 }], country: null, region: null, access: null, edition: null, nameSearchProbability: 0.8 });
 
   assert.equal(banded.namesServer, true);
   assert.deepEqual(banded.applied.modes, ["skyblock"], "the reading itself is unchanged; the policy decides what to do with it");
@@ -139,6 +176,8 @@ test("answers outside the catalogs cannot become filters", () => {
       modalidad_principal: { type: "choice", choice: NO_MODE_OPTION, confidence: 0.99, probabilities: {} },
       modalidad_secundaria: { type: "choice", choice: "modalidad-inventada", confidence: 0.99, probabilities: {} },
       pais: { type: "choice", choice: NO_COUNTRY_OPTION, confidence: 0.99, probabilities: {} },
+      acceso: { type: "choice", choice: NO_ACCESS_OPTION, confidence: 0.99, probabilities: {} },
+      edicion: { type: "choice", choice: "edicion-inventada", confidence: 0.99, probabilities: {} },
       busca_por_nombre: { type: "noul", noul: 0.1 },
     },
   } as unknown as SearchAnswers;
@@ -146,11 +185,39 @@ test("answers outside the catalogs cannot become filters", () => {
   const reading = readAnswers(answers);
   assert.deepEqual(reading.modes, []);
   assert.equal(reading.country, null);
+  assert.equal(reading.region, null);
+  assert.equal(reading.access, null);
+  assert.equal(reading.edition, null);
   assert.equal(reading.nameSearchProbability, 0.1);
 
   // The sentinels must stay impossible to confuse with a real filter value.
   assert.equal(isGameModeSlug(NO_MODE_OPTION), false);
   assert.equal(isServerCountryCode(NO_COUNTRY_OPTION), false);
+  assert.equal(isServerRegionCode(NO_COUNTRY_OPTION), false);
+  assert.equal(isCatalogAccessIntent(NO_ACCESS_OPTION), false);
+  assert.equal(isCatalogEdition(NO_EDITION_OPTION), false);
+});
+
+test("a region answered in the country question is read as a region, not a country", () => {
+  const answers = {
+    model: "jev-1.13.0",
+    usage: { input_tokens: 1, output_tokens: 1 },
+    answers: {
+      modalidad_principal: { type: "choice", choice: NO_MODE_OPTION, confidence: 0.99, probabilities: {} },
+      modalidad_secundaria: { type: "choice", choice: NO_MODE_OPTION, confidence: 0.99, probabilities: {} },
+      // One question, two catalogs: whichever one the answer belongs to is the field it lands in.
+      pais: { type: "choice", choice: "latam", confidence: 0.92, probabilities: {} },
+      acceso: { type: "choice", choice: "no-premium", confidence: 0.91, probabilities: {} },
+      edicion: { type: "choice", choice: "bedrock", confidence: 0.95, probabilities: {} },
+      busca_por_nombre: { type: "noul", noul: 0 },
+    },
+  } as unknown as SearchAnswers;
+
+  const reading = readAnswers(answers);
+  assert.equal(reading.country, null, "latam is not a country code");
+  assert.deepEqual(reading.region, { code: "latam", confidence: 0.92 });
+  assert.deepEqual(reading.access, { intent: "no-premium", confidence: 0.91 });
+  assert.deepEqual(reading.edition, { value: "bedrock", confidence: 0.95 });
 });
 
 test("a repeated modality is not applied twice, and out-of-range numbers are clamped", () => {

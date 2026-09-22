@@ -1,9 +1,9 @@
 # Búsqueda en lenguaje natural
 
 El buscador del catálogo entiende frases como «survival tranquilo en España» y las convierte en
-filtros normales del catálogo (`?mode=`, `?country=`). La interpretación la hace **Jev** (TypeSafe
-System One), que no genera texto: recibe la consulta y dos catálogos cerrados, y devuelve un valor
-de cada uno con su confianza.
+filtros normales del catálogo (`?mode=`, `?country=`, `?access=`, `?edition=`). La interpretación
+la hace **Jev** (TypeSafe System One), que no genera texto: recibe la consulta y unos catálogos
+cerrados, y devuelve un valor de cada uno con su confianza.
 
 Todo esto es una capa **encima** de la búsqueda por palabras clave que ya existía. Si falta una
 clave, si Jev tarda más de 2 s, si se agota el tope diario o si Turnstile falla, el buscador sigue
@@ -22,25 +22,55 @@ normalizar → diccionario → caché → tope diario → sesión → Jev → fi
 | Caché de interpretaciones en Postgres | `src/lib/search/cache.ts`, `store.ts` | 1 consulta |
 | Tope diario global | `src/lib/search/budget.ts` | 1 consulta |
 | Cupo por sesión verificada | `src/lib/search/runtime.ts` | 1 consulta |
-| Llamada a Jev (4 preguntas en una petición) | `src/lib/search/jev.ts` | 1 llamada |
+| Llamada a Jev (6 preguntas en una petición) | `src/lib/search/jev.ts` | 1 llamada |
 | Bandas de confianza y política | `src/lib/search/bands.ts`, `interpret.ts` | 0 |
 
 Si el diccionario resuelve **todos** los términos, no se llama a Jev. Solo las consultas que llegan
 a Jev necesitan sesión de Turnstile; el diccionario, la caché y las palabras clave van libres.
 
-## Las cuatro preguntas
+## Las seis preguntas
 
-Una sola petición con cuatro juicios independientes sobre el mismo estado
+Una sola petición con seis juicios independientes sobre el mismo estado
 (`src/lib/search/jev.ts`):
 
 - `modalidad_principal` — Choice sobre los 30 slugs de `game-modes.ts` + `sin-modalidad`.
 - `modalidad_secundaria` — el mismo catálogo, para «survival con economía».
-- `pais` — Choice sobre los 21 códigos de `countries.ts` + `sin-pais`.
+- `pais` — Choice sobre los 21 códigos de `countries.ts`, **más las regiones** (`latam`), +
+  `sin-pais`. Una sola pregunta responde país o región, y se lee en el campo al que pertenezca.
+- `acceso` — Choice sobre las **intenciones** de `catalog-filters.ts` (`premium`, `no-premium`,
+  `whitelist`) + `sin-acceso`.
+- `edicion` — Choice sobre `java` / `bedrock` + `sin-edicion`.
 - `busca_por_nombre` — Noul: la consulta nombra un servidor o una IP en vez de describir cómo
   quiere jugar la persona.
 
 Todo lo que devuelve se valida contra los catálogos antes de salir del módulo, así que no puede
 producir un filtro que la base de datos no conozca.
+
+### Grupos: regiones e intenciones
+
+Dos de las facetas se piden con una palabra que vale por varios valores, y ninguna de las dos es un
+parámetro nuevo — el grupo viaja **dentro** del parámetro que ya existía y se expande al leerlo:
+
+| Lo que se escribe | Lo que viaja en la URL | Lo que llega a la base de datos |
+| --- | --- | --- |
+| «servidores latinos» | `?country=latam` | los 18 países de Latinoamérica (sin España) |
+| «no premium», «pirata» | `?access=no-premium` | `non-premium` **y** `semi-premium` |
+
+La segunda fila es la que importa: los dos valores almacenados aceptan cuentas sin licencia y solo
+se diferencian en si las premium escriben contraseña, así que responder con uno solo esconde
+servidores que hacen exactamente lo que se pidió.
+
+Por eso `?country=` y `?access=` se leen como «cualquiera de estos», igual que `?mode=`. El chip de
+filtro activo y el selector de la barra muestran el grupo, no sus valores: una región se quita con
+un clic, no con dieciocho.
+
+### El diccionario gana donde ha acertado literalmente
+
+Los modos se **unen** entre diccionario y Jev, porque una consulta puede nombrar dos formas de
+jugar de verdad. País y acceso no: ahí el diccionario ha casado una palabra que la persona escribió
+y Jev está conjeturando sobre esas mismas palabras, así que un «mx» confiado pero equivocado no
+debe ensanchar una consulta que ya decía «España». Dos países conviven cuando el **diccionario**
+leyó los dos («españa y mexico»), que es una decisión suya.
 
 ### Bandas de confianza
 

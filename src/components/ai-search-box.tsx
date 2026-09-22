@@ -13,7 +13,8 @@ import { useFilterFormNavigation } from "@/hooks/use-filter-form-navigation";
 import { useSyncedFieldValue } from "@/hooks/use-synced-field-value";
 import { buildCatalogHref, catalogInputFrom } from "@/lib/servers/catalog-route";
 import { gameModeLabel } from "@/lib/servers/game-modes";
-import { serverCountryLabel } from "@/lib/servers/countries";
+import { serverCountryLabel, findServerRegion } from "@/lib/servers/countries";
+import { accessIntentLabel } from "@/lib/servers/catalog-filters";
 
 /** Long enough that a pause in typing is a pause, short enough not to feel like waiting. */
 const DEBOUNCE_MS = 300;
@@ -21,7 +22,7 @@ const DEBOUNCE_MS = 300;
 const MIN_INTERPRETED_LENGTH = 3;
 const SESSION_MARKER = "opinacraft:ai-search-session-until";
 
-type Suggestion = { kind: "mode" | "country"; value: string; confidence: number };
+type Suggestion = { kind: "mode" | "country" | "region" | "access" | "edition"; value: string; confidence: number };
 
 type TurnstileWidget = {
   render: (container: HTMLElement, options: Record<string, unknown>) => string;
@@ -40,7 +41,14 @@ declare global {
 type AiState = "off" | "idle" | "verifying" | "ready" | "unavailable";
 
 function suggestionLabel(suggestion: Suggestion) {
-  return suggestion.kind === "mode" ? `Modo: ${gameModeLabel(suggestion.value)}` : `País: ${serverCountryLabel(suggestion.value)}`;
+  switch (suggestion.kind) {
+    case "mode": return `Modo: ${gameModeLabel(suggestion.value)}`;
+    case "country": return `País: ${serverCountryLabel(suggestion.value)}`;
+    // A region is offered as itself: eighteen dismissable country chips would be a worse offer.
+    case "region": return `Región: ${findServerRegion(suggestion.value)?.label ?? suggestion.value}`;
+    case "access": return `Acceso: ${accessIntentLabel(suggestion.value)}`;
+    case "edition": return `Edición: ${suggestion.value === "java" ? "Java" : "Bedrock"}`;
+  }
 }
 
 function storedSessionIsCurrent() {
@@ -209,11 +217,17 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
 
   function acceptSuggestion(suggestion: Suggestion) {
     const params = new URLSearchParams(window.location.search);
-    if (suggestion.kind === "mode") {
-      if (!params.getAll("mode").includes(suggestion.value)) params.append("mode", suggestion.value);
-    } else {
-      params.set("country", suggestion.value);
+    // The repeatable facets are read as "any of these", so accepting widens the results rather than
+    // replacing what is already there. A region code rides in `?country=` and an intent code in
+    // `?access=`; both are expanded where the query string is parsed, not here.
+    const param = suggestion.kind === "region" ? "country" : suggestion.kind;
+
+    if (suggestion.kind === "edition") {
+      params.set("edition", suggestion.value);
+    } else if (!params.getAll(param).includes(suggestion.value)) {
+      params.append(param, suggestion.value);
     }
+
     params.delete("page");
     dismissSuggestion(suggestion);
     router.push(buildCatalogHref(catalogInputFrom(params)));

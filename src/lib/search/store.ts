@@ -14,15 +14,23 @@ import { db } from "@/db";
 import { searchInterpretations } from "@/schema";
 import { isGameModeSlug } from "@/lib/servers/game-modes";
 import { isServerCountryCode } from "@/lib/servers/countries";
+import { isCatalogAccessFilter, isCatalogEdition } from "@/lib/servers/catalog-filters";
 import type { CachedInterpretation, SearchCacheEntry, SearchCacheStore } from "./cache";
 
+/**
+ * Rows written before a facet existed no longer match this shape, so they are read as a miss and
+ * the query is asked again. That is the intended cost of widening what a reading can hold: an old
+ * row is re-earned within one TTL, where migrating it would mean guessing what it would have said.
+ */
 const storedInterpretation = z.object({
   filters: z.object({
     modes: z.array(z.string().refine(isGameModeSlug)),
-    country: z.string().refine(isServerCountryCode).optional(),
+    countries: z.array(z.string().refine(isServerCountryCode)),
+    access: z.array(z.string().refine(isCatalogAccessFilter)),
+    edition: z.string().refine(isCatalogEdition).optional(),
   }),
   suggested: z.array(z.object({
-    kind: z.enum(["mode", "country"]),
+    kind: z.enum(["mode", "country", "region", "access", "edition"]),
     value: z.string(),
     confidence: z.number().min(0).max(1),
   })),

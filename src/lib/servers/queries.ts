@@ -11,7 +11,7 @@ import {
   servers,
 } from "@/schema";
 import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } from "./monitor-scheduling";
-import { catalogAccessCondition, type CatalogAccessFilter } from "./catalog-filters";
+import { catalogAccessCondition, type CatalogAccessFilter, type CatalogEdition } from "./catalog-filters";
 import { MINECRAFT_VERSION_SQL_PATTERN, REPORTED_PADDING_SQL_PATTERN, catalogVersionOptions, isMinecraftVersion, reportedVersionMatches } from "./minecraft-version";
 import { normalizeGameModeInputs } from "./game-modes";
 import { reviewScoreSql } from "./review-score";
@@ -578,14 +578,20 @@ async function hydratePublishedCatalogServers(ids: string[], edition?: "java" | 
   return catalog;
 }
 
-/** What the visitor picks in the catalog filter bar, apart from the search box. */
+/**
+ * What the visitor picks in the catalog filter bar, apart from the search box.
+ *
+ * Three of these read as "any of these", not "all of these": one word from the search box can name
+ * eighteen countries ("latinos") or two kinds of access ("no premium"), and a server holds at most
+ * three modes. `version` and `edition` stay single because they are questions with one answer.
+ */
 export type CatalogFacets = {
   /** Any of these modes, not all of them: see {@link parseGameModeParams}. */
   mode?: readonly string[];
-  country?: string;
+  country?: readonly string[];
   version?: string;
-  access?: CatalogAccessFilter;
-  edition?: "java" | "bedrock";
+  access?: readonly CatalogAccessFilter[];
+  edition?: CatalogEdition;
 };
 
 export type PublishedServerListArgs = CatalogFacets & {
@@ -608,8 +614,12 @@ function catalogFacetConditions({ mode, country, version, access, edition }: Cat
     mode && mode.length > 0
       ? sql`exists (select 1 from server_game_modes gm where gm.server_id = ${servers.id} and gm.mode in (${sql.join(mode.map((slug) => sql`${slug}`), sql`, `)}))`
       : undefined,
-    country ? eq(servers.country, country) : undefined,
-    access ? catalogAccessCondition(access) : undefined,
+    country && country.length > 0 ? inArray(servers.country, [...country]) : undefined,
+    // Each access value is a conjunction of two or three columns, so several of them is an OR of
+    // those groups rather than an `in` over one column.
+    access && access.length > 0
+      ? sql`(${sql.join(access.map((value) => catalogAccessCondition(value)), sql` or `)})`
+      : undefined,
     // A bare major ("26.2") keeps its compatibility grouping: each major version the reported
     // string names counts, so "Purpur 26.2" answers to "26.2" and a "1.8-1.21" proxy answers to
     // both. A full report ("Purpur 26.2") narrows to that exact string instead.

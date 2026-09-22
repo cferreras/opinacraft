@@ -29,9 +29,9 @@ import {
 } from "@/lib/servers/queries";
 import { getServerResultsSummary } from "@/lib/servers/result-summary";
 import { buildCatalogHref, catalogInputFrom, catalogPath } from "@/lib/servers/catalog-route";
-import { catalogAccessOptions, catalogSortOptions, catalogStatusOptions, parseCatalogAccessParam } from "@/lib/servers/catalog-filters";
+import { accessParamValues, catalogAccessOptions, catalogSortOptions, catalogStatusOptions, matchedAccessIntent, parseCatalogAccessParams, parseCatalogEditionParam } from "@/lib/servers/catalog-filters";
 import { gameModeLabel, parseGameModeParams } from "@/lib/servers/game-modes";
-import { parseCountryParam, serverCountryLabel } from "@/lib/servers/countries";
+import { countryParamValues, parseCountryParams, serverCountriesLabel } from "@/lib/servers/countries";
 import { parseVersionParam } from "@/lib/servers/minecraft-version";
 
 export const catalogTitle = "Directorio de servidores de Minecraft en español | OpinaCraft";
@@ -121,16 +121,30 @@ function ActiveFilterChip({ label, removeHref, removeLabel }: { label: string; r
   );
 }
 
-export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; mode?: string | string[]; version?: string; country?: string; access?: string; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
+/**
+ * "no premium" is one request the catalog stores as two values, so the chip says the request rather
+ * than listing the storage. Anything else falls back to the filter bar's own labels.
+ */
+function accessChipLabel(values: readonly string[]) {
+  const intent = matchedAccessIntent(values);
+  if (intent) return intent.label;
+  return values.map((value) => catalogAccessOptions.find((option) => option.value === value)?.label ?? value).join(", ");
+}
+
+export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; mode?: string | string[]; version?: string; country?: string | string[]; access?: string | string[]; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
   await connection();
   const query = await searchParams;
   const requestedPage = Number.parseInt(query.page ?? "1", 10);
   const hasQuery = Boolean(query.q?.trim());
   const modes = parseGameModeParams(query.mode);
   const version = parseVersionParam(query.version);
-  const country = parseCountryParam(query.country);
-  const access = parseCatalogAccessParam(query.access);
-  const edition = query.edition === "java" || query.edition === "bedrock" ? query.edition : undefined;
+  const countries = parseCountryParams(query.country);
+  const access = parseCatalogAccessParams(query.access);
+  const edition = parseCatalogEditionParam(query.edition);
+  // What goes back into the URL and the form: one group code where the selection is exactly a
+  // group, so a region survives a version change without writing itself out eighteen times.
+  const countryParams = countryParamValues(countries);
+  const accessParams = accessParamValues(access);
   const status = query.status === "online" || query.status === "offline" || query.status === "unknown" ? query.status : undefined;
   const sort: PublicServerSort = query.sort === "players" || query.sort === "recent" ? query.sort : "rating";
   const hasExplicitSort = query.sort === "rating" || query.sort === "players" || query.sort === "recent";
@@ -139,7 +153,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const presetTableSort = (sort === "rating" || sort === "players") && (!hasQuery || hasExplicitSort) ? sort : undefined;
   const activeTableSort = tableSort ?? presetTableSort;
   const activeTableDirection: PublicServerSortDirection = tableSort ? tableDirection : "desc";
-  const listArgs = { page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", mode: modes, version, country, access, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection } as const;
+  const listArgs = { page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", mode: modes, version, country: countries, access, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection } as const;
   const monitorDependent = isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, version, sort, tableSort: activeTableSort });
   const monitorResult = monitorDependent
     ? await getCachedMonitorCatalogPage(listArgs).catch((error) => {
@@ -165,9 +179,9 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   if (query.q) baseParams.set("q", query.q);
   for (const slug of modes) baseParams.append("mode", slug);
   if (version) baseParams.set("version", version);
-  if (country) baseParams.set("country", country);
-  if (access) baseParams.set("access", access);
-  if (query.edition) baseParams.set("edition", query.edition);
+  for (const value of countryParams) baseParams.append("country", value);
+  for (const value of accessParams) baseParams.append("access", value);
+  if (edition) baseParams.set("edition", edition);
   if (query.status) baseParams.set("status", query.status);
   if (query.sort) baseParams.set("sort", query.sort);
   if (tableSort) {
@@ -188,7 +202,8 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const pageHref = (nextPage: number) => hrefWith({ page: String(nextPage) }, { keepPage: true });
   const tableSortHref = (nextSort: PublicServerTableSort) =>
     hrefWith({ sort: undefined, tableSort: nextSort, tableDirection: activeTableSort === nextSort && activeTableDirection === "asc" ? "desc" : "asc" });
-  const activeFilterCount = [hasQuery, modes.length > 0, Boolean(version), Boolean(country), Boolean(access), Boolean(edition), Boolean(status)].filter(Boolean).length;
+  // A region counts as the one filter the visitor asked for, not as eighteen.
+  const activeFilterCount = [hasQuery, modes.length > 0, Boolean(version), countries.length > 0, access.length > 0, Boolean(edition), Boolean(status)].filter(Boolean).length;
   const hasActiveFilters = activeFilterCount > 0 || Boolean(query.sort && query.sort !== "rating") || Boolean(tableSort);
   // Offered even when a filter is active: the list is cheap, cached, and a facet the visitor is
   // already inside should not reorder itself under them.
@@ -233,13 +248,15 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                       picker still replaces the primary mode, and the chips below remove them one
                       by one. */}
                   {modes.slice(1).map((slug) => <input key={slug} type="hidden" name="mode" value={slug} />)}
+                  {countryParams.slice(1).map((value) => <input key={value} type="hidden" name="country" value={value} />)}
+                  {accessParams.slice(1).map((value) => <input key={value} type="hidden" name="access" value={value} />)}
 
                   <CatalogFilterBar
                     query={query.q ?? ""}
                     mode={modes[0]}
                     version={version}
-                    country={country}
-                    access={access}
+                    country={countryParams[0]}
+                    access={accessParams[0]}
                     edition={edition}
                     versionOptions={versionOptions}
                     turnstileSiteKey={turnstileSiteKey}
@@ -252,8 +269,10 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                     {hasQuery ? <ActiveFilterChip label={`Búsqueda: ${query.q?.trim()}`} removeHref={hrefWith({ q: undefined })} removeLabel="Quitar la búsqueda" /> : null}
                     {modes.map((slug) => <ActiveFilterChip key={slug} label={`Modo: ${gameModeLabel(slug)}`} removeHref={hrefWith({ mode: modes.filter((item) => item !== slug) })} removeLabel={`Quitar el filtro de modo ${gameModeLabel(slug)}`} />)}
                     {version ? <ActiveFilterChip label={`Versión: ${version}`} removeHref={hrefWith({ version: undefined })} removeLabel="Quitar el filtro de versión" /> : null}
-                    {country ? <ActiveFilterChip label={`País: ${serverCountryLabel(country)}`} removeHref={hrefWith({ country: undefined })} removeLabel="Quitar el filtro de país" /> : null}
-                    {access ? <ActiveFilterChip label={`Acceso: ${catalogAccessOptions.find((option) => option.value === access)?.label ?? access}`} removeHref={hrefWith({ access: undefined })} removeLabel="Quitar el filtro de acceso" /> : null}
+                    {/* One chip per facet, not per value: a selection the visitor named with one
+                        word is removed with one click, and its label says the word they used. */}
+                    {countries.length > 0 ? <ActiveFilterChip label={`País: ${serverCountriesLabel(countries)}`} removeHref={hrefWith({ country: undefined })} removeLabel="Quitar el filtro de país" /> : null}
+                    {access.length > 0 ? <ActiveFilterChip label={`Acceso: ${accessChipLabel(access)}`} removeHref={hrefWith({ access: undefined })} removeLabel="Quitar el filtro de acceso" /> : null}
                     {edition ? <ActiveFilterChip label={`Edición: ${edition === "java" ? "Java" : "Bedrock"}`} removeHref={hrefWith({ edition: undefined })} removeLabel="Quitar el filtro de edición" /> : null}
                     {status ? <ActiveFilterChip label={`Estado: ${catalogStatusOptions.find((option) => option.value === status)?.label ?? status}`} removeHref={hrefWith({ status: undefined })} removeLabel="Quitar el filtro de estado" /> : null}
                   </div>

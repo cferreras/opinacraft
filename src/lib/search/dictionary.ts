@@ -3,23 +3,29 @@
  * filters, without spending a Jev call on them.
  *
  * Every alias points at a value that already exists in a closed catalog — a mode slug from
- * `game-modes.ts` or a country code from `countries.ts` — so this file can never invent a filter
- * the database cannot answer. It earns its keep on the queries visitors actually type: a couple of
- * words naming a mode and a country resolve here, the request stays a plain SQL query, and Jev is
- * asked only about the words nobody anticipated.
+ * `game-modes.ts`, a country code or region from `countries.ts`, an access intent or an edition
+ * from `catalog-filters.ts` — so this file can never invent a filter the database cannot answer.
+ * It earns its keep on the queries visitors actually type: a couple of words naming a mode and a
+ * country resolve here, the request stays a plain SQL query, and Jev is asked only about the words
+ * nobody anticipated.
  *
  * Adding an alias is deliberately a code change, like adding a mode: the dictionary is part of the
  * product vocabulary, not user data.
  */
 
 import { MAX_SERVER_GAME_MODES, gameModes } from "@/lib/servers/game-modes";
-import { serverCountries } from "@/lib/servers/countries";
+import { regionCountries, serverCountries, serverRegions } from "@/lib/servers/countries";
+import { accessIntentValues, catalogAccessIntents, catalogAccessValues, catalogEditions } from "@/lib/servers/catalog-filters";
 import { normalizeSearchQuery, searchQueryTokens } from "./normalize";
 
 export type DictionaryResolution = {
   /** Mode slugs, in catalog order, capped at what a single server may advertise. */
   modes: string[];
-  country?: string;
+  /** Country codes, in catalog order. Plural because one word can name a whole region. */
+  countries: string[];
+  /** Stored access values, in catalog order, expanded from the intent the visitor named. */
+  access: string[];
+  edition?: string;
   /** Words that mean something to the visitor and nothing to us yet — the reason to ask Jev. */
   unresolved: string[];
 };
@@ -33,6 +39,9 @@ export type DictionaryResolution = {
  * they ask for the behaviour the visitor is getting anyway. Adjectives we cannot honour — "activo",
  * "gratis", "sin lag" — are deliberately absent: they are real intent, and leaving them unresolved
  * is what gives Jev the chance to say something useful about them.
+ *
+ * `no` and `sin` are absent for a sharper reason: they are the difference between "premium" and
+ * "no premium", which are opposite filters.
  */
 const stopWords = new Set([
   "a", "al", "algun", "alguno", "buen", "buena", "buenas", "bueno", "buenos", "busco", "buscar",
@@ -82,7 +91,9 @@ const modeAliases: Record<string, readonly string[]> = {
   kitpvp: ["kit pvp", "kits"],
   uhc: ["ultra hardcore"],
   earth: ["earthmc", "tierra", "geopolitica", "mapa mundial"],
-  mmorpg: ["mmo", "rpg"],
+  // The catalog's own description for this mode is "clases, niveles, misiones y mazmorras con
+  // jefes", so the words a visitor uses for that content belong here rather than nowhere.
+  mmorpg: ["mmo", "rpg", "jefes", "jefe", "bosses", "boss", "mazmorras", "mazmorra", "dungeons", "dungeon", "raids", "raid"],
   aventura: ["adventure", "aventuras", "mapas de aventura", "narrativo"],
   tecnico: ["technical", "redstone", "granjas", "automatizacion", "tech"],
   pixelmon: ["pokemon", "cobblemon"],
@@ -116,7 +127,50 @@ const countryAliases: Record<string, readonly string[]> = {
   global: ["internacional", "international", "mundial", "worldwide", "cualquier pais", "todos los paises"],
 };
 
-type AliasTarget = { kind: "mode"; value: string } | { kind: "country"; value: string };
+/**
+ * Aliases per region. "Latino" is one of the most common words typed into this box and it is not a
+ * country: before this entry existed the query had nowhere to land but `global`, which means the
+ * opposite of what was asked.
+ */
+const regionAliases: Record<string, readonly string[]> = {
+  latam: [
+    "latino", "latinos", "latina", "latinas", "latinoamerica", "latinoamericano", "latinoamericana",
+    "latinoamericanos", "america latina", "sudamerica", "sudamericano", "sudamericanos",
+    "hispanoamerica", "hispanoamericano",
+  ],
+};
+
+/**
+ * Aliases per access intent. These are the visitor's words, not the catalog's stored values.
+ *
+ * "original" and "de pago" are deliberately absent as bare words: "algo diferente y original" asks
+ * for a novel server and "servidor de pago" for a paid one, neither of which is a statement about
+ * accounts. Only the phrases that can mean nothing else are listed.
+ */
+const accessAliases: Record<string, readonly string[]> = {
+  premium: ["premium", "solo premium", "con licencia", "cuenta original", "cuentas originales"],
+  "no-premium": [
+    "no premium", "nopremium", "sin premium", "non premium", "pirata", "piratas", "pirateado",
+    "crackeado", "cracked", "sin licencia", "no original", "no originales", "sin cuenta premium",
+  ],
+  whitelist: ["whitelist", "white list", "con whitelist", "privado", "privados", "por solicitud"],
+};
+
+/**
+ * Aliases per edition. "pe" is deliberately missing even though it is what MCPE is short for: it
+ * is also Peru's ISO code, and a country the visitor named must not turn into a platform.
+ */
+const editionAliases: Record<string, readonly string[]> = {
+  java: ["java edition", "javaedition"],
+  bedrock: ["bedrock edition", "mcpe", "pocket edition", "movil", "moviles", "celular", "consola", "xbox", "switch", "playstation"],
+};
+
+type AliasTarget =
+  | { kind: "mode"; value: string }
+  | { kind: "country"; value: string }
+  | { kind: "region"; value: string }
+  | { kind: "access"; value: string }
+  | { kind: "edition"; value: string };
 
 /** Alias phrases are folded through the same normalizer as the query so both sides always agree. */
 function aliasKey(phrase: string) {
@@ -131,7 +185,8 @@ function buildAliasIndex() {
     const key = aliasKey(phrase);
     if (!key) return;
     // First registration wins, which keeps the tables above readable: a phrase listed under two
-    // catalogs is a bug to fix in the data, not something to resolve at runtime.
+    // catalogs is a bug to fix in the data, not something to resolve at runtime. The order below
+    // is the priority order, which is why countries are registered before platforms.
     if (!index.has(key)) index.set(key, target);
     longestPhrase = Math.max(longestPhrase, key.split(" ").length);
   };
@@ -146,6 +201,21 @@ function buildAliasIndex() {
     register(country.code, { kind: "country", value: country.code });
     register(country.label, { kind: "country", value: country.code });
     for (const alias of countryAliases[country.code] ?? []) register(alias, { kind: "country", value: country.code });
+  }
+
+  for (const region of serverRegions) {
+    register(region.code, { kind: "region", value: region.code });
+    register(region.label, { kind: "region", value: region.code });
+    for (const alias of regionAliases[region.code] ?? []) register(alias, { kind: "region", value: region.code });
+  }
+
+  for (const intent of catalogAccessIntents) {
+    for (const alias of accessAliases[intent.code] ?? []) register(alias, { kind: "access", value: intent.code });
+  }
+
+  for (const edition of catalogEditions) {
+    register(edition, { kind: "edition", value: edition });
+    for (const alias of editionAliases[edition] ?? []) register(alias, { kind: "edition", value: edition });
   }
 
   return { index, longestPhrase };
@@ -167,15 +237,17 @@ function ambiguousShortCode(phrase: string, target: AliasTarget) {
 export function resolveFromDictionary(query: string): DictionaryResolution {
   const tokens = searchQueryTokens(normalizeSearchQuery(query));
   const modes = new Set<string>();
+  const countries = new Set<string>();
+  const access = new Set<string>();
   const unresolved: string[] = [];
-  let country: string | undefined;
+  let edition: string | undefined;
 
   for (let position = 0; position < tokens.length; ) {
     const remaining = tokens.length - position;
     let matched = false;
 
     // Longest phrase first, so "costa rica" is a country rather than an unresolved "costa" plus a
-    // second unresolved "rica".
+    // second unresolved "rica" — and so "no premium" beats the "premium" inside it.
     for (let length = Math.min(longestAliasPhrase, remaining); length >= 1 && !matched; length -= 1) {
       const phrase = tokens.slice(position, position + length).join(" ");
       const target = aliasIndex.get(phrase);
@@ -184,12 +256,19 @@ export function resolveFromDictionary(query: string): DictionaryResolution {
 
       if (target.kind === "mode") {
         modes.add(target.value);
-      } else if (country === undefined) {
-        country = target.value;
-      } else if (country !== target.value) {
-        // "servidores de espana y mexico" asks for something a single-valued facet cannot express.
-        // The first country stands and the second becomes a question for Jev, rather than being
-        // dropped behind the visitor's back.
+      } else if (target.kind === "country") {
+        // "servidores de espana y mexico" asks for both, and `?country=` repeats, so both stand.
+        countries.add(target.value);
+      } else if (target.kind === "region") {
+        for (const code of regionCountries(target.value)) countries.add(code);
+      } else if (target.kind === "access") {
+        for (const value of accessIntentValues(target.value)) access.add(value);
+      } else if (edition === undefined) {
+        edition = target.value;
+      } else if (edition !== target.value) {
+        // "java y bedrock" asks for something a single-valued facet cannot express. The first
+        // edition stands and the second becomes a question for Jev, rather than being dropped
+        // behind the visitor's back.
         unresolved.push(phrase);
       }
 
@@ -205,14 +284,20 @@ export function resolveFromDictionary(query: string): DictionaryResolution {
   }
 
   return {
-    // Catalog order, so two queries naming the same modes produce the same URL.
+    // Catalog order throughout, so two queries naming the same things produce the same URL.
     modes: gameModes.filter((mode) => modes.has(mode.slug)).map((mode) => mode.slug).slice(0, MAX_SERVER_GAME_MODES),
-    country,
+    countries: serverCountries.filter((country) => countries.has(country.code)).map((country) => country.code),
+    access: catalogAccessValues.filter((value) => access.has(value)),
+    ...(edition ? { edition } : {}),
     unresolved,
   };
 }
 
 /** Everything the visitor asked for is already a filter, so there is nothing left to infer. */
 export function isFullyResolved(resolution: DictionaryResolution) {
-  return resolution.unresolved.length === 0 && (resolution.modes.length > 0 || resolution.country !== undefined);
+  if (resolution.unresolved.length > 0) return false;
+  return resolution.modes.length > 0
+    || resolution.countries.length > 0
+    || resolution.access.length > 0
+    || resolution.edition !== undefined;
 }
