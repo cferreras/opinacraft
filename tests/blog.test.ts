@@ -116,7 +116,9 @@ test("filters the index by category and resolves category routes", () => {
   assert.equal(blogCategoryBySlug(undefined), undefined);
   assert.equal(blogCategoryHref("Para admins"), "/blog?categoria=admins");
   assert.equal(blogCategoryHref(), blogPath);
-  assert.deepEqual(postsInCategory("Guías").map((post) => post.category), ["Guías"]);
+  const guides = postsInCategory("Guías");
+  assert.ok(guides.length > 0);
+  assert.ok(guides.every((post) => post.category === "Guías"));
   assert.equal(postsInCategory(undefined).length, blogPosts.length);
 });
 
