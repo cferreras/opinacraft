@@ -69,6 +69,47 @@ export type BlogPost = {
 // Newest first: the rail card and the index both read this order directly.
 export const blogPosts: readonly BlogPost[] = [
   {
+    slug: "buscar-como-hablas",
+    title: "Busca como hablas: el catálogo ya entiende frases enteras",
+    category: "Guías",
+    publishedAt: "2026-09-22",
+    excerpt: "Ya no hace falta traducir lo que tienes en la cabeza a tres desplegables. Escribe «survival tranquilo en España con poca gente» y el catálogo se encarga del resto.",
+    readingMinutes: 3,
+    cover: "/blog/portada-buscar-como-hablas.webp",
+    coverAlt: "Ilustración de una lupa verde en 3D sobre fondo claro, la imagen que abre el artículo sobre la nueva búsqueda con IA.",
+    pullQuote: "Lo que antes tenías que traducir a filtros ahora puedes escribirlo tal cual, con tus palabras.",
+    sections: [
+      {
+        heading: "Escribe la frase, no las palabras sueltas",
+        paragraphs: [
+          "Buscar servidor era, hasta ahora, un ejercicio de traducción. Tenías una idea bastante clara en la cabeza (algo tranquilo, en español, sin necesidad de cuenta de pago) y te tocaba convertirla en tres desplegables antes de ver un solo resultado. El buscador del catálogo ya acepta la idea directamente.",
+          "Escribe «survival tranquilo en España», «minijuegos no premium para Bedrock» o «servidores latinos para construir» y pulsa enter. No hay sintaxis que aprender ni palabras mágicas que acertar: cuanto mejor te expliques, mejor te entiende.",
+        ],
+      },
+      {
+        heading: "Lo que ha entendido se queda a la vista",
+        paragraphs: [
+          "La búsqueda no te deja a ciegas. Lo que ha sacado de tu frase aparece encima de los resultados como filtros normales (modalidad, país, edición, tipo de acceso), y si alguno no era lo que querías decir lo quitas con un clic y la lista se actualiza al momento.",
+          "La dirección de la página recoge esos mismos filtros, así que puedes guardarla en marcadores o pasársela a alguien y verá exactamente la misma lista que tú.",
+        ],
+      },
+      {
+        heading: "Cuando lo que pides no cabe en un filtro",
+        paragraphs: [
+          "Hay cosas que no son una casilla. «Con pocos jugadores», «para construir con calma» o «una comunidad pequeña y maja» no son una modalidad ni un país, y antes ese tipo de búsqueda se quedaba sin resultados por mucho que existieran servidores así.",
+          "Ahora, en esos casos, la IA lee la ficha de cada servidor del catálogo y los coloca en orden según lo cerca que están de lo que has descrito. Encima de los resultados te dice que el orden lo ha puesto ella y cuántos servidores ha valorado, y avisa cuando ninguno encajaba del todo y lo que ves son los más parecidos. Al lado tienes siempre un enlace para ver la misma búsqueda sin IA.",
+        ],
+      },
+      {
+        heading: "Sigue siendo el mismo catálogo",
+        paragraphs: [
+          "Nada de lo que ya usabas ha desaparecido: los filtros de siempre, el orden por valoración o por jugadores y la búsqueda por nombre funcionan igual que ayer. Si escribes el nombre de un servidor o una dirección, el buscador entiende que vas a por ese y no se pone a interpretar nada.",
+          "Es una capa por encima de lo que había, no un cambio de sitio. Si te gustaba buscar a mano, sigue ahí; y si alguna vez no te apetece pensar en filtros, escribe lo que te apetece jugar y a ver qué sale.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "elegir-servidor",
     title: "Cómo elegir servidor de Minecraft según tu forma de jugar",
     category: "Guías",
