@@ -35,6 +35,7 @@ const storedInterpretation = z.object({
     confidence: z.number().min(0).max(1),
   })),
   namesServer: z.boolean(),
+  needsSemantic: z.number().min(0).max(1),
   model: z.string(),
 });
 

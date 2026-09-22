@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { AiRankingNotice } from "@/components/ai-ranking-notice";
 import { BlogHighlightsCard } from "@/components/blog-highlights-card";
 import { CatalogFilterBar } from "@/components/catalog-filter-bar";
 import { PublicServerRow } from "@/components/public-server-row";
@@ -18,6 +19,12 @@ import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { itemListSchema } from "@/lib/seo/structured-data";
 import { getCachedCatalogVersions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
 import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
+import { listPublishedServersByRankedIds } from "@/lib/servers/queries";
+import { runSemanticSearch } from "@/lib/search/semantic-runtime";
+import { sessionIdFromToken } from "@/lib/search/runtime";
+import { SEARCH_SESSION_COOKIE } from "@/lib/search/session";
+import { requestIp } from "@/lib/search/request-ip";
+import { cookies, headers } from "next/headers";
 import {
   isMonitorDependentCatalogQuery,
   isPublicServerTableSort,
@@ -131,7 +138,7 @@ function accessChipLabel(values: readonly string[]) {
   return values.map((value) => catalogAccessOptions.find((option) => option.value === value)?.label ?? value).join(", ");
 }
 
-export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; mode?: string | string[]; version?: string; country?: string | string[]; access?: string | string[]; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
+export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; relevancia?: string; mode?: string | string[]; version?: string; country?: string | string[]; access?: string | string[]; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
   await connection();
   const query = await searchParams;
   const requestedPage = Number.parseInt(query.page ?? "1", 10);
@@ -153,8 +160,30 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const presetTableSort = (sort === "rating" || sort === "players") && (!hasQuery || hasExplicitSort) ? sort : undefined;
   const activeTableSort = tableSort ?? presetTableSort;
   const activeTableDirection: PublicServerSortDirection = tableSort ? tableDirection : "desc";
-  const listArgs = { page: Number.isFinite(requestedPage) ? requestedPage : 1, query: query.q ?? "", mode: modes, version, country: countries, access, edition, status, sort, tableSort: activeTableSort, tableDirection: activeTableDirection } as const;
-  const monitorDependent = isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, version, sort, tableSort: activeTableSort });
+  const safePage = Number.isFinite(requestedPage) ? requestedPage : 1;
+
+  /**
+   * With `?relevancia=ia`, `q` is not text to match: it is the description each server is judged
+   * against, so the keyword condition must not also run. Filtering by a phrase nobody wrote into a
+   * name and ranking by how well each server answers it would intersect two different questions and
+   * return nothing — the same trap the facet pipeline avoids by making filters and keywords
+   * exclusive.
+   */
+  const judgeBy = query.relevancia === "ia" ? (query.q ?? "").trim() : "";
+  const semantic = judgeBy ? await runSemanticSearch(judgeBy, { modes, countries, access, ...(edition ? { edition } : {}) }, {
+    sessionId: sessionIdFromToken((await cookies()).get(SEARCH_SESSION_COOKIE)?.value),
+    ip: requestIp(await headers()),
+  }) : null;
+  const ranked = semantic?.ran ? semantic.ranking : null;
+
+  const listArgs = {
+    page: safePage,
+    // Judged queries keep their text out of the SQL for the reason above.
+    query: ranked ? "" : query.q ?? "",
+    mode: modes, version, country: countries, access, edition, status, sort,
+    tableSort: activeTableSort, tableDirection: activeTableDirection,
+  } as const;
+  const monitorDependent = !ranked && isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, version, sort, tableSort: activeTableSort });
   const monitorResult = monitorDependent
     ? await getCachedMonitorCatalogPage(listArgs).catch((error) => {
       console.error("[monitor] catalog query unavailable", error instanceof Error ? error.name : "unknown");
@@ -162,7 +191,10 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     })
     : null;
   const monitorUnavailable = monitorDependent && monitorResult === null;
-  const result = monitorResult ?? (monitorDependent ? { servers: [], hasNextPage: false, totalCount: 0, page: listArgs.page ?? 1 } : await getCachedPublishedServerPage(listArgs));
+  const result = ranked
+    // The ranking is the order; Postgres only fills in what each server is.
+    ? await listPublishedServersByRankedIds({ ids: ranked.scores.map((entry) => entry.serverId), page: safePage, edition })
+    : monitorResult ?? (monitorDependent ? { servers: [], hasNextPage: false, totalCount: 0, page: listArgs.page ?? 1 } : await getCachedPublishedServerPage(listArgs));
   let servers = result.servers;
   if (isMonitorApiConfigured() && !monitorDependent) {
     try {
@@ -177,6 +209,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const { hasNextPage, page, totalCount } = result;
   const baseParams = new URLSearchParams();
   if (query.q) baseParams.set("q", query.q);
+  if (ranked) baseParams.set("relevancia", "ia");
   for (const slug of modes) baseParams.append("mode", slug);
   if (version) baseParams.set("version", version);
   for (const value of countryParams) baseParams.append("country", value);
@@ -200,8 +233,10 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     return buildCatalogHref(catalogInputFrom(next));
   };
   const pageHref = (nextPage: number) => hrefWith({ page: String(nextPage) }, { keepPage: true });
+  // Ordering by a column means leaving the judged order: clearing `relevancia` here is what makes the
+  // column headers tell the truth, since a ranked page ignores `tableSort` entirely.
   const tableSortHref = (nextSort: PublicServerTableSort) =>
-    hrefWith({ sort: undefined, tableSort: nextSort, tableDirection: activeTableSort === nextSort && activeTableDirection === "asc" ? "desc" : "asc" });
+    hrefWith({ sort: undefined, relevancia: undefined, tableSort: nextSort, tableDirection: activeTableSort === nextSort && activeTableDirection === "asc" ? "desc" : "asc" });
   // A region counts as the one filter the visitor asked for, not as eighteen.
   const activeFilterCount = [hasQuery, modes.length > 0, Boolean(version), countries.length > 0, access.length > 0, Boolean(edition), Boolean(status)].filter(Boolean).length;
   const hasActiveFilters = activeFilterCount > 0 || Boolean(query.sort && query.sort !== "rating") || Boolean(tableSort);
@@ -262,6 +297,17 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                     turnstileSiteKey={turnstileSiteKey}
                     clearHref={hasActiveFilters ? catalogPath : undefined}
                   />
+
+                {ranked && semantic?.ran ? (
+                  <AiRankingNotice
+                    judged={semantic.judged}
+                    approximate={ranked.approximate}
+                    partial={semantic.partial}
+                    // Dropping `relevancia` turns the same text back into a keyword search, which is
+                    // the honest way out: the visitor keeps their words and loses only the judgement.
+                    plainHref={hrefWith({ relevancia: undefined })}
+                  />
+                ) : null}
 
                 {activeFilterCount > 0 ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">

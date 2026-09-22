@@ -51,7 +51,7 @@ const confident: JevReading = {
   region: null,
   access: null,
   edition: null,
-  nameSearchProbability: 0.05,
+  nameSearchProbability: 0.05, needsSemanticProbability: 0,
 };
 
 test("an empty query asks nothing and filters nothing", async () => {
@@ -96,7 +96,7 @@ test("a middling reading is offered rather than imposed", async () => {
     region: null,
     access: null,
     edition: null,
-    nameSearchProbability: 0.1,
+    nameSearchProbability: 0.1, needsSemanticProbability: 0,
   });
 
   const result = await interpretSearchQuery("algo para interpretar personajes con calma", { ask: jev.ask });
@@ -118,7 +118,7 @@ test("an unconfident reading is ignored and the keyword search takes over", asyn
     region: null,
     access: null,
     edition: null,
-    nameSearchProbability: 0.2,
+    nameSearchProbability: 0.2, needsSemanticProbability: 0,
   });
 
   const result = await interpretSearchQuery("algo diferente y original", { ask: jev.ask });
@@ -137,7 +137,7 @@ test("a query that names a server keeps the keyword search and demotes the filte
     region: null,
     access: null,
     edition: null,
-    nameSearchProbability: 0.88,
+    nameSearchProbability: 0.88, needsSemanticProbability: 0,
   });
 
   const result = await interpretSearchQuery("hypixel skyblock", { ask: jev.ask });
@@ -209,6 +209,111 @@ test("with nothing in the dictionary either, an unavailable Jev still falls back
   assert.equal(result.keyword, "algo raro que nadie ha escrito antes");
 });
 
+test("a query the dictionary settles never asks whether it needs judging", async () => {
+  // A certainty that costs nothing beats a judgement that costs a request, so the router is not
+  // consulted at all for "survival en españa" — Jev is never called.
+  const jev = recordingAsk(confident);
+
+  const result = await interpretSearchQuery("survival en españa", { ask: jev.ask });
+
+  assert.equal(result.source, "dictionary");
+  assert.equal(result.needsSemantic, false);
+  assert.deepEqual(jev.asked, []);
+});
+
+test("a query asking for something no facet holds is routed to per-server judgement", async () => {
+  const jev = recordingAsk({
+    model: "jev-1.13.0",
+    modes: [],
+    country: null,
+    region: null,
+    access: null,
+    edition: null,
+    nameSearchProbability: 0.02,
+    needsSemanticProbability: 0.93,
+  });
+
+  const result = await interpretSearchQuery("servidores con pocos miembros", { ask: jev.ask });
+
+  assert.equal(result.needsSemantic, true, "the cheap answer is incomplete and says so");
+  assert.equal(result.source, "keyword", "and until someone acts on it, the keyword search still runs");
+});
+
+test("a facet found does not settle a query that asked for more than the facet", async () => {
+  // The case the sentinels miss: "survival tranquilo" resolves a modality, so a rule based on
+  // "no facet applied" would answer it with every survival server and drop "tranquilo" entirely.
+  const jev = recordingAsk({
+    model: "jev-1.13.0",
+    modes: [{ slug: "survival", confidence: 0.97 }],
+    country: null,
+    region: null,
+    access: null,
+    edition: null,
+    nameSearchProbability: 0.03,
+    needsSemanticProbability: 0.88,
+  });
+
+  const result = await interpretSearchQuery("survival tranquilo", { ask: jev.ask });
+
+  assert.deepEqual(result.filters.modes, ["survival"], "the facet is still applied");
+  assert.equal(result.needsSemantic, true, "and the rest of the query is still unanswered");
+});
+
+test("the router is biased toward the cheap road", async () => {
+  const middling = {
+    model: "m", modes: [], country: null, region: null, access: null, edition: null,
+    nameSearchProbability: 0, needsSemanticProbability: 0.6,
+  };
+
+  const byDefault = await interpretSearchQuery("algo indeciso de verdad", { ask: async () => middling });
+  assert.equal(byDefault.needsSemantic, false, "0.6 is not enough to spend twenty requests");
+
+  // The threshold is an argument, so it can be retuned against real queries.
+  const lowered = await interpretSearchQuery("algo indeciso de verdad", { ask: async () => middling, semanticThreshold: 0.5 });
+  assert.equal(lowered.needsSemantic, true);
+});
+
+test("naming a server settles the route, whatever the router said", async () => {
+  const jev = recordingAsk({
+    model: "m",
+    modes: [{ slug: "skyblock", confidence: 0.95 }],
+    country: null, region: null, access: null, edition: null,
+    nameSearchProbability: 0.91,
+    needsSemanticProbability: 0.95,
+  });
+
+  const result = await interpretSearchQuery("hypixel skyblock", { ask: jev.ask });
+
+  assert.equal(result.source, "keyword");
+  assert.equal(result.needsSemantic, false, "a lookup is not a description, so nothing needs judging");
+});
+
+test("an unavailable Jev never routes to the expensive road", async () => {
+  for (const deps of [
+    { ask: failingAsk(new Error("fetch failed")).ask },
+    { ask: recordingAsk(confident).ask, allowInference: async () => false },
+  ] satisfies InterpretDeps[]) {
+    const result = await interpretSearchQuery("servidores de chill con poca gente", deps);
+    assert.equal(result.needsSemantic, false, "no reading means no judgement saying it is needed");
+  }
+});
+
+test("what the dictionary matched literally is reported apart, so it can narrow a judgement", async () => {
+  // "latam" is a word the visitor wrote; "chill" and "pocos jugadores" are not facets. The exact
+  // part may restrict which servers get judged; the inferred part may not.
+  const jev = recordingAsk({
+    model: "m", modes: [], country: { code: "mx", confidence: 0.95 }, region: null,
+    access: null, edition: null, nameSearchProbability: 0, needsSemanticProbability: 0.9,
+  });
+
+  const result = await interpretSearchQuery("servidores de chill en latam con pocos jugadores", { ask: jev.ask });
+
+  assert.equal(result.needsSemantic, true);
+  assert.ok(result.exactFilters.countries.includes("mx"), "latam covers Mexico");
+  assert.ok(result.exactFilters.countries.length > 10, "and the other seventeen");
+  assert.equal(result.exactFilters.countries.includes("es"), false, "Latin America is not Spain");
+});
+
 test("a fresh cache entry answers without asking again", async () => {
   const jev = recordingAsk(confident);
   const cache = memoryCache();
@@ -246,7 +351,7 @@ test("what the dictionary knows survives a reading that contradicts it", async (
     region: null,
     access: null,
     edition: null,
-    nameSearchProbability: 0.05,
+    nameSearchProbability: 0.05, needsSemanticProbability: 0,
   });
 
   // "españa" is exact; the country Jev inferred from the rest of the sentence does not overrule it.
@@ -257,7 +362,7 @@ test("what the dictionary knows survives a reading that contradicts it", async (
 });
 
 test("a query resolved to nothing is still remembered, so it is not re-asked all day", async () => {
-  const jev = recordingAsk({ model: "jev-1.13.0", modes: [], country: null, region: null, access: null, edition: null, nameSearchProbability: 0.1 });
+  const jev = recordingAsk({ model: "jev-1.13.0", modes: [], country: null, region: null, access: null, edition: null, nameSearchProbability: 0.1, needsSemanticProbability: 0 });
   const cache = memoryCache();
   const deps: InterpretDeps = { ask: jev.ask, cache: cache.store, now: () => new Date("2026-09-21T12:00:00.000Z") };
 

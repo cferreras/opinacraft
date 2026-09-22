@@ -121,7 +121,7 @@ test("the Jev key and the Turnstile secret exist only on the server", () => {
     }
     if (!source.startsWith('"use client"')) continue;
     // A client component that imported these would pull the key into the browser bundle.
-    for (const serverModule of ["@/env/server", "@/lib/search/runtime", "@/lib/search/jev", "@/lib/search/store"]) {
+    for (const serverModule of ["@/env/server", "@/lib/search/runtime", "@/lib/search/jev", "@/lib/search/store", "@/lib/search/semantic-runtime", "@/lib/search/semantic-store"]) {
       assert.ok(!source.includes(`from "${serverModule}"`), `${relative} is a client component and must not import ${serverModule}`);
     }
   }

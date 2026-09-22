@@ -2,6 +2,7 @@ import {
   check,
   bytea,
   bigint,
+  doublePrecision,
   foreignKey,
   integer,
   index,
@@ -863,5 +864,42 @@ export const searchInterpretations = pgTable(
   (table) => [
     // Sweeping expired rows is a range scan over this, not a full table scan.
     index("search_interpretations_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+/**
+ * How well one server answered one query, as judged server by server.
+ *
+ * This is the cache that makes per-server judging affordable. Scoring a catalog is one request per
+ * batch of servers, so a query asked twice must not be paid for twice — and with a bounded catalog
+ * the steady state is that almost everything is already known.
+ *
+ * `profile_hash` is what expires a row, not a clock. It identifies exactly what the model was shown,
+ * so editing one server's description re-scores that server and leaves every other score standing.
+ * A TTL alone could not do that: it would either hold a stale answer for days or throw away three
+ * hundred good ones because one of them changed.
+ *
+ * Like `search_interpretations`, this is a cache and not a record: any row may be deleted at any
+ * time and the only cost is asking again.
+ */
+export const searchServerScores = pgTable(
+  "search_server_scores",
+  {
+    queryHash: varchar("query_hash", { length: 64 }).notNull(),
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    // The probability that this server is what the query asked for. Stored as the judgement itself
+    // rather than as a verdict, so the show/hide threshold can be retuned without re-asking.
+    score: doublePrecision("score").notNull(),
+    profileHash: varchar("profile_hash", { length: 64 }).notNull(),
+    model: varchar("model", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.queryHash, table.serverId] }),
+    // Reading a query's scores is one index scan over the leading column of the primary key.
+    index("search_server_scores_updated_at_idx").on(table.updatedAt),
   ],
 );

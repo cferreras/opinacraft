@@ -37,6 +37,29 @@ export const serverEnv = createEnv({
     TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
     AI_SEARCH_SESSION_SECRET: z.string().min(32).optional(),
     AI_SEARCH_SESSION_QUOTA: z.coerce.number().int().positive().default(20),
+    // Per-server judging. Off by default and gated separately from the facet reading, because one
+    // of these searches is one request per visible server rather than one per search — measured at
+    // ~462 input tokens and ~300ms each, so a catalog of 300 costs roughly $0.006 and five seconds.
+    SEMANTIC_SEARCH_ENABLED: z.enum(["true", "false"]).default("false"),
+    // Counted in requests, not in searches: at 300 servers a single search spends 300 of these, so
+    // this default is about a hundred novel searches a day before the road closes.
+    SEMANTIC_DAILY_REQUEST_LIMIT: z.coerce.number().int().positive().default(30_000),
+    // What one visitor may spend per session, also in requests. Three novel searches at 300 servers.
+    SEMANTIC_SESSION_REQUEST_QUOTA: z.coerce.number().int().positive().default(900),
+    // Novel searches per minute from one address. The facet route allows 30 interpretations a
+    // minute; at 300 requests each that would be 9,000 inference calls a minute from one visitor,
+    // so this road needs its own, far tighter, ceiling.
+    SEMANTIC_SEARCHES_PER_MINUTE: z.coerce.number().int().positive().default(4),
+    SEMANTIC_SEARCHES_PER_HOUR: z.coerce.number().int().positive().default(30),
+    // Per request, not per search. The whole search is bounded by SEMANTIC_DEADLINE_MS instead.
+    SEMANTIC_TIMEOUT_MS: z.coerce.number().int().positive().max(20_000).default(4000),
+    // The wall the whole search runs into: whatever has been scored by then is what gets ranked.
+    SEMANTIC_DEADLINE_MS: z.coerce.number().int().positive().max(60_000).default(12_000),
+    SEMANTIC_CONCURRENCY: z.coerce.number().int().positive().max(64).default(32),
+    // The 0.5 measured as sensible for explicit queries; retune against real ones, not by taste.
+    SEMANTIC_SHOW_THRESHOLD: z.coerce.number().min(0).max(1).default(0.5),
+    // How sure the router must be before a search is allowed to spend all that.
+    SEMANTIC_ROUTE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
   },
   // If you're using Next.js < 13.4.4, you'll need to specify the runtimeEnv manually
   // runtimeEnv: {

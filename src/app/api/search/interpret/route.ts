@@ -5,7 +5,7 @@ import { RateLimitExceededError, consumeRateLimit } from "@/lib/rate-limit";
 import { buildCatalogHref } from "@/lib/servers/catalog-route";
 import { countryParamValues } from "@/lib/servers/countries";
 import { accessParamValues } from "@/lib/servers/catalog-filters";
-import { interpretForRequest, sessionIdFromToken } from "@/lib/search/runtime";
+import { interpretForRequest, isSemanticSearchConfigured, sessionIdFromToken } from "@/lib/search/runtime";
 import { MAX_SEARCH_QUERY_LENGTH } from "@/lib/search/normalize";
 import { SEARCH_SESSION_COOKIE } from "@/lib/search/session";
 import { requestIp } from "@/lib/search/request-ip";
@@ -60,9 +60,13 @@ export async function POST(request: Request) {
   const interpretation = await interpretForRequest(query, { sessionId });
 
   const kept = preserved(body?.search);
+  // When the query asks for something no facet can express, the visitor's own words have to survive
+  // into the URL even though no filter came out of them: the page judges each server against them.
+  const semantic = interpretation.needsSemantic && isSemanticSearchConfigured();
   const href = buildCatalogHref({
     ...kept,
-    q: interpretation.keyword,
+    ...(semantic ? { relevancia: "ia" } : {}),
+    q: semantic ? interpretation.normalizedQuery : interpretation.keyword,
     mode: interpretation.filters.modes,
     // Written as the group the visitor named where it is exactly one, so the URL they land on says
     // "latam" rather than repeating itself eighteen times.
@@ -77,6 +81,8 @@ export async function POST(request: Request) {
     suggested: interpretation.suggested,
     keyword: interpretation.keyword,
     aiAvailable: interpretation.aiAvailable,
+    // So the box can say it is about to do something slower, before the navigation rather than after.
+    semantic,
     // Built here so the client navigates to a URL the catalog itself could have produced.
     href,
   });

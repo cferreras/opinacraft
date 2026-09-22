@@ -17,6 +17,12 @@ export type CachedInterpretation = {
   filters: SearchFilters;
   suggested: SearchSuggestion[];
   namesServer: boolean;
+  /**
+   * Raw probability that the query asks for something no facet can express — not the decision.
+   * Storing the judgement rather than the verdict is what lets the routing threshold be retuned
+   * without re-asking every cached query, exactly as the confidence bands are.
+   */
+  needsSemantic: number;
   /** The model that produced it, so a model change can be told apart from a tuning change. */
   model: string;
 };

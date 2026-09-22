@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { Check, Search, Sparkles, X } from "lucide-react";
@@ -79,6 +79,14 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
   const [value, setValue] = useSyncedFieldValue(incomingValue, cleared, editing);
   const [aiState, setAiState] = useState<AiState>(turnstileSiteKey ? "idle" : "off");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  /**
+   * Whether the navigation now in flight is the expensive kind. Paired with the transition below
+   * rather than cleared by hand: a flag set before a navigation and unset after one is a flag that
+   * stays on when the navigation is the last thing that happens, which is most of the time.
+   */
+  const [judgingNavigation, setJudgingNavigation] = useState(false);
+  const [isNavigating, startNavigation] = useTransition();
+  const judging = judgingNavigation && isNavigating;
   const [interpreting, setInterpreting] = useState(false);
   const [showInteractive, setShowInteractive] = useState(false);
 
@@ -184,10 +192,13 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
         signal: controller.signal,
       });
       if (!response.ok) return;
-      const result = await response.json() as { href?: string; suggested?: Suggestion[]; aiAvailable?: boolean };
+      const result = await response.json() as { href?: string; suggested?: Suggestion[]; aiAvailable?: boolean; semantic?: boolean };
       if (result.aiAvailable === false) setAiState("off");
       setSuggestions(result.suggested ?? []);
-      if (result.href) router.push(result.href);
+      // Set before the navigation, not after: the page it lands on is the slow one, and the whole
+      // point is to say so while the wait is happening rather than once it is over.
+      setJudgingNavigation(result.semantic === true);
+      if (result.href) startNavigation(() => router.push(result.href!));
     } catch {
       // An aborted or failed interpretation leaves the visitor where they were; the form still
       // submits the query as a keyword search.
@@ -267,8 +278,13 @@ export function AiSearchBox({ value: incomingValue, cleared, turnstileSiteKey }:
       <div ref={invisibleRef} className="sr-only" aria-hidden="true" />
 
       <p id="server-search-hint" aria-live="polite" className="flex min-h-5 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        {interpreting ? <><Sparkles aria-hidden="true" className="size-3.5 animate-pulse" /> Interpretando tu búsqueda…</> : null}
-        {!interpreting && aiState === "ready" ? <><Check aria-hidden="true" className="size-3.5" /> Búsqueda en lenguaje natural activada.</> : null}
+        {/* Judging runs one request per server, so it is seconds rather than milliseconds. Saying so
+            before the navigation is the difference between "slow" and "working". */}
+        {judging ? <><Sparkles aria-hidden="true" className="size-3.5 animate-pulse text-primary" /> Valorando cada servidor con lo que has escrito…</> : null}
+        {interpreting && !judging ? <><Sparkles aria-hidden="true" className="size-3.5 animate-pulse" /> Interpretando tu búsqueda…</> : null}
+        {/* States the capability rather than confirming an activation: nobody asked for it to be
+            switched on, and "activada" reads like a system log. */}
+        {!interpreting && !judging && aiState === "ready" ? <><Check aria-hidden="true" className="size-3.5" /> Entiende frases enteras, no solo palabras.</> : null}
         {!interpreting && aiState === "unavailable" ? (
           <>
             Búsqueda con IA no disponible ahora mismo. La búsqueda normal sigue funcionando.
