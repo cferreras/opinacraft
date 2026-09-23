@@ -18,6 +18,7 @@ import {
   NoVerifiedEndpointError,
   deleteServer,
   ServerNotFoundError,
+  SlugGenerationError,
   UnverifiedEmailError,
   updateServer,
 } from "@/lib/servers/service";
@@ -95,7 +96,7 @@ export async function updateServerAction(
   if (!session) redirect("/sign-in?callbackURL=/dashboard/servers");
 
   const serverId = formValue(formData, "serverId") ?? "";
-  const slug = formValue(formData, "slug") ?? "";
+  const previousSlug = formValue(formData, "slug") ?? "";
   const publication = formValue(formData, "publicationStatus");
   const publicationStatus = z
     .enum(["draft", "published", "hidden"])
@@ -106,8 +107,9 @@ export async function updateServerAction(
   }
 
   let monitoringPaused = false;
+  let slug = previousSlug;
   try {
-    ({ monitoringPaused } = await updateServer(
+    ({ monitoringPaused, slug } = await updateServer(
       session.user.id,
       serverId,
       getServerInput(formData),
@@ -136,6 +138,9 @@ export async function updateServerAction(
     if (error instanceof NoVerifiedEndpointError) {
       return { formError: error.message };
     }
+    if (error instanceof SlugGenerationError) {
+      return { fieldErrors: { name: "Ya hay demasiados servidores con un nombre parecido. Prueba con otro." } };
+    }
     if (error instanceof DuplicateEndpointError || (databaseErrorCode(error) === "23505" && databaseConstraint(error) === "server_endpoints_verified_edition_host_port_key")) {
       return { fieldErrors: { endpoints: "Ya hay un servidor registrado con esta dirección." } };
     }
@@ -151,6 +156,12 @@ export async function updateServerAction(
   revalidatePath("/dashboard/servers");
   revalidatePath(`/servers/${slug}`);
   revalidatePath(`/servers/${slug}/manage`);
+  if (previousSlug && previousSlug !== slug) {
+    // A rename moved the page: the old address must stop serving the cached listing.
+    invalidatePublicServerCache(undefined, previousSlug);
+    revalidatePath(`/servers/${previousSlug}`);
+    revalidatePath(`/servers/${previousSlug}/manage`);
+  }
   redirect(`/servers/${slug}/manage?updated=1${monitoringPaused ? "&monitorPaused=1" : ""}`);
 }
 
