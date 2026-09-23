@@ -129,6 +129,37 @@ function slugCandidate(base: string, attempt: number) {
   return RESERVED_SLUGS.has(candidate) ? `${candidate}-server` : candidate;
 }
 
+function isSlugConflict(error: unknown) {
+  return (
+    databaseErrorCode(error) === "23505" &&
+    ["servers_slug_key", "servers_slug_unique"].includes(databaseConstraint(error) ?? "")
+  );
+}
+
+// A renamed server follows its new name in the URL. Everything else about it — reviews, player
+// history, monitor state, members — hangs off `servers.id`, so the slug can move freely. A slug
+// that already belongs to the new name (e.g. `cubusfera-2` for "Cubusfera") is kept as is, so a
+// rename that only touches accents or casing never shuffles the address.
+async function nextSlugForRename(
+  tx: DatabaseTransaction,
+  serverId: string,
+  currentSlug: string,
+  name: string,
+) {
+  const base = slugifyServerName(name);
+  const candidates = Array.from({ length: MAX_SLUG_ATTEMPTS }, (_, attempt) => slugCandidate(base, attempt));
+  if (candidates.includes(currentSlug)) return currentSlug;
+
+  const taken = await tx
+    .select({ slug: servers.slug })
+    .from(servers)
+    .where(and(inArray(servers.slug, candidates), ne(servers.id, serverId)));
+  const takenSlugs = new Set(taken.map((row) => row.slug));
+  const free = candidates.find((candidate) => !takenSlugs.has(candidate));
+  if (!free) throw new SlugGenerationError();
+  return free;
+}
+
 async function lockEndpoint(tx: DatabaseTransaction, endpoint: NormalizedCreateServerInput["endpoints"][number]) {
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtext(${`${endpoint.edition}:${endpoint.host}:${endpoint.port}`}))`,
@@ -228,12 +259,7 @@ export async function createServer(userId: string, rawInput: CreateServerInput) 
       await tryFlushMonitorSync(result.id);
       return result;
     } catch (error) {
-      if (
-        databaseErrorCode(error) === "23505" &&
-        ["servers_slug_key", "servers_slug_unique"].includes(
-          databaseConstraint(error) ?? "",
-        )
-      ) {
+      if (isSlugConflict(error)) {
         continue;
       }
 
@@ -259,11 +285,32 @@ export async function updateServer(
 ) {
   const input = normalizeUpdateServerInput(rawInput);
 
-  const result = await db.transaction(async (tx) => {
+  // The free slug is picked inside the transaction, but a concurrent rename or creation can still
+  // claim it before commit; the unique index turns that into a conflict and the edit is retried.
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const result = await updateServerOnce(userId, serverId, input, publicationStatus);
+      await tryFlushMonitorSync(serverId);
+      return result;
+    } catch (error) {
+      if (isSlugConflict(error) && attempt < MAX_SLUG_ATTEMPTS) continue;
+      throw error;
+    }
+  }
+}
+
+async function updateServerOnce(
+  userId: string,
+  serverId: string,
+  input: ReturnType<typeof normalizeUpdateServerInput>,
+  publicationStatus?: "draft" | "published" | "hidden",
+) {
+  return db.transaction(async (tx) => {
     const [server] = await tx
       .select({
         id: servers.id,
         name: servers.name,
+        slug: servers.slug,
         verificationStatus: servers.verificationStatus,
         publicationStatus: servers.publicationStatus,
       })
@@ -324,8 +371,10 @@ export async function updateServer(
       return hostChanged || current?.port !== next?.port;
     });
 
+    let slug = server.slug;
     if (input.name !== server.name) {
       await requireServerCapability(serverId, userId, "identity:edit", tx);
+      slug = await nextSlugForRename(tx, serverId, server.slug, input.name);
     }
 
     if (endpointsChanged) {
@@ -337,6 +386,7 @@ export async function updateServer(
       .update(servers)
       .set({
         name: input.name,
+        slug,
         description: input.description,
         websiteUrl: input.websiteUrl,
         storeUrl: input.storeUrl,
@@ -468,10 +518,8 @@ export async function updateServer(
     // Losing the last verified endpoint is not a failure, so the save succeeds
     // — but it stops the monitor and pulls the listing from the directory, and
     // the owner has to hear that from the save itself rather than discover it.
-    return { role, javaChanged, monitoringPaused: !verifiedEndpoint };
+    return { role, javaChanged, monitoringPaused: !verifiedEndpoint, slug, previousSlug: server.slug };
   });
-  await tryFlushMonitorSync(serverId);
-  return result;
 }
 
 export async function deleteServer(userId: string, serverId: string, confirmation: string) {

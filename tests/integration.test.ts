@@ -381,6 +381,38 @@ test("a published server can move to a new host", testOptions, async () => {
   });
 });
 
+test("renaming a server moves its slug and keeps what hangs off its id", testOptions, async () => {
+  const ownerId = await createUser();
+  const reviewerId = await createUser();
+  const { createServer, updateServer } = await loadServerServices();
+  const suffix = randomUUID().slice(0, 8);
+  const host = `rename-${randomUUID()}.example.invalid`;
+  const created = await createServer(ownerId, { name: `Ferreras SMP ${suffix}`, gameModes: ["survival"], country: "es", host, javaPort: 25565 });
+  const server = await database().query("select id from servers where slug = $1", [created.slug]);
+  const serverId = server.rows[0].id as string;
+  createdServerIds.add(serverId);
+  await database().query(
+    "insert into server_reviews (server_id, user_id, rating, content) values ($1, $2, 5, 'Buen servidor para jugar con amigos.')",
+    [serverId, reviewerId],
+  );
+
+  // Another server already holds the plain slug, so the rename has to take the next free one.
+  const blocker = await createServer(ownerId, { name: `Cubusfera ${suffix}`, gameModes: ["survival"], country: "es", host: `blocker-${randomUUID()}.example.invalid`, javaPort: 25565 });
+  const blockerRow = await database().query("select id from servers where slug = $1", [blocker.slug]);
+  createdServerIds.add(blockerRow.rows[0].id as string);
+
+  const renamed = await updateServer(ownerId, serverId, { name: `Cubusfera ${suffix}`, gameModes: ["survival"], country: "es", host, javaPort: 25565 });
+  assert.equal(renamed.previousSlug, created.slug);
+  assert.equal(renamed.slug, `cubusfera-${suffix}-2`);
+
+  // A rename that only touches casing keeps the address it already has.
+  const recased = await updateServer(ownerId, serverId, { name: `CUBUSFERA ${suffix}`, gameModes: ["survival"], country: "es", host, javaPort: 25565 });
+  assert.equal(recased.slug, `cubusfera-${suffix}-2`);
+
+  const reviews = await database().query("select count(*)::int as count from server_reviews where server_id = $1", [serverId]);
+  assert.equal(reviews.rows[0].count, 1);
+});
+
 test("publishing still requires a verified endpoint", testOptions, async () => {
   const ownerId = await createUser();
   const { createServer, updateServer, NoVerifiedEndpointError } = await loadServerServices();
