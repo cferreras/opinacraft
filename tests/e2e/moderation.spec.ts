@@ -31,13 +31,12 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   const guestContext = await browser.newContext();
   const guest = await guestContext.newPage();
   await guest.goto(`/servers/${slug}`);
-  const reviewSignIn = guest
-    .locator('[data-slot="card"]')
-    .filter({ hasText: "Comparte tu opinión sobre este servidor" })
-    .getByRole("link", { name: "Iniciar sesión", exact: true });
+  const reviewSignIn = guest.locator("#reviews").getByRole("link", { name: "Escribir una opinión", exact: true });
   await expect(reviewSignIn).toBeVisible();
+  await expect(reviewSignIn).toHaveAttribute("href", /^\/sign-in\?callbackURL=/);
   const reviewHeight = await reviewSignIn.evaluate((element) => element.getBoundingClientRect().height);
   expect(reviewHeight).toBeGreaterThanOrEqual(40);
+  await guest.getByRole("button", { name: "Informar de un problema" }).click();
   const guestReportForm = guest.locator("form").filter({ hasText: "Motivo del reporte" });
   const guestReportControlHeights = await guestReportForm.locator("input, select, button").evaluateAll((elements) =>
     elements.map((element) => element.getBoundingClientRect().height),
@@ -51,6 +50,7 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   const reporterAccount = await createAccount(reporter, "reporter");
   createdEmails.push(reporterAccount.email);
   await reporter.goto(`/servers/${slug}`);
+  await reporter.getByRole("button", { name: "Informar de un problema" }).click();
   const reportForm = reporter.locator("form").filter({ hasText: "Motivo del reporte" });
   await reportForm.locator("select").selectOption("offline");
   await reportForm.getByLabel("Detalles opcionales").fill("El servidor no responde.");
@@ -82,6 +82,7 @@ test("a server report can be hidden, restored and dismissed by moderation", asyn
   await expect(reporter.getByRole("heading", { name: serverName })).toBeVisible();
 
   await reporter.goto(`/servers/${slug}`);
+  await reporter.getByRole("button", { name: "Informar de un problema" }).click();
   const secondReportForm = reporter.locator("form").filter({ hasText: "Motivo del reporte" });
   await secondReportForm.locator("select").selectOption("other");
   await secondReportForm.getByRole("button", { name: "Enviar reporte" }).click();

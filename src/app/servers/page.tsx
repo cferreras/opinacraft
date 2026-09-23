@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Plus, Search, ServerCog, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -125,6 +125,22 @@ function ActiveFilterChip({ label, removeHref, removeLabel }: { label: string; r
         <X aria-hidden="true" className="size-3.5" />
       </Link>
     </span>
+  );
+}
+
+/** For the people on the other side of the catalog: the admin who wants their server in it. */
+function PublishServerCard({ className = "" }: { className?: string }) {
+  return (
+    <aside aria-label="Publica tu servidor" className={`flex flex-col gap-3.25 rounded-xl bg-card p-5.25 ring-1 ring-foreground/10 ${className}`}>
+      <div className="flex items-center gap-3.25">
+        <span aria-hidden="true" className="flex size-8.5 shrink-0 items-center justify-center rounded-lg bg-accent text-primary-ink">
+          <ServerCog className="size-4.5" />
+        </span>
+        <p className="text-[0.9375rem] font-bold tracking-[-0.01em]">¿Administras un servidor?</p>
+      </div>
+      <p className="text-[0.8125rem] leading-[1.55] text-muted-foreground">Publícalo, demuestra que es tuyo y responde a las opiniones de tu comunidad.</p>
+      <Button asChild size="lg" className="h-11 font-bold lg:h-10"><Link href="/servers/new"><Plus className="size-4" /> Publicar servidor</Link></Button>
+    </aside>
   );
 }
 
@@ -254,27 +270,31 @@ export default async function PublicServersPage({ searchParams }: { searchParams
       {/* The listing as the ordered list it is. Only the servers actually rendered on this page go
           in, in the order they are rendered. */}
       {servers.length > 0 ? <JsonLd data={itemListSchema(servers.map((server) => ({ name: server.name, path: `/servers/${server.slug}` })))} /> : null}
-      <main className="mx-auto w-full max-w-6xl px-4 pb-14 pt-9 sm:px-6 lg:px-8">
+      {/* Vertical rhythm steps through Fibonacci values (8 · 13 · 21 · 34 · 55px) and the type scale
+          through φ from a 14px body (14 · 22 · 40), so every gap and size is a ratio of its
+          neighbour rather than a number picked by eye. The top padding is the exception: it is the
+          site-wide frame every page shares with the navbar. */}
+      <main className="mx-auto w-full max-w-6xl px-4 pb-13.75 pt-9 sm:px-6 lg:px-8">
         <section aria-labelledby="servers-heading">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          {/* The hero splits at φ: the promise leads, and the invitation to publish sits beside it as
+              the smaller of the two, instead of a lone button competing with the headline. */}
+          <div className="grid items-end gap-8.5 lg:grid-cols-[1.618fr_1fr]">
             <div className="min-w-0">
-              <h1 id="servers-heading" className="max-w-[40rem] text-3xl font-bold tracking-tight sm:text-[2rem]">Encuentra tu próximo servidor de Minecraft</h1>
-              <p className="mt-2.5 max-w-[35rem] text-sm leading-6 text-muted-foreground">Explora, compara y únete a las comunidades publicadas en OpinaCraft.</p>
+              <h1 id="servers-heading" className="max-w-[38.75rem] text-balance text-[1.875rem] font-extrabold leading-[1.1] tracking-[-0.03em] sm:text-[2.5rem]">Encuentra tu próximo servidor de Minecraft</h1>
+              <p className="mt-3.25 max-w-[35rem] text-pretty text-[0.9375rem] leading-[1.618] text-muted-foreground sm:text-base">Explora, compara y únete a las comunidades publicadas en OpinaCraft, con su estado en tiempo real y las opiniones de quienes ya juegan en ellas.</p>
             </div>
-            <Button variant="outline" asChild size="lg" className="shrink-0 bg-card"><Link href="/servers/new"><Plus className="size-4" /> Publicar servidor</Link></Button>
+            <PublishServerCard className="max-lg:hidden" />
           </div>
 
           {/* Content column plus a rail: below `lg` the rail collapses under the results, which is
               where the blog module belongs on mobile. */}
-          <div className="mt-7 grid items-start gap-x-5 lg:grid-cols-[minmax(0,1fr)_15rem]">
+          <div className="mt-8.5 grid items-start gap-x-5.25 lg:grid-cols-[minmax(0,1fr)_15rem]">
             <div className="min-w-0">
               {/* The promoted-slots placeholder used to sit here, taking a fifth of the first
                   mobile screen to announce a product that does not exist yet. It comes back when
                   it has inventory to show. */}
-              <section aria-labelledby="server-results-heading" className="mt-1">
-                <h2 id="server-results-heading" className="text-lg font-semibold tracking-tight">Todos los servidores</h2>
-
-                <form action={catalogPath} method="get" className="mt-3">
+              <section aria-labelledby="server-results-heading">
+                <form action={catalogPath} method="get">
                   {tableSort ? <><input type="hidden" name="tableSort" value={tableSort} /><input type="hidden" name="tableDirection" value={tableDirection} /></> : null}
                   {!tableSort && hasExplicitSort ? <input type="hidden" name="sort" value={sort} /> : null}
                   {status ? <input type="hidden" name="status" value={status} /> : null}
@@ -310,7 +330,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                 ) : null}
 
                 {activeFilterCount > 0 ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <div className="mt-3.25 flex flex-wrap items-center gap-2">
                     <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Filtros activos</span>
                     {hasQuery ? <ActiveFilterChip label={`Búsqueda: ${query.q?.trim()}`} removeHref={hrefWith({ q: undefined })} removeLabel="Quitar la búsqueda" /> : null}
                     {modes.map((slug) => <ActiveFilterChip key={slug} label={`Modo: ${gameModeLabel(slug)}`} removeHref={hrefWith({ mode: modes.filter((item) => item !== slug) })} removeLabel={`Quitar el filtro de modo ${gameModeLabel(slug)}`} />)}
@@ -324,7 +344,18 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                   </div>
                 ) : null}
 
-                  <div className="mt-4 min-w-0">
+                  {/* The results announce themselves in a toolbar of their own, between the controls
+                      that narrow them and the table that lists them: the heading sits where the
+                      list starts, so the rail lines up with the filter card instead of a label. */}
+                  <div className="mt-8.5 flex flex-wrap items-baseline justify-between gap-x-5.25 gap-y-1">
+                    <h2 id="server-results-heading" className="flex items-baseline gap-2 text-[1.375rem] font-bold leading-tight tracking-[-0.02em]">
+                      Todos los servidores
+                      {servers.length > 0 ? <span className="text-sm font-semibold tabular-nums tracking-normal text-muted-foreground">{totalCount}</span> : null}
+                    </h2>
+                    {servers.length > 0 ? <span className="text-xs text-muted-foreground">{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span> : null}
+                  </div>
+
+                  <div className="mt-3.25 min-w-0">
                     {monitorUnavailable ? (
                       <Alert className="border-warning/40 bg-warning/10">
                         <AlertDescription>No se pudo consultar el estado del monitor para aplicar estos filtros. Inténtalo de nuevo en unos instantes.</AlertDescription>
@@ -341,14 +372,8 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                     ) : (
                       <>
                         <Card className="gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0 lg:bg-card lg:ring-1">
-                          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 px-4 py-3 lg:px-4.5 lg:py-3.5">
-                            <p className="text-sm tabular-nums text-muted-foreground">
-                              Mostrando <strong className="font-semibold text-foreground">{serverResultsSummary.rangeLabel}</strong> de <strong className="font-semibold text-foreground">{serverResultsSummary.totalCount}</strong> {serverResultsSummary.serverLabel}
-                            </p>
-                            <span className="text-xs text-muted-foreground">{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span>
-                          </div>
                           <CardContent className="flex flex-col gap-2 p-0 lg:block">
-                            <div role="row" aria-label="Ordenar resultados" className={`hidden h-10 items-center border-y bg-muted/40 px-4.5 text-muted-foreground lg:grid ${tableGridTemplate} lg:items-center lg:gap-3.5`}>
+                            <div role="row" aria-label="Ordenar resultados" className={`hidden h-10 items-center border-b bg-muted/40 px-4.5 text-muted-foreground lg:grid ${tableGridTemplate} lg:items-center lg:gap-3.5`}>
                               {tableHeaderCells.map((cell) => {
                                 if (cell.kind === "spacer") return <span key="actions" aria-hidden="true" />;
                                 if (cell.kind === "static") return <StaticColumnHeader key={cell.label} label={cell.label} className={cell.className} />;
@@ -359,19 +384,31 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                             {servers.map((server) => <PublicServerRow key={server.id} server={server} />)}
                           </CardContent>
                         </Card>
-                        <nav className="mt-5 flex items-center justify-between gap-4" aria-label="Páginas de servidores">
-                          {page > 1 ? <Button asChild variant="outline" size="sm"><Link href={pageHref(page - 1)}>Anterior</Link></Button> : <span />}
-                          <span className="text-xs tabular-nums text-muted-foreground">Página {page} de {totalPages}</span>
-                          {hasNextPage ? <Button asChild variant="outline" size="sm"><Link href={pageHref(page + 1)}>Siguiente</Link></Button> : <span />}
+                        {/* Where you are on the left, how to move on the right: the pager keeps its
+                            shape on every page, so the next button never jumps sideways. */}
+                        <nav className="mt-5.25 flex flex-col-reverse items-center gap-3.25 sm:flex-row sm:justify-between" aria-label="Páginas de servidores">
+                          <p className="text-[0.8125rem] tabular-nums text-muted-foreground">
+                            Mostrando <strong className="font-semibold text-foreground">{serverResultsSummary.rangeLabel}</strong> de <strong className="font-semibold text-foreground">{serverResultsSummary.totalCount}</strong> {serverResultsSummary.serverLabel}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {page > 1 ? <Button asChild variant="outline" size="sm" className="bg-card"><Link href={pageHref(page - 1)}><ChevronLeft aria-hidden="true" className="size-3.5" />Anterior</Link></Button> : <Button variant="outline" size="sm" disabled><ChevronLeft aria-hidden="true" className="size-3.5" />Anterior</Button>}
+                            <span className="min-w-20 text-center text-xs tabular-nums text-muted-foreground">Página <span className="font-semibold text-foreground">{page}</span> de {totalPages}</span>
+                            {hasNextPage ? <Button asChild variant="outline" size="sm" className="bg-card"><Link href={pageHref(page + 1)}>Siguiente<ChevronRight aria-hidden="true" className="size-3.5" /></Link></Button> : <Button variant="outline" size="sm" disabled>Siguiente<ChevronRight aria-hidden="true" className="size-3.5" /></Button>}
+                          </div>
                         </nav>
                       </>
                     )}
                   </div>
                 </form>
               </section>
+
+              {/* Below `lg` the hero has no second column, so the invitation waits until the visitor
+                  has seen the catalog it would join. */}
+              <PublishServerCard className="mt-8.5 lg:hidden" />
             </div>
 
-            <aside aria-labelledby="blog-highlights-heading" className="mt-8 min-w-0 lg:mt-0">
+            {/* Sticks under the header so the blog stays in reach while the table scrolls past it. */}
+            <aside aria-labelledby="blog-highlights-heading" className="mt-5.25 min-w-0 lg:sticky lg:top-[calc(4rem+1.3125rem)] lg:mt-0">
               <BlogHighlightsCard />
             </aside>
           </div>

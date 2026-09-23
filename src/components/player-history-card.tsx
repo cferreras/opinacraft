@@ -2,26 +2,26 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import { Activity, CheckCircle2, Info, RefreshCcw } from "lucide-react";
+import { Info, RefreshCcw } from "lucide-react";
 
 import { getAvailabilityLegend, mergeHistoryChartData } from "@/lib/servers/player-history-chart";
 import type { HistoryPointStatus, PlayerHistoryResponse } from "@/lib/servers/player-history";
 import { useBrowserDateFormatter } from "@/components/localized-timestamp";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { NativeSelect } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type Props = { serverId: string; initialData: PlayerHistoryResponse; mode?: "public" | "managed"; loadOnMount?: boolean };
 const periodLabels = { "24h": "24 h", "7d": "7 días", "30d": "30 días", "90d": "90 días" } as const;
+const periodShortLabels = { "24h": "24 h", "7d": "7 d", "30d": "30 d", "90d": "90 d" } as const;
+const periods = Object.keys(periodLabels) as Array<keyof typeof periodLabels>;
 const availabilityLegend = getAvailabilityLegend();
 const PlayerHistoryChart = dynamic(
   () => import("./player-history-chart").then((module) => module.PlayerHistoryChart),
   {
     ssr: false,
-    loading: () => <Skeleton className="h-[276px] w-full" />,
+    loading: () => <Skeleton className="h-[233px] w-full" />,
   },
 );
 
@@ -40,10 +40,43 @@ function cadenceLabel(minutes: number | null) {
   return minutes < 60 ? `objetivo cada ${minutes} min` : `objetivo cada ${Math.round(minutes / 60)} h`;
 }
 
-function AvailabilityRail({ data, formatDate }: { data: PlayerHistoryResponse; formatDate: (value: string | null) => string }) {
+function AvailabilityRail({ data, formatDate, footnote }: { data: PlayerHistoryResponse; formatDate: (value: string | null) => string; footnote: string }) {
   const points = data.series.flatMap((series) => series.points);
   if (!points.length) return null;
-  return <div className="grid gap-2" aria-label="Disponibilidad por intervalo"><div className="flex items-center justify-between gap-3 text-xs text-muted-foreground"><span className="font-medium text-foreground/80">Disponibilidad</span><span>puntos de {data.resolutionMinutes} min</span></div><div className="flex h-2.5 gap-px overflow-hidden rounded-full bg-muted" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(points.length, 1)}, minmax(2px, 1fr))` }}>{points.map((point, index) => <span key={`${point.at}-${index}`} className={statusClass(point.status)} title={`${formatDate(point.at)} · ${statusLabel(point.status)}`} />)}</div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">{availabilityLegend.map((entry) => <span key={entry.status} className="inline-flex items-center gap-1.5"><span className={`size-2 rounded-full ${statusClass(entry.status)}`} />{entry.label}</span>)}</div></div>;
+  // Discrete blocks read as "intervals" while there are few of them; past that the gaps would eat the bar.
+  const blocky = points.length <= 120;
+  return (
+    <div className="grid gap-2 sm:border-t sm:pt-5.25">
+      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground max-sm:hidden">
+        <span className="font-bold text-foreground">Disponibilidad</span>
+        <span>bloques de {data.resolutionMinutes} min</span>
+      </div>
+      <div
+        aria-label="Disponibilidad por intervalo"
+        className={blocky ? "grid h-3.25 gap-px sm:h-5.25 sm:gap-0.5" : "grid h-3.25 overflow-hidden rounded-[0.1875rem] sm:h-5.25"}
+        style={{ gridTemplateColumns: `repeat(${Math.max(points.length, 1)}, minmax(0, 1fr))` }}
+      >
+        {points.map((point, index) => <span key={`${point.at}-${index}`} className={`${statusClass(point.status)} ${blocky ? "rounded-[0.125rem]" : ""}`} title={`${formatDate(point.at)} · ${statusLabel(point.status)}`} />)}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-5.25 gap-y-1 text-xs text-muted-foreground">
+        {availabilityLegend.map((entry) => <span key={entry.status} className="inline-flex items-center gap-1.5 max-sm:hidden"><span className={`size-2 rounded-[0.125rem] ${statusClass(entry.status)}`} />{entry.label}</span>)}
+        <span className="sm:ml-auto">{footnote}</span>
+      </div>
+    </div>
+  );
+}
+
+function formatCount(value: number | null) {
+  return value === null ? "—" : Math.round(value).toLocaleString("es-ES");
+}
+
+function HeadlineFigure({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-0.5">
+      <dt className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-muted-foreground">{label}</dt>
+      <dd className="text-[1.3125rem] font-extrabold sm:text-[1.625rem] leading-tight tracking-[-0.02em] tabular-nums">{value}</dd>
+    </div>
+  );
 }
 
 export function PlayerHistoryCard({ serverId, initialData, mode = "public", loadOnMount = false }: Props) {
@@ -74,5 +107,65 @@ export function PlayerHistoryCard({ serverId, initialData, mode = "public", load
   const reload = (nextPeriod = period) => { setLoading(true); setError(null); setPeriod(nextPeriod); setRequestKey((current) => current + 1); };
   const headingId = mode + "-history-heading";
 
-  return <Card aria-labelledby={headingId} className="overflow-hidden"><CardHeader className="flex flex-wrap items-start justify-between gap-4 border-b bg-muted/10"><div className="min-w-0"><CardTitle as="h2" id={headingId} className="flex items-center gap-2 text-base sm:text-lg"><Activity className="size-4 text-primary" aria-hidden="true" />Jugadores conectados</CardTitle><p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">Máximo de jugadores observado por intervalo en el servidor. Java y Bedrock comparten esta estadística canónica.</p></div><div className="flex shrink-0 flex-wrap gap-2" aria-label="Filtros de histórico"><NativeSelect value={period} onChange={(event) => reload(event.target.value as typeof period)}><option value="24h">{periodLabels["24h"]}</option><option value="7d">{periodLabels["7d"]}</option><option value="30d">{periodLabels["30d"]}</option><option value="90d">{periodLabels["90d"]}</option></NativeSelect></div></CardHeader><CardContent className="grid gap-5">{error ? <Alert variant="destructive"><RefreshCcw className="size-4" /><AlertTitle>Error al cargar el histórico</AlertTitle><AlertDescription className="flex flex-wrap items-center gap-2">{error}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RefreshCcw className="size-3.5" /> Reintentar</Button></AlertDescription></Alert> : null}{!error && !loading && !hasData ? <div className="flex items-start gap-3 rounded-lg border border-dashed p-6"><Info className="mt-0.5 size-5 text-muted-foreground" /><div><strong className="text-sm">Aún no hay histórico suficiente</strong><p className="mt-1 text-sm text-muted-foreground">El worker todavía no ha registrado una respuesta para este servidor.</p></div></div> : null}{loading ? <Skeleton className="h-72 w-full" /> : null}{hasData && !loading ? <div className="grid gap-5"><PlayerHistoryChart data={chartData} period={data.period} /><AvailabilityRail data={data} formatDate={(value) => dateFormatter.format(value)} /><div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"><span className="inline-flex items-center gap-2"><CheckCircle2 className={data.freshness === "stale" ? "size-3.5 text-warning" : "size-3.5 text-success"} />Última actualización: {dateFormatter.format(lastSample)}.{data.freshness === "stale" ? " El worker puede estar retrasado." : ""}</span>{hasSourceChange ? <span className="inline-flex items-center gap-2"><Info className="size-3.5" />Se detectó un cambio de dirección; el histórico anterior se conserva.</span> : null}</div></div> : null}<div className="flex flex-wrap items-center gap-3 border-t pt-3 text-xs text-muted-foreground"><Badge variant="outline">Servidor</Badge><span>{loading ? "Actualizando…" : `${periodLabels[data.period]} · ${data.resolutionMinutes} min por punto · ${cadenceLabel(data.cadenceMinutes)}`}</span></div></CardContent></Card>;
+  const sampled = data.series.filter((series) => series.summary.sampleCount > 0);
+  const peak = sampled.reduce<number | null>((best, series) => (series.summary.peakPlayers === null ? best : Math.max(best ?? 0, series.summary.peakPlayers)), null);
+  const average = sampled[0]?.summary.averagePlayers ?? null;
+  const responseRate = sampled[0]?.summary.responseRatePct ?? null;
+  const footnote = data.freshness === "stale"
+    ? `Comprobado ${dateFormatter.format(lastSample)} · con retraso`
+    : `Comprobado ${dateFormatter.format(lastSample)}${data.cadenceMinutes ? "" : ` · ${cadenceLabel(data.cadenceMinutes)}`}`;
+
+  return (
+    <Card aria-labelledby={headingId} className="gap-5.25 py-5.25 [--card-spacing:--spacing(5.25)] sm:gap-8.5 sm:py-8.5 sm:[--card-spacing:--spacing(8.5)]">
+      <CardHeader className="flex flex-wrap items-start justify-between gap-x-5.25 gap-y-3.25">
+        <div className="min-w-0 flex-1 basis-64">
+          <CardTitle as="h2" id={headingId} className="text-lg font-extrabold tracking-tight sm:text-xl">Jugadores conectados</CardTitle>
+          <p className="mt-1.25 text-sm leading-6 text-muted-foreground">Máximo observado por intervalo. Java y Bedrock suman en la misma cifra.</p>
+        </div>
+        <div role="group" aria-label="Periodo del histórico" className="grid w-full shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-muted p-0.75 sm:flex sm:w-auto">
+          {periods.map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={period === option}
+              aria-label={periodLabels[option]}
+              onClick={() => { if (option !== period) reload(option); }}
+              className="h-8.5 rounded-md px-3.25 text-[0.8125rem] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring aria-pressed:bg-card aria-pressed:font-bold aria-pressed:text-foreground aria-pressed:shadow-sm"
+            >
+              {periodShortLabels[option]}
+            </button>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-5.25">
+        {error ? (
+          <Alert variant="destructive">
+            <RefreshCcw className="size-4" />
+            <AlertTitle>Error al cargar el histórico</AlertTitle>
+            <AlertDescription className="flex flex-wrap items-center gap-2">{error}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RefreshCcw className="size-3.5" /> Reintentar</Button></AlertDescription>
+          </Alert>
+        ) : null}
+        {!error && !loading && !hasData ? (
+          <div className="flex items-start gap-3 rounded-lg border border-dashed p-5.25">
+            <Info className="mt-0.5 size-5 text-muted-foreground" />
+            <div><strong className="text-sm">Aún no hay histórico suficiente</strong><p className="mt-1 text-sm text-muted-foreground">El worker todavía no ha registrado una respuesta para este servidor.</p></div>
+          </div>
+        ) : null}
+        {loading ? <Skeleton className="h-72 w-full" /> : null}
+        {hasData && !loading ? (
+          <>
+            <dl className="flex flex-wrap gap-x-5.25 gap-y-3.25 sm:gap-x-8.5">
+              <HeadlineFigure label="Pico" value={formatCount(peak)} />
+              <HeadlineFigure label="Media" value={formatCount(average)} />
+              <HeadlineFigure label="Disponibilidad" value={responseRate === null ? "—" : `${responseRate.toLocaleString("es-ES", { maximumFractionDigits: 1 })} %`} />
+            </dl>
+            <PlayerHistoryChart data={chartData} period={data.period} />
+            <AvailabilityRail data={data} formatDate={(value) => dateFormatter.format(value)} footnote={footnote} />
+            {hasSourceChange ? <p className="inline-flex items-center gap-2 text-xs text-muted-foreground"><Info className="size-3.5" />Se detectó un cambio de dirección; el histórico anterior se conserva.</p> : null}
+          </>
+        ) : null}
+        {loading ? <p className="text-xs text-muted-foreground">Actualizando…</p> : null}
+      </CardContent>
+    </Card>
+  );
 }

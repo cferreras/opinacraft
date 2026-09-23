@@ -42,11 +42,11 @@ test("uses the home route for catalog navigation and sitemap discovery", () => {
   assert.doesNotMatch(sitemapSource, /\$\{base\}\/servers`,/);
 });
 
-test("keeps the catalog reachable from the brand without a duplicate primary-nav link", () => {
+test("links the catalog from the brand and from the primary navigation", () => {
   const headerSource = readProjectFile("src/components/site-header.tsx");
 
   assert.match(headerSource, /aria-label=\"OpinaCraft, inicio\"/);
-  assert.equal(headerSource.includes('label: "Servidores", href: "/"'), false);
+  assert.equal(headerSource.includes('label: "Servidores", href: "/"'), true);
   assert.equal(headerSource.includes('label: "Mis servidores", href: "/dashboard/servers"'), true);
 });
 

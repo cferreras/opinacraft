@@ -49,7 +49,7 @@ export function CatalogFilterBar({
   const accessIntent = access && !isCatalogAccessFilter(access) ? access : null;
 
   return (
-    <Card className="gap-3 px-4 py-4">
+    <Card className="gap-2 px-4 py-4">
       {/* The box owns the search row, the invisible challenge and the suggestion chips: they are
           one control, and only it knows whether the last query was understood. */}
       <AiSearchBox value={query} cleared={cleared} turnstileSiteKey={turnstileSiteKey} />
