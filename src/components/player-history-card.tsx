@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { Info, RefreshCcw } from "lucide-react";
 
-import { getAvailabilityLegend, mergeHistoryChartData } from "@/lib/servers/player-history-chart";
+import { formatBlockDuration, getAvailabilityLegend, groupAvailabilityBlocks, mergeHistoryChartData } from "@/lib/servers/player-history-chart";
 import type { HistoryPointStatus, PlayerHistoryResponse } from "@/lib/servers/player-history";
 import { useBrowserDateFormatter } from "@/components/localized-timestamp";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -43,20 +43,26 @@ function cadenceLabel(minutes: number | null) {
 function AvailabilityRail({ data, formatDate, footnote }: { data: PlayerHistoryResponse; formatDate: (value: string | null) => string; footnote: string }) {
   const points = data.series.flatMap((series) => series.points);
   if (!points.length) return null;
-  // Discrete blocks read as "intervals" while there are few of them; past that the gaps would eat the bar.
-  const blocky = points.length <= 120;
+  // Past ~60 blocks the gaps eat the bar and it reads as one solid strip, so wider periods merge intervals.
+  const { blocks, blockMinutes } = groupAvailabilityBlocks(points, data.resolutionMinutes);
   return (
     <div className="grid gap-2 sm:border-t sm:pt-5.25">
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground max-sm:hidden">
         <span className="font-bold text-foreground">Disponibilidad</span>
-        <span>bloques de {data.resolutionMinutes} min</span>
+        <span>bloques de {formatBlockDuration(blockMinutes)}</span>
       </div>
       <div
         aria-label="Disponibilidad por intervalo"
-        className={blocky ? "grid h-3.25 gap-px sm:h-5.25 sm:gap-0.5" : "grid h-3.25 overflow-hidden rounded-[0.1875rem] sm:h-5.25"}
-        style={{ gridTemplateColumns: `repeat(${Math.max(points.length, 1)}, minmax(0, 1fr))` }}
+        className="grid h-3.25 gap-px sm:h-5.25 sm:gap-0.5"
+        style={{ gridTemplateColumns: `repeat(${blocks.length}, minmax(0, 1fr))` }}
       >
-        {points.map((point, index) => <span key={`${point.at}-${index}`} className={`${statusClass(point.status)} ${blocky ? "rounded-[0.125rem]" : ""}`} title={`${formatDate(point.at)} · ${statusLabel(point.status)}`} />)}
+        {blocks.map((block) => (
+          <span
+            key={block.at}
+            className={`${statusClass(block.status)} rounded-[0.125rem]`}
+            title={`${formatDate(block.at)} · ${statusLabel(block.status)}${block.offlineIntervals && block.offlineIntervals < block.intervals ? ` (${block.offlineIntervals} de ${block.intervals} intervalos)` : ""}`}
+          />
+        ))}
       </div>
       <div className="flex flex-wrap items-center gap-x-5.25 gap-y-1 text-xs text-muted-foreground">
         {availabilityLegend.map((entry) => <span key={entry.status} className="inline-flex items-center gap-1.5 max-sm:hidden"><span className={`size-2 rounded-[0.125rem] ${statusClass(entry.status)}`} />{entry.label}</span>)}
