@@ -229,3 +229,30 @@ test("server history keeps gaps and derives weighted response statistics", async
   assert.equal(aggregate?.summary.sourceChanges, 1);
   assert.equal(aggregateHistorySeries([]), null);
 });
+
+test("availability rail groups dense histories into a bounded number of readable blocks", async () => {
+  const { groupAvailabilityBlocks, formatBlockDuration } = await import("../src/lib/servers/player-history-chart.ts");
+  const statuses = Array.from({ length: 168 }, (_, index) => (index === 100 ? "offline" as const : index < 3 ? "no_data" as const : "online" as const));
+  const points = statuses.map((status, index) => ({ at: new Date(Date.UTC(2026, 8, 16) + index * 3_600_000).toISOString(), status }));
+  const { blocks, blockMinutes } = groupAvailabilityBlocks(points, 60, 60);
+
+  assert.equal(blockMinutes, 180);
+  assert.equal(blocks.length, 56);
+  assert.equal(blocks[0]?.status, "no_data");
+  assert.equal(blocks[0]?.at, points[0]?.at);
+  // One silent hour inside a block still shows up as an incident.
+  assert.equal(blocks[33]?.status, "offline");
+  assert.equal(blocks.filter((block) => block.status === "offline").length, 1);
+  assert.equal(formatBlockDuration(180), "3 h");
+  assert.equal(formatBlockDuration(15), "15 min");
+  assert.equal(formatBlockDuration(2160), "36 h");
+  assert.equal(formatBlockDuration(2880), "2 días");
+});
+
+test("availability rail keeps sparse histories one block per interval", async () => {
+  const { groupAvailabilityBlocks } = await import("../src/lib/servers/player-history-chart.ts");
+  const points = Array.from({ length: 40 }, (_, index) => ({ at: String(index), status: "online" as const }));
+  const { blocks, blockMinutes } = groupAvailabilityBlocks(points, 15, 60);
+  assert.equal(blocks.length, 40);
+  assert.equal(blockMinutes, 15);
+});

@@ -11,6 +11,37 @@ export function getAvailabilityLegend() {
   return availabilityLegend.map((entry) => ({ ...entry }));
 }
 
+// Worst first: one silent interval inside a block must still read as an incident.
+const blockStatusPriority: ReadonlyArray<HistoryPointStatus> = ["offline", "unknown", "online", "no_data"];
+
+export type AvailabilityBlock = { at: string; status: HistoryPointStatus; intervals: number; offlineIntervals: number };
+
+export function groupAvailabilityBlocks(
+  points: ReadonlyArray<Pick<HistoryPoint, "at" | "status">>,
+  resolutionMinutes: number,
+  maximumBlocks = 60,
+) {
+  const size = Math.max(1, Math.ceil(points.length / maximumBlocks));
+  const blocks: AvailabilityBlock[] = [];
+  for (let start = 0; start < points.length; start += size) {
+    const group = points.slice(start, start + size);
+    const statuses = new Set(group.map((point) => point.status));
+    blocks.push({
+      at: group[0]!.at,
+      status: blockStatusPriority.find((status) => statuses.has(status)) ?? "no_data",
+      intervals: group.length,
+      offlineIntervals: group.filter((point) => point.status === "offline").length,
+    });
+  }
+  return { blocks, blockMinutes: size * resolutionMinutes };
+}
+
+export function formatBlockDuration(minutes: number) {
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes % 1440 === 0) return minutes === 1440 ? "1 día" : `${minutes / 1440} días`;
+  return `${Math.round(minutes / 60)} h`;
+}
+
 export type PlayerHistoryChartPoint = HistoryPoint & {
   serverPeak?: number | null;
   javaPeak?: number | null;
