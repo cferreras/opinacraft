@@ -1,4 +1,4 @@
-@import "https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap";
+@import "https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=JetBrains+Mono:wght@500&display=swap";
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -32,6 +32,8 @@
   --info: oklch(0.58 0.12 230);
   --warning: oklch(0.62 0.15 80);
   --warning-soft: oklch(0.97 0.035 90);
+  /* Stars and rating bars: a lighter gold than `--warning`, which reads as a caution rather than a score. */
+  --rating: oklch(0.76 0.15 80);
   --danger: oklch(0.58 0.18 25);
   --danger-soft: oklch(0.96 0.03 25);
   /* Blog categories. Three reuse the semantic hues the product already speaks
@@ -91,6 +93,7 @@
   --color-info: var(--info);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-rating: var(--rating);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-category-guias: var(--category-guias);
@@ -122,7 +125,7 @@
   --breakpoint-wide: 70rem;
   --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-heading: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "SFMono-Regular", consolas, "Liberation Mono", monospace;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", consolas, "Liberation Mono", monospace;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

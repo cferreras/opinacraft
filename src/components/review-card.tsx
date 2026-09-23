@@ -1,9 +1,8 @@
-import { Star } from "lucide-react";
+import { ShieldCheck, Star } from "lucide-react";
 
 import { deleteOfficialReplyAction } from "@/app/servers/[slug]/actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { OfficialReplyEditor } from "@/components/official-reply-editor";
 import { OfficialReplyForm } from "@/components/official-reply-form";
@@ -13,9 +12,8 @@ import { LocalizedTimestamp } from "@/components/localized-timestamp";
 
 function Rating({ rating }: { rating: number }) {
   return (
-    <span className="inline-flex items-center gap-0.5 text-warning" aria-label={`${rating} de 5 estrellas`}>
-      {[1, 2, 3, 4, 5].map((star) => <Star key={star} aria-hidden="true" className={`size-3.5 ${star <= rating ? "fill-current" : "opacity-25"}`} />)}
-      <span className="ml-1 text-xs font-medium tabular-nums text-muted-foreground">{rating.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+    <span className="inline-flex items-center gap-px text-rating" aria-label={`${rating} de 5 estrellas`}>
+      {[1, 2, 3, 4, 5].map((star) => <Star key={star} aria-hidden="true" className={`size-3.25 fill-current ${star <= rating ? "" : "text-muted-foreground/25"}`} />)}
     </span>
   );
 }
@@ -33,38 +31,34 @@ export function ReviewCard({ review, serverId, slug, canReport, canReply, canMan
   canManageReplies: boolean;
 }) {
   return (
-    <Card id={`review-${review.id}`}>
-      <CardContent className="p-4 sm:p-5">
-        <div className="flex items-start gap-3">
-          <Avatar className="size-8 shrink-0"><AvatarImage src={review.authorImage ?? undefined} alt="" width={32} height={32} /><AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">{initials(review.authorName)}</AvatarFallback></Avatar>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-              <div>
-                <p className="text-sm font-semibold">{review.authorName}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground"><LocalizedTimestamp value={review.createdAt} mode="datetime" /></p>
-              </div>
-              <Rating rating={review.rating} />
-            </div>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{review.content}</p>
+    <article id={`review-${review.id}`} className="scroll-mt-24 border-t p-5.25 first:border-t-0 sm:p-8.5">
+      <div>
+        <div className="flex items-center gap-3.25">
+          <Avatar className="size-10 shrink-0"><AvatarImage src={review.authorImage ?? undefined} alt="" width={40} height={40} /><AvatarFallback className="bg-accent text-[0.9375rem] font-extrabold text-primary-ink">{initials(review.authorName)}</AvatarFallback></Avatar>
+          <div className="grid min-w-0 gap-0.5">
+            <p className="text-sm font-bold">{review.authorName}</p>
+            <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><Rating rating={review.rating} /><span aria-hidden="true">·</span><LocalizedTimestamp value={review.createdAt} mode="datetime" /></p>
           </div>
         </div>
+        <p className="mt-3.25 max-w-[38rem] whitespace-pre-wrap text-[0.9375rem] leading-6 text-foreground/75">{review.content}</p>
 
         {review.reply ? (
-          <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-3.5">
+          <div className="mt-3.25 rounded-lg bg-accent p-5.25 sm:ml-13.25">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-xs font-semibold text-primary">Respuesta oficial</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{review.reply.authorName} · <LocalizedTimestamp value={review.reply.createdAt} mode="datetime" /></p>
-              </div>
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-bold text-primary-ink">
+                <ShieldCheck aria-hidden="true" className="size-3.5" />
+                Respuesta oficial del equipo
+                <span className="font-medium text-muted-foreground">· {review.reply.authorName} · <LocalizedTimestamp value={review.reply.createdAt} mode="datetime" /></span>
+              </p>
               {canManageReplies ? <div className="flex flex-wrap items-center gap-2"><OfficialReplyEditor replyId={review.reply.id} slug={slug} content={review.reply.content} /><form action={deleteOfficialReplyAction}><input type="hidden" name="replyId" value={review.reply.id} /><input type="hidden" name="slug" value={slug} /><Button type="submit" variant="link" size="sm" className="h-auto p-0 text-xs text-primary">Eliminar</Button></form></div> : null}
             </div>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{review.reply.content}</p>
+            <p className="mt-2 text-sm leading-[1.375rem] text-foreground/75">{review.reply.content}</p>
           </div>
         ) : canReply ? <OfficialReplyForm reviewId={review.id} slug={slug} /> : null}
 
         {canReport ? <><Separator className="my-4" /><ReviewReportForm serverId={serverId} reviewId={review.id} /></> : null}
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }
 

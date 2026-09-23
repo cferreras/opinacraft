@@ -7,8 +7,9 @@ test("mobile footer keeps its content groups readable", async ({ page }) => {
   const footer = page.locator("footer");
   await expect(footer).toBeVisible();
 
+  // Two columns of link groups on a phone: Explorar and Comunidad share a row, Recursos and Legal the next.
   const groups = footer.getByRole("navigation");
-  await expect(groups).toHaveCount(3);
+  await expect(groups).toHaveCount(4);
 
   const groupRects = await groups.evaluateAll((elements) =>
     elements.map((element) => {
@@ -17,7 +18,7 @@ test("mobile footer keeps its content groups readable", async ({ page }) => {
     }),
   );
 
-  expect(new Set(groupRects.map(({ top }) => top)).size).toBe(3);
+  expect(new Set(groupRects.map(({ top }) => top)).size).toBe(2);
 
   const footerBounds = await footer.evaluate((element) => ({
     clientWidth: element.clientWidth,
@@ -26,9 +27,10 @@ test("mobile footer keeps its content groups readable", async ({ page }) => {
   expect(footerBounds.scrollWidth).toBeLessThanOrEqual(footerBounds.clientWidth);
   expect(groupRects.every(({ right }) => right <= footerBounds.clientWidth)).toBe(true);
 
-  const helpNavigation = footer.getByRole("navigation", { name: "Ayuda" });
-  await expect(helpNavigation).toBeVisible();
-  await expect(helpNavigation.getByRole("link", { name: /Privacidad/ })).toBeVisible();
+  const legalNavigation = footer.getByRole("navigation", { name: "Legal" });
+  await expect(legalNavigation).toBeVisible();
+  await expect(legalNavigation.getByRole("link", { name: /Privacidad/ })).toBeVisible();
+  await expect(footer.getByRole("group", { name: "Tema" })).toBeVisible();
 });
 
 test("all app pages expose the full site footer exactly once", async ({ page }) => {
@@ -37,7 +39,7 @@ test("all app pages expose the full site footer exactly once", async ({ page }) 
 
     const footer = page.locator("footer");
     await expect(footer, `footer on ${path}`).toHaveCount(1);
-    await expect(footer.getByRole("navigation"), `full footer on ${path}`).toHaveCount(3);
+    await expect(footer.getByRole("navigation"), `full footer on ${path}`).toHaveCount(4);
     await expect(footer.getByRole("navigation", { name: "Explorar" })).toBeVisible();
   }
 });
@@ -51,14 +53,17 @@ test("does not add a second viewport before the shared footer", async ({ page })
     const bounds = await page.locator("footer").evaluate((footer) => {
       const rect = footer.getBoundingClientRect();
       return {
-        footerBottom: Math.round(rect.bottom),
+        footerTop: Math.round(rect.top),
+        footerBottom: Math.round(rect.bottom + window.scrollY),
         documentHeight: document.documentElement.scrollHeight,
         viewportHeight: window.innerHeight,
       };
     });
 
-    expect(bounds.footerBottom, `footer should fit on ${path}`).toBeLessThanOrEqual(bounds.viewportHeight);
-    expect(bounds.documentHeight, `page should not overflow on ${path}`).toBeLessThanOrEqual(bounds.viewportHeight);
+    // The footer is taller than the room a short page leaves, so it may run past the fold -- but it
+    // has to start on the first screen, and nothing may pad the page before or after it.
+    expect(bounds.footerTop, `footer should start on the first screen of ${path}`).toBeLessThan(bounds.viewportHeight);
+    expect(bounds.documentHeight, `page should end with the footer on ${path}`).toBe(bounds.footerBottom);
   }
 });
 
@@ -75,4 +80,22 @@ test("does not stream the footer before async route content", async ({ page }) =
   });
 
   expect(firstChunk).not.toContain("<footer");
+});
+
+test("the footer switches the site theme and remembers it", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/sign-in");
+
+  const themeSwitch = page.locator("footer").getByRole("group", { name: "Tema" });
+  await themeSwitch.getByRole("button", { name: "Oscuro" }).click();
+
+  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  await expect(themeSwitch.getByRole("button", { name: "Oscuro" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  await expect(page.locator("footer").getByRole("group", { name: "Tema" }).getByRole("button", { name: "Oscuro" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.locator("footer").getByRole("group", { name: "Tema" }).getByRole("button", { name: "Claro" }).click();
+  await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
 });

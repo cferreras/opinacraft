@@ -260,12 +260,12 @@ test("code-splits the Recharts history visualization", () => {
   assert.match(chartSource, /from ["']recharts["']/);
 });
 
-test("renders player history as interval bars", () => {
+test("renders player history as a filled area with its peak marked", () => {
   const chartSource = readProjectFile("src/components/player-history-chart.tsx");
 
-  assert.match(chartSource, /\bBarChart\b/);
-  assert.match(chartSource, /\bBar\b/);
-  assert.match(chartSource, /<Bar[\s\S]*dataKey="serverPeak"/);
+  assert.match(chartSource, /\bAreaChart\b/);
+  assert.match(chartSource, /<Area[\s\S]*dataKey="serverPeak"/);
+  assert.match(chartSource, /<ReferenceDot/);
   assert.doesNotMatch(chartSource, /\bLineChart\b/);
   assert.doesNotMatch(chartSource, /\bLine\b/);
 });
@@ -332,7 +332,7 @@ test("keeps opinion and official reply editors behind accessible dialogs", () =>
 test("groups official reply edit and delete actions together", () => {
   const source = readProjectFile("src/components/review-card.tsx");
   const actionsStart = source.indexOf('<div className="flex flex-wrap items-center justify-between gap-2">');
-  const contentStart = source.indexOf('<p className="mt-2 text-sm leading-6 text-muted-foreground">{review.reply.content}</p>');
+  const contentStart = source.indexOf("{review.reply.content}</p>");
 
   assert.ok(actionsStart >= 0, "official reply actions should have a shared action row");
   assert.ok(contentStart > actionsStart, "official reply content should follow the action row");
@@ -370,7 +370,7 @@ test("uses complete identities for verified endpoints and one directory grid tem
   const directorySource = readProjectFile("src/app/servers/page.tsx");
   const rowSource = readProjectFile("src/components/public-server-row.tsx");
 
-  assert.match(detailSource, /<EndpointRow key=\{`\$\{item\.edition\}:\$\{item\.host\}:\$\{item\.port\}`\} endpoint=\{item\} \/>/);
+  assert.match(detailSource, /<EndpointRow key=\{`\$\{item\.edition\}:\$\{item\.host\}:\$\{item\.port\}`\} endpoint=\{item\}[\s/]/);
   assert.doesNotMatch(detailSource, /<EndpointRow key=\{item\.edition\}/);
   assert.match(directorySource, /export const tableGridTemplate =/);
   assert.match(rowSource, /import \{ tableGridTemplate \} from ["']@\/app\/servers\/page["']/);

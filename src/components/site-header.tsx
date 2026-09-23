@@ -6,7 +6,7 @@ import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } fro
 import {
   BookOpen,
   ChevronRight,
-  CircleHelp,
+  LayoutGrid,
   Menu,
   Plus,
   Search,
@@ -21,15 +21,16 @@ import { BrandMark } from "@/components/brand-mark";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ThemeMenuItems, ThemeSegmented } from "@/components/theme-toggle";
 
 const navigation = [
-  { label: "Mis servidores", href: "/dashboard/servers", icon: Server },
+  { label: "Servidores", href: "/", icon: LayoutGrid },
   { label: "Blog", href: "/blog", icon: BookOpen },
+  { label: "Mis servidores", href: "/dashboard/servers", icon: Server },
 ] as const;
 
 type PlatformRole = "moderator" | "admin";
@@ -44,8 +45,8 @@ const getServerPlatform = () => false;
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-2 text-[0.9375rem] font-bold tracking-tight">
-      <BrandMark size={compact ? 26 : 28} className="text-primary" />
+    <span className="inline-flex items-center gap-2 text-[1.0625rem] font-extrabold tracking-[-0.02em]">
+      <BrandMark size={compact ? 24 : 26} className="text-primary" />
       {!compact && <span>OpinaCraft</span>}
     </span>
   );
@@ -72,7 +73,7 @@ function visibleNavigation(signedIn: boolean) {
 
 function NavigationLinks({ pathname, signedIn }: { pathname: string; signedIn: boolean }) {
   return (
-    <nav aria-label="Navegación principal" className="flex h-16 items-stretch gap-0.5">
+    <nav aria-label="Navegación principal" className="flex h-16 items-stretch gap-5.25">
       {visibleNavigation(signedIn).map((item) => {
         const active = isNavigationActive(pathname, item.href);
         return (
@@ -80,10 +81,9 @@ function NavigationLinks({ pathname, signedIn }: { pathname: string; signedIn: b
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className={`relative flex items-center rounded-sm px-3 text-sm transition-colors ${active ? "font-semibold text-foreground" : "font-medium text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center rounded-sm text-sm font-semibold transition-colors ${active ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
           >
             {item.label}
-            {active ? <span aria-hidden="true" className="absolute inset-x-3 -bottom-px h-0.5 rounded-t-full bg-primary" /> : null}
           </Link>
         );
       })}
@@ -130,11 +130,11 @@ function MobileNavigationSection({
 }
 
 function MobileNavigation({ pathname, canModerate, signedIn, onNavigate }: { pathname: string; canModerate: boolean; signedIn: boolean; onNavigate: () => void }) {
-  const publicItems: readonly NavigationItem[] = [navigation[1]];
+  const publicItems: readonly NavigationItem[] = [navigation[0], navigation[1]];
   const managementItems: readonly NavigationItem[] = signedIn
     ? canModerate
-      ? [navigation[0], moderationNavigation]
-      : [navigation[0]]
+      ? [navigation[2], moderationNavigation]
+      : [navigation[2]]
     : [];
 
   return (
@@ -201,16 +201,51 @@ export function SiteHeader() {
   const canModerate = platformAccess.userId === session?.user?.id && platformAccess.role !== null;
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+    <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-2 px-4 sm:px-6 lg:gap-8.5 lg:px-8">
+        <Link href="/" aria-label="OpinaCraft, inicio" className="mr-auto inline-flex shrink-0 items-center lg:mr-0"><Brand compact={false} /></Link>
+
+        <form onSubmit={submitSearch} className="relative hidden h-10 max-w-[27.8rem] flex-1 lg:block">
+          <Search className="pointer-events-none absolute left-3.25 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <label htmlFor="header-search" className="sr-only">Buscar servidores</label>
+          <Input ref={desktopSearchRef} id="header-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Busca por nombre, modalidad o frase…" className="h-10 rounded-[0.625rem] bg-background pl-9.5 pr-16 text-sm shadow-none" />
+          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[0.3125rem] border bg-card px-1.5 py-0.5 font-sans text-[0.6875rem] font-bold text-muted-foreground">{isMac ? "⌘ K" : "Ctrl K"}</kbd>
+        </form>
+
+        <div className="ml-auto hidden lg:block"><NavigationLinks pathname={pathname} signedIn={Boolean(session)} /></div>
+
+        {sessionPending ? <Skeleton className="size-8 rounded-full" /> : session ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="hidden h-10 gap-2 px-1.5 lg:inline-flex" aria-label="Abrir mi perfil">
+                <Avatar className="size-7"><AvatarImage src={session.user.image ?? undefined} alt="" /><AvatarFallback>{avatarLabel(session)}</AvatarFallback></Avatar>
+                <span className="max-w-28 truncate text-sm font-semibold">{displayName}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem asChild><Link href="/profile"><User className="size-4" /> Mi perfil</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/dashboard/servers"><Server className="size-4" /> Mis servidores</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/servers/new"><Plus className="size-4" /> Publicar servidor</Link></DropdownMenuItem>
+              {canModerate ? <DropdownMenuItem asChild><Link href="/admin"><ShieldCheck className="size-4" /> Moderación</Link></DropdownMenuItem> : null}
+              <DropdownMenuSeparator />
+              <ThemeMenuItems />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button asChild className="hidden h-10 rounded-[0.625rem] bg-foreground px-4 text-sm font-bold text-background hover:bg-foreground/90 lg:inline-flex">
+            <Link href="/sign-in">Iniciar sesión</Link>
+          </Button>
+        )}
+
+        <Button variant="ghost" size="icon" className="size-11 lg:hidden" onClick={() => setSearchOpen(true)} aria-label="Buscar servidores"><Search className="size-5" /></Button>
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menú"><Menu className="size-5" /></Button>
+            <Button variant="ghost" size="icon" className="-mr-2 size-11 lg:hidden" aria-label="Abrir menú"><Menu className="size-5" /></Button>
           </SheetTrigger>
           <SheetContent
-            side="left"
+            side="right"
             showCloseButton={false}
-            className="gap-0 overflow-hidden bg-background p-0 data-[side=left]:w-[calc(100%_-_2rem)] data-[side=left]:max-w-80 data-[side=left]:sm:inset-y-auto data-[side=left]:sm:left-3 data-[side=left]:sm:top-3 data-[side=left]:sm:h-auto data-[side=left]:sm:max-h-[calc(100vh_-_1.5rem)] data-[side=left]:sm:max-w-80 data-[side=left]:sm:rounded-xl data-[side=left]:sm:border"
+            className="gap-0 overflow-hidden bg-background p-0 data-[side=right]:w-[calc(100%_-_2rem)] data-[side=right]:max-w-80 data-[side=right]:sm:inset-y-auto data-[side=right]:sm:right-3 data-[side=right]:sm:top-3 data-[side=right]:sm:h-auto data-[side=right]:sm:max-h-[calc(100vh_-_1.5rem)] data-[side=right]:sm:max-w-80 data-[side=right]:sm:rounded-xl data-[side=right]:sm:border"
           >
             <SheetClose asChild>
               <Button variant="ghost" size="icon-lg" className="absolute right-3 top-3 z-10 size-10" aria-label="Cerrar menú">
@@ -221,8 +256,12 @@ export function SiteHeader() {
               <SheetTitle><Brand /></SheetTitle>
               <SheetDescription>Encuentra, publica y gestiona servidores.</SheetDescription>
             </SheetHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-5">
               <MobileNavigation pathname={pathname} canModerate={canModerate} signedIn={Boolean(session)} onNavigate={() => setMenuOpen(false)} />
+              <div>
+                <p className="px-3 pb-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tema</p>
+                <ThemeSegmented className="mx-3" />
+              </div>
             </div>
             <div className="mt-auto border-t p-4">
               {session ? (
@@ -237,47 +276,14 @@ export function SiteHeader() {
                   </Link>
                 </Button>
               ) : (
-                <Button variant="outline" asChild className="mb-3 h-10 w-full"><Link href="/sign-in" onClick={() => setMenuOpen(false)}>Iniciar sesión</Link></Button>
+                <Button asChild className="mb-3 h-10 w-full rounded-[0.625rem] bg-foreground font-bold text-background hover:bg-foreground/90"><Link href="/sign-in" onClick={() => setMenuOpen(false)}>Iniciar sesión</Link></Button>
               )}
-              <Button asChild size="lg" className="h-10 w-full shadow-none">
+              <Button asChild variant="outline" size="lg" className="h-10 w-full shadow-none">
                 <Link href="/servers/new" onClick={() => setMenuOpen(false)}><Plus className="size-4" /> Publicar servidor</Link>
               </Button>
             </div>
           </SheetContent>
         </Sheet>
-
-        <Link href="/" aria-label="OpinaCraft, inicio" className="inline-flex shrink-0 items-center"><Brand compact={false} /></Link>
-        <div className="hidden lg:block"><NavigationLinks pathname={pathname} signedIn={Boolean(session)} /></div>
-
-        <form onSubmit={submitSearch} className="relative ml-auto hidden w-full max-w-xs lg:block">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <label htmlFor="header-search" className="sr-only">Buscar servidores</label>
-          <Input ref={desktopSearchRef} id="header-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar servidores" className="h-9 bg-muted pl-8 pr-14" />
-          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-background px-1.5 py-0.5 text-[0.625rem] font-semibold text-muted-foreground">{isMac ? "⌘ K" : "Ctrl K"}</kbd>
-        </form>
-
-        <div className="ml-auto flex items-center gap-1 lg:ml-0">
-          <span aria-hidden="true" className="mx-1 hidden h-5 w-px bg-border lg:block" />
-          <Button variant="ghost" size="icon" asChild className="hidden sm:inline-flex"><Link href="/contact" aria-label="Ayuda"><CircleHelp className="size-4" /></Link></Button>
-          <ThemeToggle />
-          <Button size="lg" asChild className="hidden sm:inline-flex"><Link href="/servers/new"><Plus className="size-4" /> Publicar</Link></Button>
-          {sessionPending ? <Skeleton className="size-8 rounded-full" /> : session ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-9 gap-2 px-1.5" aria-label="Abrir mi perfil">
-                  <Avatar className="size-7"><AvatarImage src={session.user.image ?? undefined} alt="" /><AvatarFallback>{avatarLabel(session)}</AvatarFallback></Avatar>
-                  <span className="hidden max-w-28 truncate text-sm font-medium md:inline">{displayName}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuItem asChild><Link href="/profile"><User className="size-4" /> Mi perfil</Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link href="/dashboard/servers"><Server className="size-4" /> Mis servidores</Link></DropdownMenuItem>
-                {canModerate ? <DropdownMenuItem asChild><Link href="/admin"><ShieldCheck className="size-4" /> Moderación</Link></DropdownMenuItem> : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex"><Link href="/sign-in">Iniciar sesión</Link></Button>}
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSearchOpen(true)} aria-label="Buscar servidores"><Search className="size-5" /></Button>
-        </div>
       </div>
 
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
