@@ -30,15 +30,18 @@ export async function GET(request: Request, { params }: Props) {
   const edition = editionValue as HistoryEditionFilter;
   const session = await getServerSession();
   let publicData;
+  let data;
   try {
     publicData = await getPublicPlayerHistory(serverId, period, edition);
+    // A draft or hidden server has no public history, but its members still
+    // read it from the same provider as the public page.
+    data = publicData ?? (session ? await getManagedPlayerHistory(serverId, session.user.id, period, edition) : null);
   } catch (error) {
     if (isMonitorApiConfigured()) {
       return NextResponse.json({ error: "Monitor history is temporarily unavailable." }, { status: 503, headers: { "retry-after": "60" } });
     }
     throw error;
   }
-  const data = publicData ?? (!isMonitorApiConfigured() && session ? await getManagedPlayerHistory(serverId, session.user.id, period, edition) : null);
   if (!data) return NextResponse.json({ error: "Server not found." }, { status: 404 });
 
   const body = JSON.stringify(data);

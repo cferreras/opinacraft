@@ -258,3 +258,15 @@ test("availability rail keeps sparse histories one block per interval", async ()
   assert.equal(blocks.length, 40);
   assert.equal(blockMinutes, 15);
 });
+
+test("members keep reading a draft's history once the Monitor API is configured", async () => {
+  const { readFileSync } = await import("node:fs");
+  // The public check rejects drafts; the managed fallback must not be switched
+  // off by the Monitor API, or a new server's owner gets a 404 instead of history.
+  const route = readFileSync(new URL("../src/app/api/servers/[serverId]/player-history/route.ts", import.meta.url), "utf8");
+  assert.match(route, /publicData \?\? \(session \? await getManagedPlayerHistory\(/);
+  const history = readFileSync(new URL("../src/lib/servers/player-history.ts", import.meta.url), "utf8");
+  const managed = history.slice(history.indexOf("export async function getManagedPlayerHistory"));
+  assert.ok(managed.indexOf("if (!member) return null;") < managed.indexOf("fetchMonitorHistory(serverId, period)"));
+  assert.notEqual(managed.indexOf("fetchMonitorHistory(serverId, period)"), -1);
+});

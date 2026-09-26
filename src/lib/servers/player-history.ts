@@ -409,5 +409,8 @@ export async function getPublicPlayerHistory(serverId: string, period: HistoryPe
 export async function getManagedPlayerHistory(serverId: string, userId: string, period: HistoryPeriod, edition: HistoryEditionFilter = "all", now = new Date()) {
   const [member] = await db.select({ serverId: serverMembers.serverId }).from(serverMembers).where(and(eq(serverMembers.serverId, serverId), eq(serverMembers.userId, userId))).limit(1);
   if (!member) return null;
+  // Once the Monitor API is configured, Neon no longer receives samples, so a
+  // member reading a draft must be served by the Monitor API like the public page.
+  if (isMonitorApiConfigured()) return fetchMonitorHistory(serverId, period);
   return queryPlayerHistory(serverId, period, edition, now);
 }
