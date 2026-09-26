@@ -88,3 +88,39 @@ test("monitor history includes a jittered sample from the current interval immed
   assert.equal(history.series[0]?.points.at(-1)?.at, "2026-08-22T10:00:00.000Z");
   assert.equal(history.series[0]?.points.at(-1)?.status, "online");
 });
+
+test("monitor history uptime counts probes the server did not answer as downtime", () => {
+  const history = buildMonitorHistory({
+    period: "7d",
+    now: new Date("2026-08-22T10:07:00.000Z"),
+    cadenceMinutes: 15,
+    lastUpdatedAt: new Date("2026-08-22T09:50:00.000Z"),
+    probeEdition: "java",
+    rows: {
+      raw: false,
+      rows: [
+        { bucket_start: "2026-08-22T08:00:00.000Z", sample_count: 4, online_count: 4, unknown_count: 0 },
+        { bucket_start: "2026-08-22T09:00:00.000Z", sample_count: 4, online_count: 0, unknown_count: 0 },
+        { bucket_start: "2026-08-21T09:00:00.000Z", sample_count: 4, online_count: 0, unknown_count: 4 },
+      ],
+    },
+  });
+
+  const summary = history.series[0]!.summary;
+  // Offline probes are answers, so the response rate stays high while the server was down half the time.
+  assert.equal(summary.responseRatePct, 66.7);
+  assert.equal(summary.uptimePct, 50);
+});
+
+test("monitor history leaves uptime empty when no probe got an answer", () => {
+  const history = buildMonitorHistory({
+    period: "7d",
+    now: new Date("2026-08-22T10:07:00.000Z"),
+    cadenceMinutes: 15,
+    lastUpdatedAt: new Date("2026-08-22T09:50:00.000Z"),
+    probeEdition: "java",
+    rows: { raw: false, rows: [{ bucket_start: "2026-08-22T09:00:00.000Z", sample_count: 4, online_count: 0, unknown_count: 4 }] },
+  });
+
+  assert.equal(history.series[0]!.summary.uptimePct, null);
+});

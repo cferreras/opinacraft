@@ -73,6 +73,7 @@ export function aggregateHistorySeries(series: HistorySeries[]): HistorySeries |
     .at(-1) ?? null;
   const totalSamples = populated.reduce((sum, point) => sum + point.sampleCount, 0);
   const totalResponding = populated.reduce((sum, point) => sum + (point.sampleCount * point.responseRatePct) / 100, 0);
+  const uptimeValues = series.flatMap((item) => item.summary.uptimePct === null || item.summary.uptimePct === undefined ? [] : [item.summary.uptimePct]);
   const coverage = populated.length ? populated.reduce((sum, point) => sum + point.monitorCoveragePct, 0) / populated.length : 0;
 
   return {
@@ -86,6 +87,7 @@ export function aggregateHistorySeries(series: HistorySeries[]): HistorySeries |
       peakPlayers: playerPoints.length ? Math.max(...playerPoints.map((point) => point.peakPlayers ?? 0)) : null,
       averageOccupancyPct: occupancyPoints.length ? round(occupancyPoints.reduce((sum, point) => sum + (point.averageOccupancyPct ?? 0), 0) / occupancyPoints.length) : null,
       responseRatePct: totalSamples ? round((totalResponding / totalSamples) * 100) ?? 0 : 0,
+      uptimePct: uptimeValues.length ? Math.max(...uptimeValues) : null,
       monitorCoveragePct: round(coverage) ?? 0,
       sampleCount: totalSamples,
       lastSampleAt,

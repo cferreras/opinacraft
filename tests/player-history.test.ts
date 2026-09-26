@@ -61,6 +61,7 @@ test("server view avoids summing potentially duplicated Java and Bedrock counts"
     peakPlayers: players,
     averageOccupancyPct: (players / capacity) * 100,
     responseRatePct: 100,
+    uptimePct: 100,
     monitorCoveragePct: 100,
     sampleCount: 1,
     lastSampleAt,
@@ -82,7 +83,7 @@ test("player history keeps averages separate from whole-player peaks", async () 
     {
       edition: "java",
       points: [{ at: "2026-08-03T12:00:00.000Z", averagePlayers: 1.2, peakPlayers: 2, capacity: 100, averageOccupancyPct: 1.2, responseRatePct: 100, monitorCoveragePct: 100, sampleCount: 4, status: "online", sourceChanged: false }],
-      summary: { currentPlayers: 1.2, currentCapacity: 100, currentStatus: "online", averagePlayers: 1.2, peakPlayers: 2, averageOccupancyPct: 1.2, responseRatePct: 100, monitorCoveragePct: 100, sampleCount: 4, lastSampleAt: "2026-08-03T12:00:00.000Z", sourceChanges: 0 },
+      summary: { currentPlayers: 1.2, currentCapacity: 100, currentStatus: "online", averagePlayers: 1.2, peakPlayers: 2, averageOccupancyPct: 1.2, responseRatePct: 100, uptimePct: 100, monitorCoveragePct: 100, sampleCount: 4, lastSampleAt: "2026-08-03T12:00:00.000Z", sourceChanges: 0 },
     },
   ]);
   assert.equal(aggregate?.points[0]?.averagePlayers, 1.2);
@@ -97,7 +98,7 @@ test("player history chart preserves the observed peak across wider intervals", 
     {
       edition: "server",
       points: [{ at: "2026-08-03T12:00:00.000Z", averagePlayers: 6, peakPlayers: 10, capacity: 100, averageOccupancyPct: 6, responseRatePct: 100, monitorCoveragePct: 100, sampleCount: 16, status: "online", sourceChanged: false }],
-      summary: { currentPlayers: 6, currentCapacity: 100, currentStatus: "online", averagePlayers: 6, peakPlayers: 10, averageOccupancyPct: 6, responseRatePct: 100, monitorCoveragePct: 100, sampleCount: 16, lastSampleAt: "2026-08-03T12:00:00.000Z", sourceChanges: 0 },
+      summary: { currentPlayers: 6, currentCapacity: 100, currentStatus: "online", averagePlayers: 6, peakPlayers: 10, averageOccupancyPct: 6, responseRatePct: 100, uptimePct: 100, monitorCoveragePct: 100, sampleCount: 16, lastSampleAt: "2026-08-03T12:00:00.000Z", sourceChanges: 0 },
     },
   ]);
   assert.equal(chart[0]?.serverPeak, 10);
@@ -213,17 +214,18 @@ test("server history keeps gaps and derives weighted response statistics", async
     {
       edition: "java",
       points: [{ at, averagePlayers: null, peakPlayers: null, capacity: null, averageOccupancyPct: null, responseRatePct: 0, monitorCoveragePct: 50, sampleCount: 0, status: "no_data", sourceChanged: false }],
-      summary: { currentPlayers: null, currentCapacity: null, currentStatus: "no_data", averagePlayers: null, peakPlayers: null, averageOccupancyPct: null, responseRatePct: 0, monitorCoveragePct: 50, sampleCount: 0, lastSampleAt: null, sourceChanges: 0 },
+      summary: { currentPlayers: null, currentCapacity: null, currentStatus: "no_data", averagePlayers: null, peakPlayers: null, averageOccupancyPct: null, responseRatePct: 0, uptimePct: null, monitorCoveragePct: 50, sampleCount: 0, lastSampleAt: null, sourceChanges: 0 },
     },
     {
       edition: "bedrock",
       points: [{ at, averagePlayers: 30, peakPlayers: 40, capacity: 100, averageOccupancyPct: 30, responseRatePct: 75, monitorCoveragePct: 100, sampleCount: 4, status: "online", sourceChanged: true }],
-      summary: { currentPlayers: 30, currentCapacity: 100, currentStatus: "online", averagePlayers: 30, peakPlayers: 40, averageOccupancyPct: 30, responseRatePct: 75, monitorCoveragePct: 100, sampleCount: 4, lastSampleAt: "2026-08-03T12:14:00.000Z", sourceChanges: 1 },
+      summary: { currentPlayers: 30, currentCapacity: 100, currentStatus: "online", averagePlayers: 30, peakPlayers: 40, averageOccupancyPct: 30, responseRatePct: 75, uptimePct: 100, monitorCoveragePct: 100, sampleCount: 4, lastSampleAt: "2026-08-03T12:14:00.000Z", sourceChanges: 1 },
     },
   ]);
   assert.equal(aggregate?.points[0]?.status, "online");
   assert.equal(aggregate?.points[0]?.sourceChanged, true);
   assert.equal(aggregate?.summary.responseRatePct, 75);
+  assert.equal(aggregate?.summary.uptimePct, 100);
   assert.equal(aggregate?.summary.monitorCoveragePct, 100);
   assert.equal(aggregate?.summary.sampleCount, 4);
   assert.equal(aggregate?.summary.sourceChanges, 1);

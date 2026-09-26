@@ -116,7 +116,8 @@ export function PlayerHistoryCard({ serverId, initialData, mode = "public", load
   const sampled = data.series.filter((series) => series.summary.sampleCount > 0);
   const peak = sampled.reduce<number | null>((best, series) => (series.summary.peakPlayers === null ? best : Math.max(best ?? 0, series.summary.peakPlayers)), null);
   const average = sampled[0]?.summary.averagePlayers ?? null;
-  const responseRate = sampled[0]?.summary.responseRatePct ?? null;
+  // Older monitor API responses predate uptimePct; show "—" rather than the response rate, which counts silent probes as answers.
+  const uptime = sampled[0]?.summary.uptimePct ?? null;
   const footnote = data.freshness === "stale"
     ? `Comprobado ${dateFormatter.format(lastSample)} · con retraso`
     : `Comprobado ${dateFormatter.format(lastSample)}${data.cadenceMinutes ? "" : ` · ${cadenceLabel(data.cadenceMinutes)}`}`;
@@ -163,7 +164,7 @@ export function PlayerHistoryCard({ serverId, initialData, mode = "public", load
             <dl className="flex flex-wrap gap-x-5.25 gap-y-3.25 sm:gap-x-8.5">
               <HeadlineFigure label="Pico" value={formatCount(peak)} />
               <HeadlineFigure label="Media" value={formatCount(average)} />
-              <HeadlineFigure label="Disponibilidad" value={responseRate === null ? "—" : `${responseRate.toLocaleString("es-ES", { maximumFractionDigits: 1 })} %`} />
+              <HeadlineFigure label="Disponibilidad" value={uptime === null ? "—" : `${uptime.toLocaleString("es-ES", { maximumFractionDigits: 1 })} %`} />
             </dl>
             <PlayerHistoryChart data={chartData} period={data.period} />
             <AvailabilityRail data={data} formatDate={(value) => dateFormatter.format(value)} footnote={footnote} />

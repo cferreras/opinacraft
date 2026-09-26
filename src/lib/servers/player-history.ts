@@ -43,6 +43,9 @@ export type HistorySeries = {
     peakPlayers: number | null;
     averageOccupancyPct: number | null;
     responseRatePct: number;
+    // Share of answered probes where the server was online; probes the monitor
+    // could not complete ("unknown") are left out because they say nothing about the server.
+    uptimePct: number | null;
     monitorCoveragePct: number;
     sampleCount: number;
     lastSampleAt: string | null;
@@ -189,6 +192,8 @@ function buildSeriesFromBuckets(
   buckets: Array<Array<BucketRow>>,
   expectedSamples: number | ((slot: Date) => number) = 1,
 ): HistorySeries {
+  let totalOnline = 0;
+  let totalAnswered = 0;
   const points = slots.map((slot, index) => {
     const rows = buckets[index] ?? [];
     if (!rows.length) return emptyPoint(slot);
@@ -205,6 +210,8 @@ function buildSeriesFromBuckets(
     const peakValues = rows.flatMap((row) => row.playersPeak === null || row.playersPeak === undefined ? [] : [row.playersPeak]);
     const sourceIds = new Set(rows.map((row) => row.historySourceId));
     const status: HistoryPointStatus = onlineCount > 0 ? "online" : respondingCount >= sampleCount ? "offline" : "unknown";
+    totalOnline += onlineCount;
+    totalAnswered += respondingCount;
     return {
       at: slot.toISOString(),
       averagePlayers: playerDataCount ? round(playersTotal / playerDataCount) : null,
@@ -249,6 +256,7 @@ function buildSeriesFromBuckets(
       peakPlayers: playerPoints.length ? Math.max(...playerPoints.map((point) => point.peakPlayers ?? 0)) : null,
       averageOccupancyPct: occupancyPoints.length ? round(occupancyPoints.reduce((sum, point) => sum + (point.averageOccupancyPct ?? 0), 0) / occupancyPoints.length) : null,
       responseRatePct: totalSamples ? round((totalResponding / totalSamples) * 100) ?? 0 : 0,
+      uptimePct: totalAnswered ? round((totalOnline / totalAnswered) * 100) : null,
       monitorCoveragePct: expectedTotal ? round((totalSamples / expectedTotal) * 100) ?? 0 : 0,
       sampleCount: totalSamples,
       lastSampleAt: latestSample?.toISOString() ?? null,
