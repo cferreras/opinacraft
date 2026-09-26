@@ -283,7 +283,13 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
                 label="Jugadores"
                 value={server.monitor.playersCurrent !== null && server.monitor.playersMax !== null ? <>{server.monitor.playersCurrent.toLocaleString("es-ES")}<span className="font-semibold text-muted-foreground">/ {server.monitor.playersMax.toLocaleString("es-ES")}</span></> : "— / —"}
               />
-              <Metric label="Versión" className="max-sm:hidden" value={server.monitor.version ?? "—"} />
+              {/* The version is whatever the server reports ("Velocity 3.3.0-SNAPSHOT", "1.8.x-1.21.x"…), so it
+                  wraps inside its cell instead of being clipped at the column's width. */}
+              <Metric
+                label="Versión"
+                className="max-sm:hidden"
+                value={server.monitor.version ? <span title={server.monitor.version} className="line-clamp-2 min-w-0 whitespace-normal text-[0.9375rem] leading-tight [overflow-wrap:anywhere]">{server.monitor.version}</span> : "—"}
+              />
               <Metric label="Ping" tone={latencyClass(server.monitor.latencyMs)} value={server.monitor.latencyMs !== null ? `${server.monitor.latencyMs} ms` : "—"} />
               <Metric
                 label="Valoración"

@@ -28,6 +28,7 @@ export const minecraftEditions = ["java", "bedrock"] as const;
 export type MinecraftEdition = (typeof minecraftEditions)[number];
 
 const MAX_URL_LENGTH = 2_048;
+const URL_LENGTH_MESSAGE = `Usa un enlace de hasta ${MAX_URL_LENGTH} caracteres.`;
 type ServerUrlField = "websiteUrl" | "storeUrl" | "discordUrl" | "accessFormUrl";
 
 export type RawServerEndpoint = {
@@ -99,11 +100,11 @@ export const createServerInputSchema = z
   .object({
     name: z.string().trim().min(3).max(80),
     description: z.string().transform((value) => normalizeServerDescription(value) ?? "").pipe(z.string().max(SERVER_DESCRIPTION_MAX_LENGTH)).optional(),
-    websiteUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-    storeUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-    discordUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
+    websiteUrl: z.string().trim().max(MAX_URL_LENGTH, URL_LENGTH_MESSAGE).optional(),
+    storeUrl: z.string().trim().max(MAX_URL_LENGTH, URL_LENGTH_MESSAGE).optional(),
+    discordUrl: z.string().trim().max(MAX_URL_LENGTH, URL_LENGTH_MESSAGE).optional(),
     accessType: z.enum(serverAccessTypes).default("open"),
-    accessFormUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
+    accessFormUrl: z.string().trim().max(MAX_URL_LENGTH, URL_LENGTH_MESSAGE).optional(),
     accountMode: z.enum(serverAccountModes).default("premium_only"),
     authMode: z.enum(serverAuthModes).default("direct"),
     // Unknown slugs are filtered out by normalizeGameModeInputs, so only the count is a hard error.
@@ -277,6 +278,17 @@ export function isPublicHost(value: string) {
   );
 }
 
+const urlFieldLabels: Record<ServerUrlField, string> = {
+  websiteUrl: "la web",
+  storeUrl: "la tienda",
+  discordUrl: "el Discord",
+  accessFormUrl: "el formulario",
+};
+
+// Anything that already names a scheme ("https:", "javascript:", "mailto:") is left for the
+// protocol check below; "tienda.example.com:8443" does not count, because a port follows its colon.
+const EXPLICIT_SCHEME = /^[a-z][a-z0-9+.-]*:(?!\d)/i;
+
 export function normalizeHttpUrl(value: string, field: ServerUrlField) {
   const candidate = value.trim();
 
@@ -284,11 +296,18 @@ export function normalizeHttpUrl(value: string, field: ServerUrlField) {
     return null;
   }
 
+  // Owners paste links the way they share them — "glorium.tebex.io" — so a bare address is read
+  // as https instead of being refused for the missing scheme.
+  const withScheme = candidate.startsWith("//")
+    ? `https:${candidate}`
+    : EXPLICIT_SCHEME.test(candidate) ? candidate : `https://${candidate}`;
+  const label = urlFieldLabels[field];
+
   let parsed: URL;
   try {
-    parsed = new URL(candidate);
+    parsed = new URL(withScheme);
   } catch {
-    throw new ServerInputError("Escribe una URL válida.", field);
+    throw new ServerInputError(`Escribe el enlace de ${label} completo, por ejemplo https://tuservidor.com.`, field);
   }
 
   if (
@@ -296,7 +315,14 @@ export function normalizeHttpUrl(value: string, field: ServerUrlField) {
     parsed.username ||
     parsed.password
   ) {
-    throw new ServerInputError("Escribe una URL pública que empiece por http:// o https://.", field);
+    throw new ServerInputError(`El enlace de ${label} debe empezar por http:// o https://.`, field);
+  }
+
+  if (!isPublicHost(parsed.hostname)) {
+    throw new ServerInputError(
+      `Usa la dirección pública de ${label}, con su dominio completo (por ejemplo tuservidor.tebex.io).`,
+      field,
+    );
   }
 
   if (field === "discordUrl") {

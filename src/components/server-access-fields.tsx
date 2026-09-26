@@ -66,7 +66,7 @@ export function ServerAccessFields({
         </div>
         {errors?.accessType ? <FieldError>{errors.accessType}</FieldError> : null}
       </fieldset>
-      {accessType === "whitelist" ? <Field className="border-l-2 border-primary/30 pl-4"><FieldLabel htmlFor="access-form-url">Formulario de acceso <span className="font-normal text-muted-foreground">(opcional)</span></FieldLabel><Input id="access-form-url" name="accessFormUrl" type="url" value={formUrl} onChange={(event) => setFormUrl(event.target.value)} placeholder="https://forms.example.com/solicitud" /><FieldDescription>Si lo publicas, aparecerá como enlace “Solicitar acceso” en la ficha pública.</FieldDescription>{errors?.accessFormUrl ? <FieldError>{errors.accessFormUrl}</FieldError> : null}</Field> : null}
+      {accessType === "whitelist" ? <Field className="border-l-2 border-primary/30 pl-4"><FieldLabel htmlFor="access-form-url">Formulario de acceso <span className="font-normal text-muted-foreground">(opcional)</span></FieldLabel><Input id="access-form-url" name="accessFormUrl" type="text" inputMode="url" autoCapitalize="none" spellCheck={false} value={formUrl} onChange={(event) => setFormUrl(event.target.value)} placeholder="https://forms.example.com/solicitud" /><FieldDescription>Si lo publicas, aparecerá como enlace “Solicitar acceso” en la ficha pública.</FieldDescription>{errors?.accessFormUrl ? <FieldError>{errors.accessFormUrl}</FieldError> : null}</Field> : null}
       <fieldset className="grid gap-3">
         <legend className="text-sm font-semibold">Cuentas y autenticación</legend>
         <FieldDescription>Elige la descripción que mejor entiende un jugador antes de conectarse.</FieldDescription>

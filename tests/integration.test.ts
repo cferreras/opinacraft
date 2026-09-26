@@ -703,6 +703,38 @@ test("public player history stays private for a server that is not publicly visi
   }
 });
 
+test("a draft's members read its player history from the Monitor API and strangers do not", testOptions, async () => {
+  const ownerId = await createUser();
+  const strangerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `draft-history-${randomUUID()}.example.invalid`, port: 25565 } });
+  process.env.DATABASE_URL = testDatabaseUrl;
+  const previousUrl = process.env.MONITOR_API_URL;
+  const previousSecret = process.env.MONITOR_API_SECRET;
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  process.env.MONITOR_API_URL = "https://monitor-api.example.test";
+  process.env.MONITOR_API_SECRET = "integration-monitor-secret";
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    requestedUrls.push(String(input));
+    return Response.json({ period: "24h", series: [] });
+  }) as typeof fetch;
+
+  try {
+    const { getManagedPlayerHistory } = await import("../src/lib/servers/player-history.ts");
+    // Neon receives no samples once the Monitor API is configured, so the
+    // owner's view of a fresh draft must come from the Monitor API, not a 404.
+    assert.deepEqual(await getManagedPlayerHistory(serverId, ownerId, "24h"), { period: "24h", series: [] });
+    assert.equal(await getManagedPlayerHistory(serverId, strangerId, "24h"), null);
+    assert.deepEqual(requestedUrls, [`https://monitor-api.example.test/v1/servers/${serverId}/history?period=24h`]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousUrl === undefined) delete process.env.MONITOR_API_URL;
+    else process.env.MONITOR_API_URL = previousUrl;
+    if (previousSecret === undefined) delete process.env.MONITOR_API_SECRET;
+    else process.env.MONITOR_API_SECRET = previousSecret;
+  }
+});
+
 test("reconciliation never deletes monitor targets from a truncated inventory", testOptions, async () => {
   const ownerId = await createUser();
   await createServerRecord({ ownerId, endpoint: { host: `reconcile-a-${randomUUID()}.example.invalid`, port: 25565 } });

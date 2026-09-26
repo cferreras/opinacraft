@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { safeCallbackUrl } from "../src/lib/callback-url.ts";
@@ -22,6 +23,7 @@ import {
   normalizeCreateServerInput,
   normalizeHost,
   normalizeHttpUrl,
+  normalizeUpdateServerInput,
   ServerInputError,
   slugifyServerName,
 } from "../src/lib/servers/validation.ts";
@@ -169,7 +171,80 @@ test("creates an ASCII slug and validates external URLs", () => {
     "https://shop.example.com/store",
   );
   assert.throws(() => normalizeHttpUrl("javascript:alert(1)", "websiteUrl"));
-  assert.throws(() => normalizeHttpUrl("shop.example.com", "storeUrl"));
+});
+
+test("accepts the store links owners paste, with or without a scheme", () => {
+  for (const [input, expected] of [
+    ["glorium.tebex.io", "https://glorium.tebex.io/"],
+    ["https://glorium.tebex.io/", "https://glorium.tebex.io/"],
+    ["HTTPS://Glorium.Tebex.io/category/rangos", "https://glorium.tebex.io/category/rangos"],
+    ["tienda.glorium.net/", "https://tienda.glorium.net/"],
+    ["store.example.com:8443/shop", "https://store.example.com:8443/shop"],
+    ["//glorium.craftingstore.net", "https://glorium.craftingstore.net/"],
+    ["http://shop.example.com", "http://shop.example.com/"],
+  ]) {
+    assert.equal(normalizeHttpUrl(input, "storeUrl"), expected, input);
+  }
+  assert.equal(normalizeHttpUrl("discord.gg/glorium", "discordUrl"), "https://discord.gg/glorium");
+});
+
+test("publishes a draft whose store link has no scheme", () => {
+  const input = normalizeUpdateServerInput({
+    name: "Glorium Network",
+    gameModes: ["survival"],
+    country: "es",
+    storeUrl: "glorium.tebex.io",
+    host: "play.glorium.net",
+    javaPort: 25565,
+  });
+
+  assert.equal(input.storeUrl, "https://glorium.tebex.io/");
+});
+
+test("explains in Spanish which link is wrong and why", () => {
+  const cases: Array<[string, RegExp]> = [
+    ["javascript:alert(1)", /El enlace de la tienda debe empezar por http:\/\/ o https:\/\//],
+    ["ftp://glorium.tebex.io", /El enlace de la tienda debe empezar por http:\/\/ o https:\/\//],
+    ["https://user:secret@glorium.tebex.io", /El enlace de la tienda debe empezar por http:\/\/ o https:\/\//],
+    ["https://tienda glorium", /Escribe el enlace de la tienda completo/],
+    ["tienda", /Usa la dirección pública de la tienda/],
+    ["localhost:3000/shop", /Usa la dirección pública de la tienda/],
+    ["http://192.168.1.10/shop", /Usa la dirección pública de la tienda/],
+  ];
+
+  for (const [value, message] of cases) {
+    assert.throws(
+      () => normalizeHttpUrl(value, "storeUrl"),
+      (error) => error instanceof ServerInputError && error.field === "storeUrl" && message.test(error.message),
+      value,
+    );
+  }
+
+  const tooLong = createServerInputSchema.safeParse({
+    name: "Glorium Network",
+    storeUrl: `https://glorium.tebex.io/${"a".repeat(2_048)}`,
+    host: "play.glorium.net",
+    javaPort: 25565,
+  });
+  assert.equal(tooLong.success, false);
+  assert.deepEqual(tooLong.error?.issues[0]?.path, ["storeUrl"]);
+  assert.match(tooLong.error?.issues[0]?.message ?? "", /Usa un enlace de hasta 2048 caracteres/);
+});
+
+test("link fields let the server explain a bad link instead of the browser blocking the form", () => {
+  for (const file of ["src/components/server-form.tsx", "src/components/server-manage-form.tsx", "src/components/server-access-fields.tsx"]) {
+    const source = readFileSync(file, "utf8");
+    assert.doesNotMatch(source, /type="url"/, file);
+  }
+  assert.match(readFileSync("src/components/server-manage-form.tsx", "utf8"), /name="storeUrl" type="text" inputMode="url"/);
+});
+
+test("a refused save keeps what the owner typed in the manage form", () => {
+  const source = readFileSync("src/components/server-manage-form.tsx", "utf8");
+
+  assert.doesNotMatch(source, /<form action=\{action\}>/);
+  assert.match(source, /<form onSubmit=\{handleSubmit\}>/);
+  assert.match(source, /startTransition\(\(\) => action\(formData\)\)/);
 });
 
 test("normalizes omitted and blank store URLs to null", () => {

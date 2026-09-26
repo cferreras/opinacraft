@@ -26,7 +26,7 @@ test("a save that loses the last verified endpoint reports the paused monitor", 
 test("the manage action carries the paused monitor into the redirect", () => {
   const source = readFileSync("src/app/servers/[slug]/manage/actions.ts", "utf8");
 
-  assert.match(source, /\(\{ monitoringPaused \} = await updateServer\(/);
+  assert.match(source, /\(\{ monitoringPaused(?:, slug)? \} = await updateServer\(/);
   assert.match(source, /monitoringPaused \? "&monitorPaused=1" : ""/);
 });
 
