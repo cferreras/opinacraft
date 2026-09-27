@@ -1,4 +1,4 @@
-import { ShieldCheck, Star } from "lucide-react";
+import { BadgeCheck, ShieldCheck, Star } from "lucide-react";
 
 import { deleteOfficialReplyAction } from "@/app/servers/[slug]/actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -22,13 +22,15 @@ function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "U";
 }
 
-export function ReviewCard({ review, serverId, slug, canReport, canReply, canManageReplies }: {
+export function ReviewCard({ review, serverId, slug, canReport, canReply, canManageReplies, verified = false }: {
   review: ReviewView;
   serverId: string;
   slug: string;
   canReport: boolean;
   canReply: boolean;
   canManageReplies: boolean;
+  /** The author voted for this server with their account. Only ever true with votes enabled. */
+  verified?: boolean;
 }) {
   return (
     <article id={`review-${review.id}`} className="scroll-mt-24 border-t p-5.25 first:border-t-0 sm:p-8.5">
@@ -36,7 +38,15 @@ export function ReviewCard({ review, serverId, slug, canReport, canReply, canMan
         <div className="flex items-center gap-3.25">
           <Avatar className="size-10 shrink-0"><AvatarImage src={review.authorImage ?? undefined} alt="" width={40} height={40} /><AvatarFallback className="bg-accent text-[0.9375rem] font-extrabold text-primary-ink">{initials(review.authorName)}</AvatarFallback></Avatar>
           <div className="grid min-w-0 gap-0.5">
-            <p className="text-sm font-bold">{review.authorName}</p>
+            {verified ? (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <p className="text-sm font-bold">{review.authorName}</p>
+                <span title="Votó por este servidor" className="inline-flex h-5.5 items-center gap-1 rounded-full bg-success-soft px-2 text-[0.6875rem] font-bold text-primary-ink">
+                  <BadgeCheck aria-hidden="true" className="size-3.25" />
+                  Jugador verificado
+                </span>
+              </div>
+            ) : <p className="text-sm font-bold">{review.authorName}</p>}
             <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><Rating rating={review.rating} /><span aria-hidden="true">·</span><LocalizedTimestamp value={review.createdAt} mode="datetime" /></p>
           </div>
         </div>

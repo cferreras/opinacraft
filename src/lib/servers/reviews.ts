@@ -13,6 +13,7 @@ import {
   serverReviewReports,
   serverReviews,
   servers,
+  serverVotes,
 } from "@/schema";
 import {
   reviewInputSchema,
@@ -478,6 +479,22 @@ export async function getReviewSummary(serverId: string): Promise<ReviewSummary>
   };
 }
 
+/** Published reviews whose author has voted for the server with their account at some point. */
+export async function countVerifiedReviews(serverId: string) {
+  const [row] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(serverReviews)
+    .where(
+      and(
+        eq(serverReviews.serverId, serverId),
+        eq(serverReviews.status, "published"),
+        isNull(serverReviews.withheldAt),
+        sql`exists (select 1 from ${serverVotes} where ${serverVotes.serverId} = ${serverReviews.serverId} and ${serverVotes.userId} = ${serverReviews.userId})`,
+      ),
+    );
+  return row?.total ?? 0;
+}
+
 export type ReviewReplyView = {
   id: string;
   content: string;
@@ -543,6 +560,9 @@ export async function listServerReviews(serverId: string, page = 1, currentUserI
   const repliesByReview = new Map(replyRows.map((reply) => [reply.reviewId, reply]));
 
   return {
+    // Review id → author id, kept off `ReviewView` so the ids never ride along to a client prop.
+    // The page only uses it to ask which authors voted.
+    authorIds: Object.fromEntries(visibleRows.flatMap((row) => (row.authorId ? [[row.id, row.authorId]] : []))) as Record<string, string>,
     reviews: visibleRows.map((row): ReviewView => {
       const reply = repliesByReview.get(row.id);
       return {

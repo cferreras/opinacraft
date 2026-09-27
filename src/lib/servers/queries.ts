@@ -17,6 +17,8 @@ import { normalizeGameModeInputs } from "./game-modes";
 import { reviewScoreSql } from "./review-score";
 import { fetchMonitorStatuses, isMonitorApiConfigured, queryMonitorCatalog } from "./monitor-api-client";
 import type { MonitorStatusView } from "@/lib/monitor/repository";
+import { votingMonth } from "@/lib/votes/month";
+import { monthlyVotesSql, rankedServerConditions, rankingOrderSql } from "@/lib/votes/ranking";
 
 type ServerBase = {
   id: string;
@@ -103,7 +105,8 @@ const MAX_PUBLIC_SERVER_PAGE = 10_000;
 
 export type PublicServer = Omit<ManagedServer, "role">;
 export type AggregateHealthStatus = "online" | "offline" | "unknown";
-export type PublicServerSort = "rating" | "players" | "recent";
+/** `votes` is this month's ranking; it only exists while the vote system is switched on. */
+export type PublicServerSort = "votes" | "rating" | "players" | "recent";
 export type PublicServerTableSort = "name" | "edition" | "players" | "version" | "latency" | "rating" | "ip";
 export type PublicServerSortDirection = "asc" | "desc";
 
@@ -590,7 +593,7 @@ export async function listPublishedServersByRankedIds({ ids, page = 1, edition }
   ids: readonly string[];
   page?: number;
   edition?: CatalogEdition;
-}) {
+}): Promise<CatalogPage> {
   const safePage = Math.min(Math.max(Math.trunc(page) || 1, 1), MAX_PUBLIC_SERVER_PAGE);
   const start = (safePage - 1) * PUBLIC_SERVER_PAGE_SIZE;
   const pageIds = ids.slice(start, start + PUBLIC_SERVER_PAGE_SIZE);
@@ -661,7 +664,36 @@ export type PublishedServerListArgs = CatalogFacets & {
   sort?: PublicServerSort;
   tableSort?: PublicServerTableSort;
   tableDirection?: PublicServerSortDirection;
+  /**
+   * The ranking month for `sort: "votes"`. Passed in rather than read from the clock so it is part
+   * of the cached page's key: on the 1st a new month must not be served last month's order.
+   */
+  month?: string;
 };
+
+/** Each listed server's place in the whole month's ranking and its votes, keyed by id. */
+export type CatalogRanking = Record<string, { position: number; votes: number }>;
+
+export type CatalogPage = { servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number; ranking?: CatalogRanking };
+
+/**
+ * The global place of each id in the month's ranking, not its index on the page: a filtered list
+ * still shows the number the server holds in the ranking, the same one its ficha states.
+ */
+export async function listRankingPositions(ids: readonly string[], month: string): Promise<CatalogRanking> {
+  if (ids.length === 0) return {};
+  const ranked = db
+    .select({
+      id: servers.id,
+      votes: sql<number>`${monthlyVotesSql(month)}`.as("votes"),
+      position: sql<number>`row_number() over (order by ${sql.join(rankingOrderSql(month), sql`, `)})::int`.as("position"),
+    })
+    .from(servers)
+    .where(rankedServerConditions())
+    .as("ranked");
+  const rows = await db.select({ id: ranked.id, votes: ranked.votes, position: ranked.position }).from(ranked).where(inArray(ranked.id, [...ids]));
+  return Object.fromEntries(rows.map((row) => [row.id, { position: Number(row.position), votes: Number(row.votes) }]));
+}
 
 /**
  * Every facet is resolved in Postgres except version wherever a monitor answers: that one is
@@ -727,6 +759,7 @@ export async function listPublishedServersWithMonitor({
   sort,
   tableSort,
   tableDirection,
+  month = votingMonth(),
   ...facets
 }: CatalogFacets & {
   page: number;
@@ -735,15 +768,21 @@ export async function listPublishedServersWithMonitor({
   sort: PublicServerSort;
   tableSort?: PublicServerTableSort;
   tableDirection: PublicServerSortDirection;
-}) {
+  month?: string;
+}): Promise<CatalogPage> {
   const queryText = query.trim();
+  const byVotes = sort === "votes" && !tableSort;
+  // The votes order is settled here and the monitor keeps it: `sort: "catalog"` is a stable sort
+  // that only drops the servers the status filter excludes.
   const catalogOrder = tableSort && tableSort !== "players" && tableSort !== "version" && tableSort !== "latency"
     ? [tableSortOrder(tableSort, tableDirection)]
-    : queryText
-      ? [catalogRelevanceOrder(queryText)]
-      : sort === "recent"
-        ? [desc(servers.createdAt)]
-        : [desc(sql`coalesce(${reviewScoreSql()}, 0)`)];
+    : byVotes
+      ? rankingOrderSql(month)
+      : queryText
+        ? [catalogRelevanceOrder(queryText)]
+        : sort === "recent"
+          ? [desc(servers.createdAt)]
+          : [desc(sql`coalesce(${reviewScoreSql()}, 0)`)];
   const candidates = await db
     .select({ id: servers.id })
     .from(servers)
@@ -778,23 +817,29 @@ export async function listPublishedServersWithMonitor({
   const hydrated = await hydratePublishedCatalogServers(result.ids, facets.edition);
   const statesById = new Map(result.states.map((state) => [state.serverId, state]));
   const monitored = hydrated.map((server) => monitorFromApi(server, statesById.get(server.id) ?? null));
-  return { servers: monitored, hasNextPage: result.totalCount > page * PUBLIC_SERVER_PAGE_SIZE, totalCount: result.totalCount, page };
+  const ranking = byVotes ? await listRankingPositions(result.ids, month) : undefined;
+  return { servers: monitored, hasNextPage: result.totalCount > page * PUBLIC_SERVER_PAGE_SIZE, totalCount: result.totalCount, page, ranking };
 }
 
-export async function listPublishedServersFromNeon({ page = 1, query = "", status, sort = "rating", tableSort, tableDirection = "asc", ...facets }: PublishedServerListArgs = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number }> {
+export async function listPublishedServersFromNeon({ page = 1, query = "", status, sort = "rating", tableSort, tableDirection = "asc", month = votingMonth(), ...facets }: PublishedServerListArgs = {}): Promise<CatalogPage> {
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
     : 1;
   const queryText = query.trim();
+  // Asking for the votes outranks the text's relevance: the page only asks when the visitor chose
+  // the ranking, since with a query and no choice the default stays relevance.
+  const byVotes = sort === "votes" && !tableSort;
   const catalogOrder = tableSort
     ? [tableSortOrder(tableSort, tableDirection)]
-    : queryText
-      ? [catalogRelevanceOrder(queryText)]
-      : sort === "players"
-        ? [desc(sql`coalesce(${servers.monitorPlayersCurrent}, 0)`)]
-        : sort === "recent"
-          ? [desc(servers.createdAt)]
-          : [desc(sql`coalesce(${reviewScoreSql()}, 0)`)];
+    : byVotes
+      ? rankingOrderSql(month)
+      : queryText
+        ? [catalogRelevanceOrder(queryText)]
+        : sort === "players"
+          ? [desc(sql`coalesce(${servers.monitorPlayersCurrent}, 0)`)]
+          : sort === "recent"
+            ? [desc(servers.createdAt)]
+            : [desc(sql`coalesce(${reviewScoreSql()}, 0)`)];
   const serverIds = await db
     .select({ id: servers.id, totalCount: sql<number>`count(*) over()::int` })
     .from(servers)
@@ -819,11 +864,14 @@ export async function listPublishedServersFromNeon({ page = 1, query = "", statu
     return { servers: emptyServers, hasNextPage: false, totalCount: 0, page: safePage };
   }
 
-  const catalogServers = await hydratePublishedCatalogServers(ids, facets.edition);
-  return { servers: catalogServers, hasNextPage, totalCount, page: safePage };
+  const [catalogServers, ranking] = await Promise.all([
+    hydratePublishedCatalogServers(ids, facets.edition),
+    byVotes ? listRankingPositions(ids, month) : undefined,
+  ]);
+  return { servers: catalogServers, hasNextPage, totalCount, page: safePage, ranking };
 }
 
-export async function listPublishedServers({ page = 1, query = "", status, sort = "rating", tableSort, tableDirection = "asc", ...facets }: PublishedServerListArgs = {}): Promise<{ servers: CatalogServer[]; hasNextPage: boolean; totalCount: number; page: number }> {
+export async function listPublishedServers({ page = 1, query = "", status, sort = "rating", tableSort, tableDirection = "asc", ...facets }: PublishedServerListArgs = {}): Promise<CatalogPage> {
   const safePage = Number.isSafeInteger(page) && page > 0
     ? Math.min(page, MAX_PUBLIC_SERVER_PAGE)
     : 1;

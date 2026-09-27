@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Plus, Search, ServerCog, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarClock, ChevronLeft, ChevronRight, Plus, Search, ServerCog, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -10,14 +10,15 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { AiRankingNotice } from "@/components/ai-ranking-notice";
 import { BlogHighlightsCard } from "@/components/blog-highlights-card";
 import { CatalogFilterBar } from "@/components/catalog-filter-bar";
-import { PublicServerRow } from "@/components/public-server-row";
+import { PublicServerRow, type RowRanking } from "@/components/public-server-row";
+import { RankingSortMenu } from "@/components/ranking-sort-menu";
 import { SiteHeader } from "@/components/site-header";
 import { JsonLd } from "@/components/json-ld";
 import { clientEnv } from "@/env/client";
 import { isAiSearchConfigured } from "@/lib/search/runtime";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { itemListSchema } from "@/lib/seo/structured-data";
-import { getCachedCatalogVersions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
+import { getCachedCatalogVersions, getCachedFeaturedOpinions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
 import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
 import { listPublishedServersByRankedIds } from "@/lib/servers/queries";
 import { runSemanticSearch } from "@/lib/search/semantic-runtime";
@@ -36,10 +37,12 @@ import {
 } from "@/lib/servers/queries";
 import { getServerResultsSummary } from "@/lib/servers/result-summary";
 import { buildCatalogHref, catalogInputFrom, catalogPath } from "@/lib/servers/catalog-route";
-import { accessParamValues, catalogAccessOptions, catalogSortOptions, catalogStatusOptions, matchedAccessIntent, parseCatalogAccessParams, parseCatalogEditionParam } from "@/lib/servers/catalog-filters";
+import { accessParamValues, catalogAccessOptions, catalogRowRanking, catalogSortOptionsFor, catalogStatusOptions, defaultCatalogSort, matchedAccessIntent, parseCatalogAccessParams, parseCatalogEditionParam, resolveCatalogSort } from "@/lib/servers/catalog-filters";
 import { gameModeLabel, parseGameModeParams } from "@/lib/servers/game-modes";
 import { countryParamValues, parseCountryParams, serverCountriesLabel } from "@/lib/servers/countries";
 import { parseVersionParam } from "@/lib/servers/minecraft-version";
+import { getCachedMonthlyVotes, votesEnabled } from "@/lib/votes/cached";
+import { daysLeftLabel, monthlyReset } from "@/lib/votes/month";
 
 export const catalogTitle = "Directorio de servidores de Minecraft en español | OpinaCraft";
 export const catalogDescription = "Descubre, compara y únete a comunidades de Minecraft: estado en tiempo real, ping, modalidad y opiniones de quienes ya juegan en ellas.";
@@ -50,6 +53,11 @@ export const metadata: Metadata = { title: catalogTitle, description: catalogDes
  * the edition column fits without squeezing the server name to nothing — so it waits for the room.
  */
 export const tableGridTemplate = "lg:grid-cols-[minmax(0,1fr)_9rem_5.5rem_3.25rem_5.75rem_1rem] wide:grid-cols-[minmax(0,1fr)_5.375rem_9rem_5.5rem_3.25rem_5.75rem_1rem]";
+/**
+ * The ranking adds a place and the votes, and pays for them with the edition column and, until the
+ * rail has room, the address: at `lg` both would leave the name under 120px.
+ */
+export const rankingGridTemplate = "lg:grid-cols-[1.75rem_minmax(0,1fr)_5.5rem_3.25rem_5.75rem_4.5rem_1rem] wide:grid-cols-[1.75rem_minmax(0,1fr)_9rem_5.5rem_3.25rem_5.75rem_4.5rem_1rem]";
 
 const tableColumns: Array<{ key: PublicServerTableSort; label: string; align?: "end" }> = [
   { key: "name", label: "Servidor" },
@@ -76,7 +84,7 @@ const tableHeaderCells: TableHeaderCell[] = [
 
 function orderSummary(activeSort: PublicServerTableSort | undefined, direction: PublicServerSortDirection, fallback: PublicServerSort, hasQuery: boolean) {
   if (hasQuery && !activeSort) return "Ordenado por relevancia";
-  if (!activeSort) return `Ordenado por ${catalogSortOptions.find((option) => option.value === fallback)?.label.toLowerCase() ?? "valoración"}`;
+  if (!activeSort) return `Ordenado por ${catalogSortOptionsFor(true).find((option) => option.value === fallback)?.label.toLowerCase() ?? "valoración"}`;
   const column = tableColumns.find((item) => item.key === activeSort);
   return `Ordenado por ${(column?.label ?? "tabla").toLowerCase()}, de ${direction === "asc" ? "menor a mayor" : "mayor a menor"}`;
 }
@@ -115,6 +123,36 @@ function SortableColumnHeader({
 
 function StaticColumnHeader({ label, className = "" }: { label: string; className?: string }) {
   return <div role="columnheader" className={`min-w-0 truncate px-1 text-[0.625rem] font-semibold uppercase tracking-[0.035em] text-muted-foreground ${className}`}>{label}</div>;
+}
+
+const rankingHeaderCells: TableHeaderCell[] = [
+  { kind: "static", label: "#", className: "text-center" },
+  { kind: "sort", key: "name" },
+  { kind: "static", label: "Dirección", className: "hidden wide:block" },
+  { kind: "sort", key: "players" },
+  { kind: "sort", key: "latency" },
+  { kind: "sort", key: "rating" },
+];
+
+/** The votes column is the ranking's own order, so its header goes back to it instead of toggling. */
+function VotesColumnHeader({ active, href }: { active: boolean; href: string }) {
+  return (
+    <div role="columnheader" aria-label="Votos del mes" aria-sort={active ? "descending" : "none"} className="flex min-w-0 justify-end">
+      <Link href={href} prefetch={false} data-active={active} aria-label="Ordenar por votos del mes" className="group -mr-1 inline-flex min-h-10 items-center gap-1 px-1 text-[0.625rem] font-semibold uppercase tracking-[0.035em] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground data-[active=true]:text-primary">
+        Votos
+        <ArrowDown aria-hidden="true" className={`size-3 ${active ? "text-primary" : "text-muted-foreground/40"}`} />
+      </Link>
+    </div>
+  );
+}
+
+function MonthlyResetNote({ reset, className = "" }: { reset: ReturnType<typeof monthlyReset>; className?: string }) {
+  return (
+    <p className={`inline-flex items-center gap-1.5 text-xs text-muted-foreground ${className}`}>
+      <CalendarClock aria-hidden="true" className="size-3.5 shrink-0" />
+      <span>Se reinicia el {reset.resetLabel} · <strong className="font-semibold text-foreground">{daysLeftLabel(reset.daysLeft)}</strong></span>
+    </p>
+  );
 }
 
 function ActiveFilterChip({ label, removeHref, removeLabel }: { label: string; removeHref: string; removeLabel: string }) {
@@ -169,8 +207,9 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const countryParams = countryParamValues(countries);
   const accessParams = accessParamValues(access);
   const status = query.status === "online" || query.status === "offline" || query.status === "unknown" ? query.status : undefined;
-  const sort: PublicServerSort = query.sort === "players" || query.sort === "recent" ? query.sort : "rating";
-  const hasExplicitSort = query.sort === "rating" || query.sort === "players" || query.sort === "recent";
+  const votesOn = votesEnabled();
+  // With votes off this resolves exactly as the catalog always has: players, recent, or rating.
+  const { sort, explicit: hasExplicitSort } = resolveCatalogSort(query.sort, { hasQuery, votesEnabled: votesOn });
   const tableSort = isPublicServerTableSort(query.tableSort) ? query.tableSort : undefined;
   const tableDirection: PublicServerSortDirection = query.tableDirection === "desc" ? "desc" : "asc";
   const presetTableSort = (sort === "rating" || sort === "players") && (!hasQuery || hasExplicitSort) ? sort : undefined;
@@ -192,12 +231,15 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   }) : null;
   const ranked = semantic?.ran ? semantic.ranking : null;
 
+  const reset = monthlyReset();
   const listArgs = {
     page: safePage,
     // Judged queries keep their text out of the SQL for the reason above.
     query: ranked ? "" : query.q ?? "",
     mode: modes, version, country: countries, access, edition, status, sort,
     tableSort: activeTableSort, tableDirection: activeTableDirection,
+    // Only the ranking depends on the month, so only its cache entries are keyed by it.
+    ...(sort === "votes" ? { month: reset.month } : {}),
   } as const;
   const monitorDependent = !ranked && isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, version, sort, tableSort: activeTableSort });
   const monitorResult = monitorDependent
@@ -223,6 +265,24 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     }
   }
   const { hasNextPage, page, totalCount } = result;
+  // The judged order has columns of its own to explain, so the votes stay out of it.
+  const showVotes = votesOn && !ranked;
+  const byVotes = showVotes && sort === "votes" && !tableSort;
+  const serverIds = servers.map((server) => server.id);
+  const [monthlyVotes, opinions] = showVotes && serverIds.length > 0
+    ? await Promise.all([
+      // In vote order the votes come with the page, from the query that ordered it.
+      byVotes ? {} : getCachedMonthlyVotes(serverIds, reset.month),
+      // A missing quote costs the row a line, not the page.
+      getCachedFeaturedOpinions(serverIds).catch((error) => {
+        console.error("[votes] featured opinions unavailable", error instanceof Error ? error.name : "unknown");
+        return {};
+      }),
+    ])
+    : [{}, {}];
+  const rankingFor = (server: (typeof servers)[number]): RowRanking | undefined => showVotes
+    ? catalogRowRanking(server.id, { byVotes, ranking: result.ranking, votes: monthlyVotes, opinions })
+    : undefined;
   const baseParams = new URLSearchParams();
   if (query.q) baseParams.set("q", query.q);
   if (ranked) baseParams.set("relevancia", "ia");
@@ -249,13 +309,19 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     return buildCatalogHref(catalogInputFrom(next));
   };
   const pageHref = (nextPage: number) => hrefWith({ page: String(nextPage) }, { keepPage: true });
+  const ordering = { sort: undefined, tableSort: undefined, tableDirection: undefined, relevancia: undefined };
+  // A bare catalog is already the ranking; a search is relevance unless the votes are named.
+  const sortHref = (value: PublicServerSort) => hrefWith({ ...ordering, sort: value === "votes" && !hasQuery ? undefined : value });
+  const votesHref = sortHref("votes");
+  const rankingSortOptions = catalogSortOptionsFor(true).map((option) => ({ key: option.value, label: option.label, href: sortHref(option.value) }));
+  const activeRankingSort = byVotes ? "votes" : !tableSort && hasExplicitSort ? sort : null;
   // Ordering by a column means leaving the judged order: clearing `relevancia` here is what makes the
   // column headers tell the truth, since a ranked page ignores `tableSort` entirely.
   const tableSortHref = (nextSort: PublicServerTableSort) =>
     hrefWith({ sort: undefined, relevancia: undefined, tableSort: nextSort, tableDirection: activeTableSort === nextSort && activeTableDirection === "asc" ? "desc" : "asc" });
   // A region counts as the one filter the visitor asked for, not as eighteen.
   const activeFilterCount = [hasQuery, modes.length > 0, Boolean(version), countries.length > 0, access.length > 0, Boolean(edition), Boolean(status)].filter(Boolean).length;
-  const hasActiveFilters = activeFilterCount > 0 || Boolean(query.sort && query.sort !== "rating") || Boolean(tableSort);
+  const hasActiveFilters = activeFilterCount > 0 || Boolean(query.sort && query.sort !== defaultCatalogSort(votesOn)) || Boolean(tableSort);
   // Offered even when a filter is active: the list is cheap, cached, and a facet the visitor is
   // already inside should not reorder itself under them.
   const versionOptions = await getCachedCatalogVersions().catch(() => [] as string[]);
@@ -347,13 +413,28 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                   {/* The results announce themselves in a toolbar of their own, between the controls
                       that narrow them and the table that lists them: the heading sits where the
                       list starts, so the rail lines up with the filter card instead of a label. */}
-                  <div className="mt-8.5 flex flex-wrap items-baseline justify-between gap-x-5.25 gap-y-1">
-                    <h2 id="server-results-heading" className="flex items-baseline gap-2 text-[1.375rem] font-bold leading-tight tracking-[-0.02em]">
-                      Todos los servidores
-                      {servers.length > 0 ? <span className="text-sm font-semibold tabular-nums tracking-normal text-muted-foreground">{totalCount}</span> : null}
-                    </h2>
-                    {servers.length > 0 ? <span className="text-xs text-muted-foreground">{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span> : null}
-                  </div>
+                  {showVotes ? (
+                    // The ranking names its month and when it ends: a vote today counts toward this
+                    // list, and the countdown is the reason to come back before it closes.
+                    <div className="mt-8.5 flex flex-wrap items-end justify-between gap-x-5.25 gap-y-2">
+                      <div className="grid gap-1">
+                        <h2 id="server-results-heading" className="flex items-baseline gap-2 text-[1.375rem] font-bold leading-tight tracking-[-0.02em]">
+                          {byVotes ? `Más votados de ${reset.monthName}` : "Todos los servidores"}
+                          {servers.length > 0 ? <span className="text-sm font-semibold tabular-nums tracking-normal text-muted-foreground">{totalCount}</span> : null}
+                        </h2>
+                        {byVotes ? <MonthlyResetNote reset={reset} /> : servers.length > 0 ? <span className="text-xs text-muted-foreground">{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span> : null}
+                      </div>
+                      {servers.length > 0 ? <RankingSortMenu options={rankingSortOptions} activeKey={activeRankingSort} fallbackLabel={hasQuery && !tableSort ? "Relevancia" : "Columna"} /> : null}
+                    </div>
+                  ) : (
+                    <div className="mt-8.5 flex flex-wrap items-baseline justify-between gap-x-5.25 gap-y-1">
+                      <h2 id="server-results-heading" className="flex items-baseline gap-2 text-[1.375rem] font-bold leading-tight tracking-[-0.02em]">
+                        Todos los servidores
+                        {servers.length > 0 ? <span className="text-sm font-semibold tabular-nums tracking-normal text-muted-foreground">{totalCount}</span> : null}
+                      </h2>
+                      {servers.length > 0 ? <span className="text-xs text-muted-foreground">{orderSummary(activeTableSort, activeTableDirection, sort, hasQuery)}</span> : null}
+                    </div>
+                  )}
 
                   <div className="mt-3.25 min-w-0">
                     {monitorUnavailable ? (
@@ -373,15 +454,18 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                       <>
                         <Card className="gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0 lg:bg-card lg:ring-1">
                           <CardContent className="flex flex-col gap-2 p-0 lg:block">
-                            <div role="row" aria-label="Ordenar resultados" className={`hidden h-10 items-center border-b bg-muted/40 px-4.5 text-muted-foreground lg:grid ${tableGridTemplate} lg:items-center lg:gap-3.5`}>
-                              {tableHeaderCells.map((cell) => {
+                            <div role="row" aria-label="Ordenar resultados" className={`hidden h-10 items-center border-b bg-muted/40 px-4.5 text-muted-foreground lg:grid ${showVotes ? rankingGridTemplate : tableGridTemplate} lg:items-center lg:gap-3.5`}>
+                              {(showVotes ? rankingHeaderCells : tableHeaderCells).map((cell) => {
                                 if (cell.kind === "spacer") return <span key="actions" aria-hidden="true" />;
                                 if (cell.kind === "static") return <StaticColumnHeader key={cell.label} label={cell.label} className={cell.className} />;
                                 const column = tableColumns.find((item) => item.key === cell.key);
-                                return column ? <SortableColumnHeader key={column.key} column={column} activeSort={activeTableSort} direction={activeTableDirection} href={tableSortHref(column.key)} /> : null;
+                                // With the votes on, a header ordering by rating is only active when asked for.
+                                const activeSort = showVotes && byVotes ? undefined : activeTableSort;
+                                return column ? <SortableColumnHeader key={column.key} column={column} activeSort={activeSort} direction={activeTableDirection} href={tableSortHref(column.key)} /> : null;
                               })}
+                              {showVotes ? <><VotesColumnHeader active={byVotes} href={votesHref} /><span aria-hidden="true" /></> : null}
                             </div>
-                            {servers.map((server) => <PublicServerRow key={server.id} server={server} />)}
+                            {servers.map((server) => <PublicServerRow key={server.id} server={server} ranking={rankingFor(server)} />)}
                           </CardContent>
                         </Card>
                         {/* Where you are on the left, how to move on the right: the pager keeps its

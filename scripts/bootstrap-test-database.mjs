@@ -609,6 +609,55 @@ async function main() {
     `);
     await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_player_hourly_server_bucket_idx" ON "server_player_hourly" ("server_id", "bucket_start")');
 
+    await ensureEnum(client, "vote_delivery_status", ["not_configured", "delivered", "failed"]);
+    await ensureEnum(client, "votifier_key_type", ["token", "rsa"]);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "server_votes" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "server_id" uuid NOT NULL REFERENCES "servers"("id") ON DELETE CASCADE,
+        "nickname" varchar(16) NOT NULL,
+        "nickname_key" varchar(16) NOT NULL,
+        "user_id" text REFERENCES "user"("id") ON DELETE SET NULL,
+        "ip_hash" varchar(64),
+        "month" varchar(7) NOT NULL,
+        "delivery_status" "vote_delivery_status" DEFAULT 'not_configured' NOT NULL,
+        "delivery_error" varchar(40),
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        CONSTRAINT "server_votes_nickname_check" CHECK ("nickname" ~ '^[A-Za-z0-9_]{3,16}$'),
+        CONSTRAINT "server_votes_month_check" CHECK ("month" ~ '^[0-9]{4}-[0-9]{2}$')
+      )
+    `);
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_votes_server_nickname_created_idx" ON "server_votes" ("server_id", "nickname_key", "created_at")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_votes_server_ip_created_idx" ON "server_votes" ("server_id", "ip_hash", "created_at")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_votes_user_server_idx" ON "server_votes" ("user_id", "server_id")');
+    await createIndex(client, 'CREATE INDEX IF NOT EXISTS "server_votes_server_created_idx" ON "server_votes" ("server_id", "created_at")');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "server_monthly_votes" (
+        "server_id" uuid NOT NULL REFERENCES "servers"("id") ON DELETE CASCADE,
+        "month" varchar(7) NOT NULL,
+        "votes" integer DEFAULT 0 NOT NULL,
+        "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+        PRIMARY KEY ("server_id", "month"),
+        CHECK ("votes" >= 0)
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "server_votifier_settings" (
+        "server_id" uuid PRIMARY KEY REFERENCES "servers"("id") ON DELETE CASCADE,
+        "host" varchar(253) NOT NULL,
+        "port" integer NOT NULL CHECK ("port" between 1024 and 65535),
+        "key_type" "votifier_key_type" NOT NULL,
+        "secret_ciphertext" bytea NOT NULL,
+        "last_test_at" timestamp with time zone,
+        "last_test_ok" boolean,
+        "last_test_error" varchar(40),
+        "last_test_latency_ms" integer,
+        "updated_by_user_id" text REFERENCES "user"("id") ON DELETE SET NULL,
+        "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+        "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+      )
+    `);
+
     await client.query("CREATE INDEX IF NOT EXISTS servers_name_trgm_idx ON servers USING gin (lower(name) gin_trgm_ops)");
     await client.query("CREATE INDEX IF NOT EXISTS servers_description_trgm_idx ON servers USING gin (lower(description) gin_trgm_ops)");
     await client.query("CREATE INDEX IF NOT EXISTS tags_slug_trgm_idx ON tags USING gin (lower(slug) gin_trgm_ops)");

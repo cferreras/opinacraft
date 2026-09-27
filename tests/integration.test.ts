@@ -27,11 +27,15 @@ const pool = testDatabaseUrl
     })
   : null;
 
+// The env schema is parsed on first import, so every secret a test needs is set before anything loads.
+process.env.VOTIFIER_SECRET ??= "integration-votifier-secret-at-least-32-characters";
+
 const createdServerIds = new Set<string>();
 const createdUserIds = new Set<string>();
 let serverServices: typeof import("../src/lib/servers/service.ts") | null = null;
 let reviewServices: typeof import("../src/lib/servers/reviews.ts") | null = null;
 let adminServices: typeof import("../src/lib/admin.ts") | null = null;
+let voteServices: typeof import("../src/lib/votes/service.ts") | null = null;
 let closeDatabase: (() => Promise<void>) | null = null;
 
 const testOptions = { skip: !integrationEnabled };
@@ -61,6 +65,17 @@ async function loadReviewServices() {
     ({ closeDatabase } = await import("../src/db.ts"));
   }
   return reviewServices;
+}
+
+async function loadVoteServices() {
+  if (!voteServices) {
+    process.env.DATABASE_URL = testDatabaseUrl;
+    process.env.BETTER_AUTH_SECRET ??= "integration-test-secret-that-is-at-least-32-characters";
+    process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
+    voteServices = await import("../src/lib/votes/service.ts");
+    ({ closeDatabase } = await import("../src/db.ts"));
+  }
+  return voteServices;
 }
 
 async function loadAdminServices() {
@@ -930,4 +945,163 @@ test("reopening a dismissed review report rejects a newer open report from the s
   );
   const result = await database().query("select status from server_review_reports where id = $1", [dismissedReportId]);
   assert.equal(result.rows[0].status, "dismissed");
+});
+
+async function createRankedServer() {
+  const ownerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `votes-${randomUUID()}.example.invalid`, port: 25565 } });
+  await publishServer(serverId);
+  return serverId;
+}
+
+test("a vote is refused inside 23 hours by nickname, IP or account, and only on that server", testOptions, async () => {
+  const serverId = await createRankedServer();
+  const otherServerId = await createRankedServer();
+  const voterId = await createUser();
+  const { castVote } = await loadVoteServices();
+  const now = new Date("2026-09-15T10:00:00Z");
+
+  const first = await castVote({ serverId, nickname: "Kiroo_", nicknameKey: "kiroo_", ip: "203.0.113.10", userId: voterId, now });
+  assert.equal(first.status, "ok");
+  assert.equal(first.status === "ok" && first.votes, 1);
+  assert.equal(first.status === "ok" && first.delivery, "not_configured");
+  assert.equal(first.status === "ok" && first.linkedToAccount, true);
+
+  const sameNickDifferentCase = await castVote({ serverId, nickname: "KIROO_", nicknameKey: "kiroo_", ip: "198.51.100.1", now: new Date(now.getTime() + 60_000) });
+  assert.equal(sameNickDifferentCase.status, "cooldown");
+  const sameIp = await castVote({ serverId, nickname: "Otro_nick", nicknameKey: "otro_nick", ip: "203.0.113.10", now: new Date(now.getTime() + 60_000) });
+  assert.equal(sameIp.status, "cooldown");
+  const sameAccount = await castVote({ serverId, nickname: "Tercero", nicknameKey: "tercero", ip: "198.51.100.2", userId: voterId, now: new Date(now.getTime() + 60_000) });
+  assert.equal(sameAccount.status, "cooldown");
+  assert.equal(sameAccount.status === "cooldown" && sameAccount.nextVoteAt.toISOString(), "2026-09-16T09:00:00.000Z");
+
+  const elsewhere = await castVote({ serverId: otherServerId, nickname: "Kiroo_", nicknameKey: "kiroo_", ip: "203.0.113.10", userId: voterId, now: new Date(now.getTime() + 60_000) });
+  assert.equal(elsewhere.status, "ok");
+
+  const nextDay = await castVote({ serverId, nickname: "Kiroo_", nicknameKey: "kiroo_", ip: "203.0.113.10", userId: voterId, now: new Date(now.getTime() + 23 * 60 * 60 * 1000) });
+  assert.equal(nextDay.status, "ok");
+  assert.equal(nextDay.status === "ok" && nextDay.votes, 2);
+
+  const stored = await database().query("select month, ip_hash from server_votes where server_id = $1", [serverId]);
+  assert.deepEqual(stored.rows.map((row) => row.month), ["2026-09", "2026-09"]);
+  assert.ok(stored.rows.every((row) => /^[0-9a-f]{64}$/.test(row.ip_hash) && !row.ip_hash.includes("203")));
+});
+
+test("two simultaneous votes from the same player count once", testOptions, async () => {
+  const serverId = await createRankedServer();
+  const { castVote } = await loadVoteServices();
+  const now = new Date("2026-09-15T10:00:00Z");
+  const results = await Promise.all([1, 2, 3].map(() => castVote({ serverId, nickname: "Rapido", nicknameKey: "rapido", ip: "203.0.113.20", now })));
+  assert.equal(results.filter((result) => result.status === "ok").length, 1);
+  const total = await database().query("select votes from server_monthly_votes where server_id = $1 and month = '2026-09'", [serverId]);
+  assert.equal(total.rows[0].votes, 1);
+});
+
+test("unpublished servers cannot be voted for", testOptions, async () => {
+  const ownerId = await createUser();
+  const serverId = await createServerRecord({ ownerId, endpoint: { host: `draft-${randomUUID()}.example.invalid`, port: 25565 } });
+  const { castVote } = await loadVoteServices();
+  const result = await castVote({ serverId, nickname: "Nadie", nicknameKey: "nadie", ip: "203.0.113.30" });
+  assert.equal(result.status, "not-eligible");
+});
+
+test("the ranking puts more votes first and the stats agree with it", testOptions, async () => {
+  const leaderId = await createRankedServer();
+  const followerId = await createRankedServer();
+  const { castVote, getRankPosition, getServerVoteStats } = await loadVoteServices();
+  const now = new Date();
+  for (const [index, serverId] of [leaderId, leaderId, followerId].entries()) {
+    const result = await castVote({ serverId, nickname: `Votante${index}`, nicknameKey: `votante${index}`, ip: `203.0.113.${40 + index}`, now });
+    assert.equal(result.status, "ok");
+  }
+  const leader = await getRankPosition(leaderId);
+  const follower = await getRankPosition(followerId);
+  assert.ok(leader !== null && follower !== null && leader < follower);
+
+  const stats = await getServerVoteStats(leaderId, now);
+  assert.equal(stats.votes, 2);
+  assert.equal(stats.position, leader);
+  assert.equal(stats.votesToday, 2);
+});
+
+test("only votes cast with an account make that account's opinions verified", testOptions, async () => {
+  const serverId = await createRankedServer();
+  const withAccount = await createUser();
+  const withoutAccount = await createUser();
+  const { castVote, getVerifiedVoters, getLatestAccountVote } = await loadVoteServices();
+  await castVote({ serverId, nickname: "ConCuenta", nicknameKey: "concuenta", ip: "203.0.113.50", userId: withAccount });
+  await castVote({ serverId, nickname: "SinCuenta", nicknameKey: "sincuenta", ip: "203.0.113.51" });
+  const verified = await getVerifiedVoters(serverId, [withAccount, withoutAccount]);
+  assert.deepEqual([...verified], [withAccount]);
+  assert.equal((await getLatestAccountVote(serverId, withAccount))?.nickname, "ConCuenta");
+  assert.equal(await getLatestAccountVote(serverId, withoutAccount), null);
+});
+
+test("IP hashes older than 30 days are cleared and the votes are kept", testOptions, async () => {
+  const serverId = await createRankedServer();
+  const { castVote, purgeExpiredVoteIpHashes } = await loadVoteServices();
+  const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+  await castVote({ serverId, nickname: "Antiguo", nicknameKey: "antiguo", ip: "203.0.113.60", now: old });
+  await castVote({ serverId, nickname: "Reciente", nicknameKey: "reciente", ip: "203.0.113.61" });
+  assert.ok(await purgeExpiredVoteIpHashes() >= 1);
+  const rows = await database().query("select nickname, ip_hash from server_votes where server_id = $1 order by created_at", [serverId]);
+  assert.equal(rows.rows.length, 2);
+  assert.equal(rows.rows[0].ip_hash, null);
+  assert.notEqual(rows.rows[1].ip_hash, null);
+});
+
+test("the catalog's vote order, positions and featured opinions come from real votes", testOptions, async () => {
+  const token = randomUUID().slice(0, 8);
+  const quietId = await createRankedServer();
+  const popularId = await createRankedServer();
+  await database().query("update servers set name = $2 where id = $1", [quietId, `Ranking ${token} tranquilo`]);
+  await database().query("update servers set name = $2 where id = $1", [popularId, `Ranking ${token} popular`]);
+  const voterId = await createUser();
+  const bystanderId = await createUser();
+  const { castVote } = await loadVoteServices();
+  const { votingMonth } = await import("../src/lib/votes/month.ts");
+  const { listPublishedServersFromNeon, listRankingPositions } = await import("../src/lib/servers/queries.ts");
+  const { getFeaturedOpinions } = await import("../src/lib/votes/featured-opinions.ts");
+  const { countVerifiedReviews } = await import("../src/lib/servers/reviews.ts");
+
+  await castVote({ serverId: popularId, nickname: "Fan_uno", nicknameKey: "fan_uno", ip: "203.0.113.70", userId: voterId });
+  await castVote({ serverId: popularId, nickname: "Fan_dos", nicknameKey: "fan_dos", ip: "203.0.113.71" });
+  await database().query(
+    `insert into server_reviews (server_id, user_id, rating, content, created_at) values
+       ($1, $2, 5, 'Opinión de alguien que no votó por el servidor, aunque es reciente.', now()),
+       ($1, $3, 5, 'Opinión de quien sí votó: el staff responde rápido y no hay pay-to-win.', now() - interval '1 day')`,
+    [popularId, bystanderId, voterId],
+  );
+
+  const month = votingMonth();
+  const page = await listPublishedServersFromNeon({ query: `Ranking ${token}`, sort: "votes", month });
+  assert.deepEqual(page.servers.map((server) => server.id), [popularId, quietId]);
+  assert.equal(page.ranking?.[popularId]?.votes, 2);
+  assert.equal(page.ranking?.[quietId]?.votes, 0);
+
+  const positions = await listRankingPositions([quietId, popularId], month);
+  assert.ok(positions[popularId].position < positions[quietId].position);
+
+  const opinions = await getFeaturedOpinions([popularId, quietId]);
+  assert.match(opinions.get(popularId)?.excerpt ?? "", /quien sí votó/);
+  assert.equal(opinions.has(quietId), false);
+  assert.equal(await countVerifiedReviews(popularId), 1);
+});
+
+test("Votifier settings keep the stored key when none is typed and never expose it", testOptions, async () => {
+  const serverId = await createRankedServer();
+  const ownerId = await createUser();
+  await loadVoteServices();
+  const { saveVotifierSettings, getVotifierSettingsView, getStoredVotifierSettings } = await import("../src/lib/votes/votifier-settings.ts");
+  const { encryptVotifierSecret, decryptVotifierSecret } = await import("../src/lib/votes/votifier-secret.ts");
+
+  await saveVotifierSettings(serverId, ownerId, { host: "play.example.com", port: 8192, keyType: "token", secretCiphertext: encryptVotifierSecret("token-secreto") });
+  await saveVotifierSettings(serverId, ownerId, { host: "votos.example.com", port: 8193, keyType: "token", secretCiphertext: null });
+
+  const view = await getVotifierSettingsView(serverId);
+  assert.equal(view?.host, "votos.example.com");
+  assert.equal(view?.port, 8193);
+  assert.equal(Object.keys(view ?? {}).some((key) => /secret/i.test(key)), false);
+  const stored = await getStoredVotifierSettings(serverId);
+  assert.equal(decryptVotifierSecret(stored!.secretCiphertext), "token-secreto");
 });

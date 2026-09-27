@@ -1,6 +1,7 @@
 import { and, eq, type SQL } from "drizzle-orm";
 
-import type { PublicServerSort } from "@/lib/servers/queries";
+import type { CatalogRanking, PublicServerSort } from "@/lib/servers/queries";
+import type { FeaturedOpinion } from "@/lib/votes/featured-opinions";
 import { servers } from "@/schema";
 
 export const catalogAccessValues = ["premium", "non-premium", "semi-premium", "whitelist"] as const;
@@ -146,6 +147,51 @@ export const catalogSortOptions: ReadonlyArray<{ value: PublicServerSort; label:
   { value: "players", label: "Más jugadores" },
   { value: "recent", label: "Más recientes" },
 ];
+
+export const votesSortOption = { value: "votes", label: "Más votados del mes" } as const satisfies { value: PublicServerSort; label: string };
+
+/** With votes on, the monthly ranking leads the list and the other orders follow it. */
+export function catalogSortOptionsFor(votesEnabled: boolean): ReadonlyArray<{ value: PublicServerSort; label: string }> {
+  return votesEnabled ? [votesSortOption, ...catalogSortOptions] : catalogSortOptions;
+}
+
+/**
+ * The order a catalog URL asks for. With votes on, a bare catalog is the monthly ranking; a search
+ * without a chosen order still answers by relevance, so "votes" there must be asked for by name.
+ * With votes off this is the catalog as it always was, and `?sort=votes` reads as no choice at all.
+ */
+export function resolveCatalogSort(raw: string | undefined, { hasQuery, votesEnabled }: { hasQuery: boolean; votesEnabled: boolean }): { sort: PublicServerSort; explicit: boolean } {
+  if (raw === "rating" || raw === "players" || raw === "recent") return { sort: raw, explicit: true };
+  if (votesEnabled && raw === "votes") return { sort: "votes", explicit: true };
+  return { sort: votesEnabled && !hasQuery ? "votes" : "rating", explicit: false };
+}
+
+/** `position` is null when the list is not in vote order: a place only means something in the ranking. */
+export type CatalogRowRanking = { position: number | null; votes: number; opinion: FeaturedOpinion | null };
+
+/**
+ * What a row shows of the ranking. In vote order the place and the votes come with the page, from
+ * the same query that ordered it, so the two cannot disagree; in any other order there is no place
+ * and the votes come from the shared vote figures.
+ */
+export function catalogRowRanking(serverId: string, { byVotes, ranking, votes, opinions }: {
+  byVotes: boolean;
+  ranking?: CatalogRanking;
+  votes: Readonly<Record<string, number>>;
+  opinions: Readonly<Record<string, FeaturedOpinion>>;
+}): CatalogRowRanking {
+  const ranked = byVotes ? ranking?.[serverId] : undefined;
+  return {
+    position: ranked?.position ?? null,
+    votes: ranked?.votes ?? votes[serverId] ?? 0,
+    opinion: opinions[serverId] ?? null,
+  };
+}
+
+/** The sort a URL without one gets, so a link back to it can leave `sort` out. */
+export function defaultCatalogSort(votesEnabled: boolean): PublicServerSort {
+  return votesEnabled ? "votes" : "rating";
+}
 
 export const catalogEditionOptions: ReadonlyArray<{ value: string; label: string }> = [
   { value: "", label: "Todas" },

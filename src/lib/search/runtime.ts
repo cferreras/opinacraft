@@ -249,3 +249,15 @@ export function sessionIdFromToken(token: string | undefined) {
   if (!config) return null;
   return verifySearchSession(token, config.sessionSecret);
 }
+
+/**
+ * The anti-bot check for forms outside search, such as the vote page. The secret stays in this
+ * module; callers only learn whether the visitor passed, failed, or whether the check is missing.
+ */
+export async function verifyVisitorChallenge(token: string, remoteIp?: string): Promise<"ok" | "failed" | "unconfigured"> {
+  const secret = serverEnv.TURNSTILE_SECRET_KEY;
+  if (!secret) return "unconfigured";
+  const verification = await verifyTurnstileToken({ token, secret, remoteIp });
+  if (!verification.ok) console.warn("[turnstile] rejected a token", verification.errorCodes?.join(",") ?? "unknown");
+  return verification.ok ? "ok" : "failed";
+}

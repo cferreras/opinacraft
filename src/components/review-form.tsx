@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { createContext, useActionState, useContext, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { Star } from "lucide-react";
 
@@ -12,6 +12,14 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 
 export type ReviewAction = (previousState: ReviewActionState | null, formData: FormData) => Promise<ReviewActionState | null>;
+
+// Lets the page put a note at the top of every review form it renders, including the one inside the
+// edit dialog, without threading a prop through components that don't care about it.
+const ReviewFormNoticeContext = createContext<ReactNode>(null);
+
+export function ReviewFormNoticeProvider({ notice, children }: { notice: ReactNode; children: ReactNode }) {
+  return <ReviewFormNoticeContext value={notice}>{children}</ReviewFormNoticeContext>;
+}
 
 function SubmitButton({ editing }: { editing: boolean }) {
   const { pending } = useFormStatus();
@@ -39,12 +47,14 @@ export function ReviewForm({
   const [rating, setRating] = useState(String(initialRating));
   const [content, setContent] = useState(initialContent);
   const contentId = editing ? `review-content-${reviewId}` : "review-content-new";
+  const notice = useContext(ReviewFormNoticeContext);
 
   return (
     <form action={formAction} className="grid gap-5">
       <input type="hidden" name="serverId" value={serverId} />
       <input type="hidden" name="slug" value={slug} />
       {reviewId ? <input type="hidden" name="reviewId" value={reviewId} /> : null}
+      {notice}
 
       <Field>
         <FieldLabel>Tu puntuación</FieldLabel>
