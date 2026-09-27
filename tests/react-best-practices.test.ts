@@ -396,15 +396,28 @@ test("only reports a successful share when the share or clipboard capability suc
   assert.doesNotMatch(source, /else await navigator\.clipboard\?\.writeText\(url\)/);
 });
 
-test("shows the platform-specific search shortcut without changing its keyboard behavior", () => {
+test("links the OpinaCraft community from the header instead of a search bar", () => {
   const source = readProjectFile("src/components/site-header.tsx");
 
-  assert.match(source, /useSyncExternalStore/);
-  assert.match(source, /const isMac = useSyncExternalStore\(emptySubscribe, getMacPlatform, getServerPlatform\);/);
-  assert.doesNotMatch(source, /setIsMac/);
-  assert.match(source, /\{isMac \? "⌘ K" : "Ctrl K"\}/);
-  assert.match(source, /event\.metaKey \|\| event\.ctrlKey/);
-  assert.match(source, /event\.key\.toLowerCase\(\) === "k"/);
+  assert.match(source, /href: discordInviteUrl, icon: IconBrandDiscord/);
+  assert.match(source, /href: youtubeChannelUrl, icon: IconBrandYoutube/);
+  assert.match(source, /href: tiktokProfileUrl, icon: IconBrandTiktok/);
+  assert.equal(source.match(/communityLinks\.map/g)?.length, 2);
+  assert.equal(source.match(/href=\{item\.href\} target="_blank" rel="noopener noreferrer"/g)?.length, 2);
+  assert.match(source, /<a href=\{discordInviteUrl\} target="_blank" rel="noopener noreferrer" aria-label="Únete a nuestro Discord">/);
+  assert.doesNotMatch(source, /header-search|submitSearch|searchOpen/);
+});
+
+test("links the OpinaCraft community from both footer variants", () => {
+  const source = readProjectFile("src/components/site-footer.tsx");
+
+  assert.match(source, /\{ label: "Discord", href: discordInviteUrl, external: true \}/);
+  assert.match(source, /\{ label: "YouTube", href: youtubeChannelUrl, external: true \}/);
+  assert.match(source, /<a href=\{discordInviteUrl\} target="_blank" rel="noopener noreferrer"/);
+  assert.match(source, /<a href=\{youtubeChannelUrl\} target="_blank" rel="noopener noreferrer"/);
+  assert.match(source, /\{ label: "TikTok", href: tiktokProfileUrl, external: true \}/);
+  assert.match(source, /<a href=\{tiktokProfileUrl\} target="_blank" rel="noopener noreferrer"/);
+  assert.match(source, /<a href=\{link\.href\} target="_blank" rel="noopener noreferrer"/);
 });
 
 test("shares server status and edition presentation helpers", () => {

@@ -33,12 +33,10 @@ test("renders the catalog at the home route and permanently aliases /servers", (
 
 test("uses the home route for catalog navigation and sitemap discovery", () => {
   const catalogSource = readProjectFile("src/app/servers/page.tsx");
-  const headerSource = readProjectFile("src/components/site-header.tsx");
   const sitemapSource = readProjectFile("src/app/sitemap.ts");
 
   assert.match(catalogSource, /form action=\{catalogPath\} method="get"/);
   assert.match(catalogSource, /buildCatalogHref/);
-  assert.match(headerSource, /router\.push\(nextQuery \? `\/\?q=/);
   assert.doesNotMatch(sitemapSource, /\$\{base\}\/servers`,/);
 });
 
