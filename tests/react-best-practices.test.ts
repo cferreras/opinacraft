@@ -372,9 +372,12 @@ test("uses complete identities for verified endpoints and one directory grid tem
 
   assert.match(detailSource, /<EndpointRow key=\{`\$\{item\.edition\}:\$\{item\.host\}:\$\{item\.port\}`\} endpoint=\{item\}[\s/]/);
   assert.doesNotMatch(detailSource, /<EndpointRow key=\{item\.edition\}/);
+  // The header and the rows read the same templates, so a column can never drift between them;
+  // the ranking adds a second one, defined beside the first.
   assert.match(directorySource, /export const tableGridTemplate =/);
-  assert.match(rowSource, /import \{ tableGridTemplate \} from ["']@\/app\/servers\/page["']/);
-  assert.match(rowSource, /\$\{tableGridTemplate\}/);
+  assert.match(directorySource, /export const rankingGridTemplate =/);
+  assert.match(rowSource, /import \{ rankingGridTemplate, tableGridTemplate \} from ["']@\/app\/servers\/page["']/);
+  assert.match(rowSource, /\$\{ranking \? rankingGridTemplate : tableGridTemplate\}/);
 });
 
 test("describes relevance ordering when a search has no explicit table sort", () => {

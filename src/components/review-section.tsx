@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { BadgeCheck, ChevronLeft, ChevronRight, Star } from "lucide-react";
 
 import { createReviewAction, deleteReviewAction, updateReviewAction } from "@/app/servers/[slug]/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -7,13 +7,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { DeletedReviewNotice, ReviewCard } from "@/components/review-card";
 import { ReviewEditDialog } from "@/components/review-edit-dialog";
-import { ReviewForm } from "@/components/review-form";
+import { ReviewForm, ReviewFormNoticeProvider } from "@/components/review-form";
 import { canPublishOfficialReply, REVIEW_PAGE_SIZE, type ReviewSummary, type ReviewView } from "@/lib/servers/reviews";
+import { voteAgoLabel } from "@/lib/votes/rank-copy";
 
 type ViewerState = {
   emailVerified: boolean;
   membershipRole: "owner" | "admin" | "editor" | null;
   review: { id: string; rating: number; content: string; status: "published" | "hidden" | "deleted"; createdAt: Date; updatedAt: Date } | null;
+};
+
+/** What the vote system adds to the section. Absent when votes are off, which leaves the section as it was. */
+export type ReviewVotes = {
+  serverName: string;
+  voteHref: string;
+  /** The signed-in viewer's latest vote with their account, if any. */
+  latestVote: { nickname: string; createdAt: Date } | null;
+  verifiedCount: number;
+  verifiedReviewIds: readonly string[];
 };
 
 function RatingStars({ rating, size = "size-3.5" }: { rating: number; size?: string }) {
@@ -24,7 +35,7 @@ function RatingStars({ rating, size = "size-3.5" }: { rating: number; size?: str
   );
 }
 
-function Summary({ summary }: { summary: ReviewSummary }) {
+function Summary({ summary, verifiedCount = 0 }: { summary: ReviewSummary; verifiedCount?: number }) {
   const total = Math.max(summary.total, 1);
   const averageLabel = summary.average === null ? "—" : summary.average.toLocaleString("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return (
@@ -35,6 +46,12 @@ function Summary({ summary }: { summary: ReviewSummary }) {
         <p className="text-[2.625rem] font-extrabold leading-none tracking-[-0.04em] tabular-nums sm:text-[4.25rem]">{averageLabel}</p>
         <span className="max-sm:hidden"><RatingStars rating={summary.average ?? 0} size="size-4.5" /></span>
         <p className="text-[0.8125rem] text-muted-foreground tabular-nums">{summary.total} {summary.total === 1 ? "opinión" : "opiniones"}</p>
+        {verifiedCount > 0 ? (
+          <p className="flex items-center gap-1.25 text-xs font-bold text-primary-ink tabular-nums">
+            <BadgeCheck aria-hidden="true" className="size-3.5 shrink-0" />
+            {verifiedCount.toLocaleString("es-ES")} {verifiedCount === 1 ? "opinión de jugador verificado" : "opiniones de jugadores verificados"}
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-1.25 sm:gap-2" aria-label="Distribución de puntuaciones">
         {[5, 4, 3, 2, 1].map((rating) => {
@@ -42,6 +59,27 @@ function Summary({ summary }: { summary: ReviewSummary }) {
           return <div key={rating} className="grid grid-cols-[0.8125rem_minmax(0,1fr)] items-center gap-2 text-xs sm:grid-cols-[0.8125rem_minmax(0,1fr)_2.125rem] sm:gap-3.25 sm:text-[0.8125rem] text-muted-foreground tabular-nums"><span className="font-bold text-foreground">{rating}</span><div className="h-1.5 overflow-hidden rounded-full bg-muted sm:h-2"><div className="h-full rounded-full bg-rating" style={{ width: `${share}%` }} /></div><span className="text-right max-sm:hidden">{share}%</span></div>;
         })}
       </div>
+    </div>
+  );
+}
+
+function VoteNotice({ votes }: { votes: ReviewVotes }) {
+  const { latestVote, serverName, voteHref } = votes;
+  return (
+    <div className="flex gap-3 rounded-lg bg-accent p-3.25 text-[0.8125rem] leading-5 text-foreground/80">
+      <BadgeCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary-ink" />
+      {latestVote ? (
+        <div className="grid gap-0.5">
+          <p className="font-bold text-foreground">Tu opinión aparecerá como verificada</p>
+          <p>Votaste por {serverName} como <strong>{latestVote.nickname}</strong> {voteAgoLabel(latestVote.createdAt)}, así que llevará la insignia <strong>Jugador verificado</strong>.</p>
+        </div>
+      ) : (
+        <div className="grid gap-0.5">
+          <p className="font-bold text-foreground">Las opiniones de quien ha votado aparecen como verificadas</p>
+          <p>Vota por {serverName} con la sesión iniciada y tu opinión llevará la insignia <strong>Jugador verificado</strong>. Puedes publicarla igualmente sin votar.</p>
+          <Link href={voteHref} className="mt-1 w-fit font-bold text-primary-ink underline-offset-4 hover:underline">Votar ahora →</Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -56,7 +94,7 @@ function Composer({ serverId, slug, viewer }: { serverId: string; slug: string; 
   return <Card><CardContent className="grid gap-4 p-4"><p className="text-sm font-semibold">Comparte tu experiencia</p><ReviewForm action={createReviewAction} serverId={serverId} slug={slug} /></CardContent></Card>;
 }
 
-export function ReviewSection({ serverId, slug, summary, reviews, page, hasNextPage, viewer, notice, errorNotice }: {
+export function ReviewSection({ serverId, slug, summary, reviews, page, hasNextPage, viewer, notice, errorNotice, votes }: {
   serverId: string;
   slug: string;
   summary: ReviewSummary;
@@ -66,6 +104,7 @@ export function ReviewSection({ serverId, slug, summary, reviews, page, hasNextP
   viewer: ViewerState | null;
   notice?: string;
   errorNotice?: string;
+  votes?: ReviewVotes;
 }) {
   const canReply = canPublishOfficialReply(viewer?.membershipRole ?? null);
   const canReport = Boolean(viewer?.emailVerified);
@@ -73,6 +112,8 @@ export function ReviewSection({ serverId, slug, summary, reviews, page, hasNextP
   const canWrite = !viewer || (viewer.emailVerified && !viewer.membershipRole && (!viewer.review || viewer.review.status === "deleted"));
   const writeHref = viewer ? "#review-composer" : `/sign-in?callbackURL=${encodeURIComponent(`/servers/${slug}#reviews`)}`;
   const firstShown = (page - 1) * REVIEW_PAGE_SIZE + 1;
+  const verifiedReviewIds = new Set(votes?.verifiedReviewIds);
+  const composer = viewer ? <Composer serverId={serverId} slug={slug} viewer={viewer} /> : null;
   return (
     <Card id="reviews" className="scroll-mt-24 gap-0 py-0">
       <div className="grid gap-5.25 border-b p-5.25 sm:gap-8.5 sm:p-8.5">
@@ -82,13 +123,13 @@ export function ReviewSection({ serverId, slug, summary, reviews, page, hasNextP
         </div>
         {notice ? <Alert><AlertDescription>{notice}</AlertDescription></Alert> : null}
         {errorNotice ? <Alert variant="destructive"><AlertDescription>{errorNotice}</AlertDescription></Alert> : null}
-        <Summary summary={summary} />
+        <Summary summary={summary} verifiedCount={votes?.verifiedCount} />
         {/* On phones the action drops under the score as a full-width outline button. */}
         {canWrite ? <Button asChild variant="outline" className="h-11 border-foreground font-bold sm:hidden"><Link href={writeHref}>Escribir una opinión</Link></Button> : null}
-        {viewer ? <div id="review-composer" className="scroll-mt-24"><Composer serverId={serverId} slug={slug} viewer={viewer} /></div> : null}
+        {viewer ? <div id="review-composer" className="scroll-mt-24">{votes ? <ReviewFormNoticeProvider notice={<VoteNotice votes={votes} />}>{composer}</ReviewFormNoticeProvider> : composer}</div> : null}
       </div>
       {reviews.length ? (
-        <div className="grid">{reviews.map((review) => <ReviewCard key={review.id} review={review} serverId={serverId} slug={slug} canReport={canReport && !review.isMine} canReply={canReply} canManageReplies={canReply} />)}</div>
+        <div className="grid">{reviews.map((review) => <ReviewCard key={review.id} review={review} serverId={serverId} slug={slug} canReport={canReport && !review.isMine} canReply={canReply} canManageReplies={canReply} verified={verifiedReviewIds.has(review.id)} />)}</div>
       ) : (
         <p className="p-8.5 text-center text-sm text-muted-foreground">Todavía no hay opiniones. Sé el primero en contar tu experiencia.</p>
       )}

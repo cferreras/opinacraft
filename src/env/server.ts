@@ -13,6 +13,11 @@ export const serverEnv = createEnv({
     SITE_URL: z.url().optional(),
     BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
     SERVER_VERIFICATION_SECRET: z.string().min(32).optional(),
+    // Encrypts owners' Votifier tokens and public keys at rest; vote delivery is off without it.
+    VOTIFIER_SECRET: z.string().min(32).optional(),
+    // Development only: lets the owner panel and vote delivery reach a Votifier on localhost or the
+    // LAN. Ignored whenever NODE_ENV is production, so it can never open the SSRF guard in a deploy.
+    VOTIFIER_ALLOW_PRIVATE_HOSTS: z.enum(["true", "false"]).default("false"),
     CRON_MONITOR_SECRET: z.string().min(32).optional(),
     MONITOR_API_URL: z.url().optional(),
     MONITOR_API_SECRET: z.string().min(32).optional(),

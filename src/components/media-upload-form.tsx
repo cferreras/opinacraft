@@ -6,7 +6,8 @@ import { ImageIcon, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionHeading } from "@/components/section-heading";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
@@ -74,7 +75,7 @@ export function MediaUploadForm({ serverId }: { serverId: string }) {
 
   return (
     <Card>
-      <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ImageIcon className="size-4 text-primary" /> Imágenes de marca</CardTitle><p className="text-sm text-muted-foreground">El logo se convierte a WebP automáticamente. Tamaño máximo: 500 KB.</p></CardHeader>
+      <CardHeader><SectionHeading number="Marca" icon={<ImageIcon className="size-4" />} title="Imágenes de marca" description="El logo y el banner que acompañan a tu ficha. El logo se convierte a WebP automáticamente; tamaño máximo: 500 KB." /></CardHeader>
       <CardContent className="grid gap-5">
         {active.length ? <div className="grid gap-3 sm:grid-cols-2">{active.map((media) => <div key={media.kind} className="overflow-hidden rounded-lg border"><div className="flex aspect-[1.6/1] items-center justify-center bg-muted p-3"><img src={media.url} alt={`${media.kind} preview`} className="max-h-full w-full object-contain" /></div><div className="flex items-center justify-between gap-3 border-t px-3 py-2.5"><Badge variant="secondary" className="capitalize">{media.kind} · {Math.round(media.bytes / 1024)} KB</Badge><Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => void remove(media.kind)}><Trash2 className="size-3.5" /> Quitar</Button></div></div>)}</div> : null}
         <form onSubmit={submit} className="grid gap-4 rounded-lg border border-dashed p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">

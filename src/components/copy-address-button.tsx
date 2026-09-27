@@ -12,12 +12,15 @@ export function CopyAddressButton({
   iconOnly = false,
   showIcon = false,
   label = "Copiar",
+  // "la dirección" by default; a link is masculine.
+  copiedLabel = "Copiada",
 }: {
   value: string;
   className?: string;
   iconOnly?: boolean;
   showIcon?: boolean;
   label?: string;
+  copiedLabel?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -45,7 +48,7 @@ export function CopyAddressButton({
       className={cn("text-muted-foreground hover:text-foreground", className)}
     >
       {iconOnly || showIcon ? <Icon aria-hidden="true" /> : null}
-      {!iconOnly && <span>{copied ? "Copiada" : label}</span>}
+      {!iconOnly && <span>{copied ? copiedLabel : label}</span>}
     </Button>
   );
 }

@@ -1,0 +1,54 @@
+name: Vote maintenance
+
+run-name: Vote maintenance by @${{ github.actor }}
+
+on:
+  schedule:
+    - cron: "15 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: vote-maintenance
+  cancel-in-progress: false
+
+jobs:
+  purge-ip-hashes:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # Votes keep a keyed hash of the voter's IP only for the cooldown and abuse checks; the privacy
+    # policy promises it is gone after 30 days, and this is what keeps that promise.
+    env:
+      SITE_URL: ${{ secrets.OPINACRAFT_SITE_URL }}
+      CRON_MONITOR_SECRET: ${{ secrets.OPINACRAFT_CRON_MONITOR_SECRET }}
+
+    steps:
+      - name: Validate configuration
+        shell: bash
+        run: |
+          test -n "$SITE_URL" || { echo "::error::The repository secret OPINACRAFT_SITE_URL is required."; exit 1; }
+          test -n "$CRON_MONITOR_SECRET" || { echo "::error::The repository secret OPINACRAFT_CRON_MONITOR_SECRET is required."; exit 1; }
+          if [[ "${SITE_URL,,}" != https://* ]]; then
+            echo "::error::OPINACRAFT_SITE_URL must use HTTPS"
+            exit 1
+          fi
+
+      - name: Clear expired vote IP hashes
+        shell: bash
+        run: |
+          RESPONSE_FILE="$RUNNER_TEMP/purge.json"
+          HTTP_STATUS=$(curl --silent --show-error --max-time 120 \
+            --output "$RESPONSE_FILE" --write-out "%{http_code}" \
+            --proto '=https' --proto-redir '=https' \
+            -X POST "$SITE_URL/api/internal/votes/purge" \
+            -H "Authorization: Bearer $CRON_MONITOR_SECRET")
+          echo "HTTP $HTTP_STATUS"
+          cat "$RESPONSE_FILE"
+          echo
+          case "$HTTP_STATUS" in
+            2*) jq -r '"Cleared \(.cleared) IP hashes"' "$RESPONSE_FILE" >> "$GITHUB_STEP_SUMMARY" ;;
+            401) echo "::error::$SITE_URL refused the token. OPINACRAFT_CRON_MONITOR_SECRET must match CRON_MONITOR_SECRET in the site environment."; exit 1 ;;
+            *) echo "::error::Vote maintenance endpoint returned HTTP $HTTP_STATUS"; exit 1 ;;
+          esac

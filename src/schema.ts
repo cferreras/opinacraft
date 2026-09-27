@@ -2,6 +2,7 @@ import {
   check,
   bytea,
   bigint,
+  boolean,
   doublePrecision,
   foreignKey,
   integer,
@@ -901,5 +902,87 @@ export const searchServerScores = pgTable(
     primaryKey({ columns: [table.queryHash, table.serverId] }),
     // Reading a query's scores is one index scan over the leading column of the primary key.
     index("search_server_scores_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+export const votifierKeyType = pgEnum("votifier_key_type", ["token", "rsa"]);
+export const voteDeliveryStatus = pgEnum("vote_delivery_status", ["not_configured", "delivered", "failed"]);
+
+/**
+ * One row per vote. Voting needs no account: the nickname is what the server rewards, and the
+ * account, when there is one, is what later marks that person's opinions as verified. The IP is
+ * kept only as a keyed hash for the 23-hour limit and is cleared after 30 days.
+ */
+export const serverVotes = pgTable(
+  "server_votes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    nickname: varchar("nickname", { length: 16 }).notNull(),
+    // Lower-cased: Minecraft nicknames are case-insensitive, so `Steve` and `steve` share a limit.
+    nicknameKey: varchar("nickname_key", { length: 16 }).notNull(),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    ipHash: varchar("ip_hash", { length: 64 }),
+    // The ranking month in Spanish time (`2026-09`), fixed when the vote is cast.
+    month: varchar("month", { length: 7 }).notNull(),
+    deliveryStatus: voteDeliveryStatus("delivery_status").default("not_configured").notNull(),
+    deliveryError: varchar("delivery_error", { length: 40 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("server_votes_server_nickname_created_idx").on(table.serverId, table.nicknameKey, table.createdAt),
+    index("server_votes_server_ip_created_idx").on(table.serverId, table.ipHash, table.createdAt),
+    index("server_votes_user_server_idx").on(table.userId, table.serverId),
+    index("server_votes_server_created_idx").on(table.serverId, table.createdAt),
+    index("server_votes_ip_hash_created_idx").on(table.createdAt).where(sql`${table.ipHash} is not null`),
+    check("server_votes_nickname_check", sql`${table.nickname} ~ '^[A-Za-z0-9_]{3,16}$'`),
+    check("server_votes_month_check", sql`${table.month} ~ '^[0-9]{4}-[0-9]{2}$'`),
+  ],
+);
+
+/** Running totals per server and month, bumped in the same transaction as the vote they count. */
+export const serverMonthlyVotes = pgTable(
+  "server_monthly_votes",
+  {
+    serverId: uuid("server_id")
+      .notNull()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    month: varchar("month", { length: 7 }).notNull(),
+    votes: integer("votes").default(0).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.serverId, table.month] }),
+    index("server_monthly_votes_month_votes_idx").on(table.month, table.votes),
+    check("server_monthly_votes_votes_check", sql`${table.votes} >= 0`),
+  ],
+);
+
+/** Where a server wants its votes delivered. The token or public key is stored encrypted. */
+export const serverVotifierSettings = pgTable(
+  "server_votifier_settings",
+  {
+    serverId: uuid("server_id")
+      .primaryKey()
+      .references(() => servers.id, { onDelete: "cascade" }),
+    host: varchar("host", { length: 253 }).notNull(),
+    port: integer("port").notNull(),
+    keyType: votifierKeyType("key_type").notNull(),
+    secretCiphertext: bytea("secret_ciphertext").notNull(),
+    lastTestAt: timestamp("last_test_at", { withTimezone: true }),
+    lastTestOk: boolean("last_test_ok"),
+    lastTestError: varchar("last_test_error", { length: 40 }),
+    lastTestLatencyMs: integer("last_test_latency_ms"),
+    updatedByUserId: text("updated_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    check("server_votifier_settings_port_check", sql`${table.port} between 1024 and 65535`),
   ],
 );

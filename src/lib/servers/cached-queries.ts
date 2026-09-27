@@ -10,6 +10,8 @@ import {
 } from "./queries";
 import { getReviewSummary, listServerReviews } from "./reviews";
 import { publicServerSlugTag, publicServersTag, reviewListTag, reviewSummaryTag, userAvatarsTag } from "./cache-tags";
+import { votesTag } from "@/lib/votes/cached";
+import { getFeaturedOpinions, type FeaturedOpinion } from "@/lib/votes/featured-opinions";
 
 export async function getCachedPublishedServer(slug: string): Promise<PublicServer | null> {
   "use cache";
@@ -18,17 +20,23 @@ export async function getCachedPublishedServer(slug: string): Promise<PublicServ
   return getPublishedServerCoreBySlug(slug);
 }
 
+/**
+ * `args.month` is part of the key, so the ranking starts over on the 1st instead of serving last
+ * month's order. Ranked pages live as long as the vote figures do: an order older than the votes
+ * printed beside it would show a row with fewer votes above one with more.
+ */
 export async function getCachedPublishedServerPage(args: PublishedServerListArgs) {
   "use cache";
-  cacheLife({ stale: 180, revalidate: 300, expire: 900 });
-  cacheTag(publicServersTag());
+  if (args.sort === "votes") cacheLife({ stale: 30, revalidate: 60, expire: 300 });
+  else cacheLife({ stale: 180, revalidate: 300, expire: 900 });
+  cacheTag(publicServersTag(), votesTag());
   return listPublishedServersFromNeon(args);
 }
 
 export async function getCachedMonitorCatalogPage(args: PublishedServerListArgs) {
   "use cache";
   cacheLife({ stale: 30, revalidate: 45, expire: 120 });
-  cacheTag("monitor:catalog");
+  cacheTag("monitor:catalog", votesTag());
   return listPublishedServersWithMonitor({
     page: args.page ?? 1,
     query: args.query ?? "",
@@ -41,6 +49,7 @@ export async function getCachedMonitorCatalogPage(args: PublishedServerListArgs)
     sort: args.sort ?? "rating",
     tableSort: args.tableSort,
     tableDirection: args.tableDirection ?? "asc",
+    month: args.month,
   });
 }
 
@@ -58,6 +67,17 @@ export async function getCachedPublishedServerCount() {
   cacheTag(publicServersTag());
   const { countPublishedServers } = await import("./queries");
   return countPublishedServers();
+}
+
+/**
+ * The quote on each catalog row. Reviews already invalidate the public catalog, and the votes tag
+ * covers the preference for voters' opinions; a Map does not survive the cache, so it is a record.
+ */
+export async function getCachedFeaturedOpinions(serverIds: readonly string[]): Promise<Record<string, FeaturedOpinion>> {
+  "use cache";
+  cacheLife({ stale: 180, revalidate: 300, expire: 900 });
+  cacheTag(publicServersTag(), votesTag());
+  return Object.fromEntries(await getFeaturedOpinions(serverIds));
 }
 
 export async function getCachedReviewSummary(serverId: string) {

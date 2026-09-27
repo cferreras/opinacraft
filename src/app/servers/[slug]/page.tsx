@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { type ReactNode } from "react";
 import {
+  ArrowBigUp,
   ExternalLink,
   Globe,
   KeyRound,
@@ -27,6 +29,7 @@ import { ServerLogo } from "@/components/server-logo";
 import { ServerSectionNav } from "@/components/server-section-nav";
 import { ServerUtilityActions, ShareServerButton } from "@/components/server-utility-actions";
 import { SiteHeader } from "@/components/site-header";
+import { VoteRankCard } from "@/components/vote-rank-card";
 import { JsonLd } from "@/components/json-ld";
 import { buildServerMetaDescription, normalizeServerDescription } from "@/lib/servers/description";
 import { getServerSession } from "@/lib/session";
@@ -41,6 +44,9 @@ import { getCachedMonitorStatuses, getCachedPublicReviews, getCachedPublishedSer
 import { monitorFromApi, type ManagedServer } from "@/lib/servers/queries";
 import { emptyPlayerHistoryResponse } from "@/lib/servers/player-history";
 import { getReviewViewerState } from "@/lib/servers/reviews";
+import { getCachedServerVoteStats, getCachedVerifiedVoters, votesEnabled } from "@/lib/votes/cached";
+import { getLatestAccountVote } from "@/lib/votes/service";
+import { getCachedVerifiedReviewCount } from "@/lib/votes/verified-reviews";
 
 type PublicServerPageProps = {
   params: Promise<{ slug: string }>;
@@ -80,6 +86,14 @@ const replyErrors: Record<string, string> = {
 const pageSections = [
   { id: "actividad", label: "Actividad" },
   { id: "reviews", label: "Opiniones" },
+  { id: "acceso", label: "Acceso" },
+  { id: "report", label: "Informar" },
+] as const;
+
+// With votes on, the opinions come first: they carry the "Jugador verificado" badges the rank card points at.
+const votePageSections = [
+  { id: "reviews", label: "Opiniones" },
+  { id: "actividad", label: "Actividad" },
   { id: "acceso", label: "Acceso" },
   { id: "report", label: "Informar" },
 ] as const;
@@ -202,6 +216,30 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
     getCachedPublicReviews(server.id, Number.isFinite(requestedReviewPage) ? requestedReviewPage : 1),
     viewerPromise,
   ]);
+  const votes = votesEnabled();
+  // Everything the vote system adds to the page, fetched together; null when the flag is off.
+  const voteData = votes
+    ? await (async () => {
+        const authorIds = Object.values(cachedReviewPage.authorIds);
+        const [stats, verifiedVoters, verifiedCount, latestVote] = await Promise.all([
+          getCachedServerVoteStats(server.id),
+          getCachedVerifiedVoters(server.id, [...new Set(authorIds)].sort()),
+          getCachedVerifiedReviewCount(server.id),
+          session ? getLatestAccountVote(server.id, session.user.id) : Promise.resolve(null),
+        ]);
+        const voters = new Set(verifiedVoters);
+        return {
+          stats,
+          reviews: {
+            serverName: server.name,
+            voteHref: `/servers/${server.slug}/votar`,
+            latestVote,
+            verifiedCount,
+            verifiedReviewIds: Object.entries(cachedReviewPage.authorIds).filter(([, authorId]) => voters.has(authorId)).map(([reviewId]) => reviewId),
+          },
+        };
+      })()
+    : null;
   const history = emptyPlayerHistoryResponse("24h");
   const reviewPage = {
     ...cachedReviewPage,
@@ -299,6 +337,8 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
           </div>
 
           <aside className="min-w-0 max-lg:contents lg:sticky lg:grid lg:gap-5.25 lg:top-[calc(4rem+1.5rem)] lg:col-start-2 lg:row-span-2 lg:row-start-1" aria-label="Conexión y acceso">
+            {/* Same order as the connection card and ahead of it in the source, so on phones it follows the key figures. */}
+            {voteData ? <VoteRankCard className="order-3 lg:order-none" serverName={server.name} slug={server.slug} votes={voteData.stats.votes} position={voteData.stats.position} previousPosition={voteData.stats.previousPosition} /> : null}
             <Card className="order-3 gap-0 py-0 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_21px_-13px_rgb(0_0_0/0.18)] lg:order-none" aria-labelledby="connection-heading">
               <div className="flex items-center justify-between gap-3 px-5.25 pt-5.25">
                 <h2 id="connection-heading" className="text-[1.0625rem] font-extrabold tracking-tight">Conectar</h2>
@@ -370,9 +410,10 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
           </aside>
 
           <div className="min-w-0 max-lg:contents lg:col-start-1 lg:row-start-2 lg:grid lg:gap-5.25">
-            <div className="order-5 min-w-0 lg:order-none"><ServerSectionNav sections={pageSections.map((section) => (section.id === "reviews" ? { ...section, count: reviewSummary.total } : section))} /></div>
-            <div id="actividad" className="order-6 min-w-0 scroll-mt-24 lg:order-none"><PlayerHistoryCard serverId={server.id} initialData={history} mode="public" /></div>
-            <div className="order-7 min-w-0 lg:order-none"><ReviewSection serverId={server.id} slug={server.slug} summary={reviewSummary} reviews={reviewPage.reviews} page={reviewPage.page} hasNextPage={reviewPage.hasNextPage} viewer={viewer} notice={notice} errorNotice={errorNotice} /></div>
+            <div className="order-5 min-w-0 lg:order-none"><ServerSectionNav sections={(voteData ? votePageSections : pageSections).map((section) => (section.id === "reviews" ? { ...section, count: reviewSummary.total } : section))} /></div>
+            {voteData ? null : <div id="actividad" className="order-6 min-w-0 scroll-mt-24 lg:order-none"><PlayerHistoryCard serverId={server.id} initialData={history} mode="public" /></div>}
+            <div className={`${voteData ? "order-6" : "order-7"} min-w-0 lg:order-none`}><ReviewSection serverId={server.id} slug={server.slug} summary={reviewSummary} reviews={reviewPage.reviews} page={reviewPage.page} hasNextPage={reviewPage.hasNextPage} viewer={viewer} notice={notice} errorNotice={errorNotice} votes={voteData?.reviews} /></div>
+            {voteData ? <div id="actividad" className="order-7 min-w-0 scroll-mt-24 lg:order-none"><PlayerHistoryCard serverId={server.id} initialData={history} mode="public" /></div> : null}
             <div id="report" className="order-9 min-w-0 scroll-mt-24 lg:order-none"><ReportForm serverId={server.id} /></div>
           </div>
         </div>
@@ -386,6 +427,11 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
             label={`Copiar IP ${endpoint.edition === "java" ? "Java" : "Bedrock"}`}
             className="h-12 flex-1 bg-primary text-[0.9375rem] font-extrabold text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
           />
+          {voteData ? (
+            <Button asChild variant="outline" className="h-12 shrink-0 gap-1.5 px-4 text-[0.9375rem] font-bold">
+              <Link href={`/servers/${server.slug}/votar`}><ArrowBigUp aria-hidden="true" className="size-4.5" />Votar</Link>
+            </Button>
+          ) : null}
           <ShareServerButton name={server.name} />
         </div>
       ) : null}

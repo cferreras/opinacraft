@@ -4,7 +4,8 @@ import { addMemberAction, changeMemberRoleAction, removeMemberAction } from "@/a
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionHeading } from "@/components/section-heading";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -18,7 +19,7 @@ function initials(value: string) {
 export function MemberPanel({ serverId, slug, members, canManage }: { serverId: string; slug: string; members: Member[]; canManage: boolean }) {
   return (
     <Card>
-      <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Users className="size-4 text-primary" /> Miembros</CardTitle><p className="text-sm text-muted-foreground">Gestiona el acceso de tu equipo con el nivel adecuado.</p></CardHeader>
+      <CardHeader><SectionHeading number="Equipo" icon={<Users className="size-4" />} title="Miembros" description="Gestiona quién puede editar este servidor y con qué nivel de acceso." /></CardHeader>
       <CardContent className="grid gap-3">
         {members.map((member) => (
           <div key={member.userId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
