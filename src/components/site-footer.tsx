@@ -4,6 +4,7 @@ import { ArrowRight, Heart } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeSwitch } from "@/components/theme-toggle";
 import { aboutPath } from "@/lib/site/about";
+import { discordInviteUrl, tiktokProfileUrl, youtubeChannelUrl } from "@/lib/site/community";
 import { cn } from "@/lib/utils";
 
 const footerColumns = [
@@ -23,6 +24,9 @@ const footerColumns = [
     // to a signed-out visitor. The header offers them to whoever is actually signed in.
     links: [
       { label: "Publicar servidor", href: "/servers/new" },
+      { label: "Discord", href: discordInviteUrl, external: true },
+      { label: "YouTube", href: youtubeChannelUrl, external: true },
+      { label: "TikTok", href: tiktokProfileUrl, external: true },
       { label: "Crear cuenta", href: "/sign-up" },
       { label: "Iniciar sesión", href: "/sign-in" },
     ],
@@ -70,6 +74,9 @@ function CompactFooter() {
         <nav aria-label="Enlaces legales" className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <Link href={aboutPath} className="transition-colors hover:text-foreground">Quiénes somos</Link>
           <Link href="/contact" className="transition-colors hover:text-foreground">Contacto</Link>
+          <a href={discordInviteUrl} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-foreground">Discord</a>
+          <a href={youtubeChannelUrl} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-foreground">YouTube</a>
+          <a href={tiktokProfileUrl} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-foreground">TikTok</a>
           <Link href="/terms" className="transition-colors hover:text-foreground">Términos</Link>
           <Link href="/privacy" className="transition-colors hover:text-foreground">Privacidad</Link>
         </nav>
@@ -164,12 +171,18 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "compact" 
               <ul className="mt-2 grid text-sm sm:mt-[1.3125rem] sm:gap-[0.8125rem]">
                 {column.links.map((link) => (
                   <li key={link.href} className="flex">
-                    <Link href={link.href} className={cn(linkClass, "inline-flex min-h-[2.125rem] items-center gap-2 sm:min-h-5 sm:leading-5")}>
-                      {link.label}
-                      {"live" in link ? (
-                        <span aria-hidden="true" className="size-1.5 rounded-full bg-success shadow-[0_0_0_3px_color-mix(in_oklch,var(--success)_20%,transparent)]" />
-                      ) : null}
-                    </Link>
+                    {"external" in link ? (
+                      <a href={link.href} target="_blank" rel="noopener noreferrer" className={cn(linkClass, "inline-flex min-h-[2.125rem] items-center gap-2 sm:min-h-5 sm:leading-5")}>
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link href={link.href} className={cn(linkClass, "inline-flex min-h-[2.125rem] items-center gap-2 sm:min-h-5 sm:leading-5")}>
+                        {link.label}
+                        {"live" in link ? (
+                          <span aria-hidden="true" className="size-1.5 rounded-full bg-success shadow-[0_0_0_3px_color-mix(in_oklch,var(--success)_20%,transparent)]" />
+                        ) : null}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>

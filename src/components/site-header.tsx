@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { IconBrandDiscord, IconBrandTiktok, IconBrandYoutube } from "@tabler/icons-react";
 import {
   BookOpen,
   ChevronRight,
   LayoutGrid,
   Menu,
   Plus,
-  Search,
   Server,
   ShieldCheck,
   User,
@@ -20,12 +20,11 @@ import { authClient } from "@/lib/auth-client";
 import { BrandMark } from "@/components/brand-mark";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeMenuItems, ThemeSegmented } from "@/components/theme-toggle";
+import { discordInviteUrl, tiktokProfileUrl, youtubeChannelUrl } from "@/lib/site/community";
 
 const navigation = [
   { label: "Servidores", href: "/", icon: LayoutGrid },
@@ -33,15 +32,17 @@ const navigation = [
   { label: "Mis servidores", href: "/dashboard/servers", icon: Server },
 ] as const;
 
+const communityLinks = [
+  { label: "Únete a nuestro Discord", href: discordInviteUrl, icon: IconBrandDiscord },
+  { label: "Nuestro canal de YouTube", href: youtubeChannelUrl, icon: IconBrandYoutube },
+  { label: "Síguenos en TikTok", href: tiktokProfileUrl, icon: IconBrandTiktok },
+] as const;
+
 type PlatformRole = "moderator" | "admin";
 
 const moderationNavigation = { label: "Moderación", href: "/admin", icon: ShieldCheck } as const;
 
 type NavigationItem = (typeof navigation)[number] | typeof moderationNavigation;
-
-const emptySubscribe = () => () => {};
-const getMacPlatform = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
-const getServerPlatform = () => false;
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -147,26 +148,9 @@ function MobileNavigation({ pathname, canModerate, signedIn, onNavigate }: { pat
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const router = useRouter();
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [platformAccess, setPlatformAccess] = useState<{ userId: string; role: PlatformRole | null }>({ userId: "", role: null });
   const [menuOpen, setMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const desktopSearchRef = useRef<HTMLInputElement>(null);
-  const isMac = useSyncExternalStore(emptySubscribe, getMacPlatform, getServerPlatform);
-
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        if (window.matchMedia("(max-width: 1023px)").matches) setSearchOpen(true);
-        else desktopSearchRef.current?.focus();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -189,30 +173,23 @@ export function SiteHeader() {
     return () => { active = false; };
   }, [session?.user?.id]);
 
-  function submitSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextQuery = query.trim();
-    router.push(nextQuery ? `/?q=${encodeURIComponent(nextQuery)}` : "/");
-    setSearchOpen(false);
-    setMenuOpen(false);
-  }
-
   const displayName = session?.user?.name || session?.user?.email?.split("@")[0] || "Invitado";
   const canModerate = platformAccess.userId === session?.user?.id && platformAccess.role !== null;
 
   return (
     <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-2 px-4 sm:px-6 lg:gap-8.5 lg:px-8">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-2 px-4 sm:px-6 lg:gap-3 lg:px-8">
         <Link href="/" aria-label="OpinaCraft, inicio" className="mr-auto inline-flex shrink-0 items-center lg:mr-0"><Brand compact={false} /></Link>
 
-        <form onSubmit={submitSearch} className="relative hidden h-10 max-w-[27.8rem] flex-1 lg:block">
-          <Search className="pointer-events-none absolute left-3.25 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <label htmlFor="header-search" className="sr-only">Buscar servidores</label>
-          <Input ref={desktopSearchRef} id="header-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Busca por nombre, modalidad o frase…" className="h-10 rounded-[0.625rem] bg-background pl-9.5 pr-16 text-sm shadow-none" />
-          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[0.3125rem] border bg-card px-1.5 py-0.5 font-sans text-[0.6875rem] font-bold text-muted-foreground">{isMac ? "⌘ K" : "Ctrl K"}</kbd>
-        </form>
+        <div className="ml-5.5 hidden lg:block"><NavigationLinks pathname={pathname} signedIn={Boolean(session)} /></div>
 
-        <div className="ml-auto hidden lg:block"><NavigationLinks pathname={pathname} signedIn={Boolean(session)} /></div>
+        <div className="ml-auto hidden items-center gap-1 lg:flex">
+          {communityLinks.map((item) => (
+            <Button key={item.href} variant="ghost" size="icon" asChild className="size-10 text-muted-foreground hover:text-foreground">
+              <a href={item.href} target="_blank" rel="noopener noreferrer" aria-label={item.label} title={item.label}><item.icon aria-hidden="true" className="size-5" /></a>
+            </Button>
+          ))}
+        </div>
 
         {sessionPending ? <Skeleton className="size-8 rounded-full" /> : session ? (
           <DropdownMenu>
@@ -237,7 +214,10 @@ export function SiteHeader() {
           </Button>
         )}
 
-        <Button variant="ghost" size="icon" className="size-11 lg:hidden" onClick={() => setSearchOpen(true)} aria-label="Buscar servidores"><Search className="size-5" /></Button>
+        {/* A phone bar has room for one: Discord. The menu carries every community link. */}
+        <Button variant="ghost" size="icon" asChild className="size-11 lg:hidden">
+          <a href={discordInviteUrl} target="_blank" rel="noopener noreferrer" aria-label="Únete a nuestro Discord"><IconBrandDiscord aria-hidden="true" className="size-5" /></a>
+        </Button>
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="-mr-2 size-11 lg:hidden" aria-label="Abrir menú"><Menu className="size-5" /></Button>
@@ -262,6 +242,16 @@ export function SiteHeader() {
                 <p className="px-3 pb-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tema</p>
                 <ThemeSegmented className="mx-3" />
               </div>
+              <div>
+                <p className="px-3 pb-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Síguenos</p>
+                <div className="flex gap-1 px-1.5">
+                  {communityLinks.map((item) => (
+                    <Button key={item.href} variant="ghost" size="icon" asChild className="size-11 text-muted-foreground hover:text-foreground">
+                      <a href={item.href} target="_blank" rel="noopener noreferrer" aria-label={item.label}><item.icon aria-hidden="true" className="size-5" /></a>
+                    </Button>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="mt-auto border-t p-4">
               {session ? (
@@ -285,19 +275,6 @@ export function SiteHeader() {
           </SheetContent>
         </Sheet>
       </div>
-
-      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Buscar servidores</DialogTitle>
-            <DialogDescription>Busca por nombre, dirección o etiquetas.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={submitSearch} className="flex gap-2">
-            <Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ej. survival" className="h-9" />
-            <Button type="submit" size="lg"><Search className="size-4" /> Buscar</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
     </header>
   );
 }
