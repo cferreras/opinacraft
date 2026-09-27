@@ -16,6 +16,7 @@ import { SiteHeader } from "@/components/site-header";
 import { JsonLd } from "@/components/json-ld";
 import { clientEnv } from "@/env/client";
 import { isAiSearchConfigured } from "@/lib/search/runtime";
+import { homeCardPath, ogCardImage } from "@/lib/og/model";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { itemListSchema } from "@/lib/seo/structured-data";
 import { getCachedCatalogVersions, getCachedFeaturedOpinions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
@@ -47,7 +48,7 @@ import { daysLeftLabel, monthlyReset } from "@/lib/votes/month";
 export const catalogTitle = "Directorio de servidores de Minecraft en español | OpinaCraft";
 export const catalogDescription = "Descubre, compara y únete a comunidades de Minecraft: estado en tiempo real, ping, modalidad y opiniones de quienes ya juegan en ellas.";
 
-export const metadata: Metadata = { title: catalogTitle, description: catalogDescription, alternates: { canonical: catalogPath }, openGraph: buildOpenGraph({ title: catalogTitle, description: catalogDescription, path: catalogPath }) };
+export const metadata: Metadata = { title: catalogTitle, description: catalogDescription, alternates: { canonical: catalogPath }, openGraph: buildOpenGraph({ title: catalogTitle, description: catalogDescription, path: catalogPath, images: ogCardImage(homeCardPath, "OpinaCraft: servidores de Minecraft en español y los más votados del mes.") }) };
 /**
  * The rail leaves the table ~700px at `lg` and its designed 828px only past ~1120px, which is where
  * the edition column fits without squeezing the server name to nothing — so it waits for the room.

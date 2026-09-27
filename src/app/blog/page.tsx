@@ -7,6 +7,7 @@ import { BlogCategoryBadge } from "@/components/blog-category-badge";
 import { Card } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { SiteHeader } from "@/components/site-header";
+import { ogCardImage, staticCardPath } from "@/lib/og/model";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 import {
   blogCategories,
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
   title,
   description,
   alternates: { canonical: blogPath },
-  openGraph: buildOpenGraph({ title, description, path: blogPath }),
+  openGraph: buildOpenGraph({ title, description, path: blogPath, images: ogCardImage(staticCardPath("blog"), "Blog de OpinaCraft: guías y comparativas de servidores de Minecraft.") }),
 };
 
 function CategoryFilters({ active }: { active?: string }) {

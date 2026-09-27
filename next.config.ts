@@ -74,6 +74,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/servers/*/media": sharpRuntimeFiles,
     "/api/account/avatar": sharpRuntimeFiles,
+    // Share cards read their fonts from disk and re-encode server logos with Sharp.
+    "/og/**": ["./src/lib/og/fonts/*.ttf", ...sharpRuntimeFiles],
   },
   env: {
     NEXT_PUBLIC_DISCORD_ENABLED: discordEnabled ? "true" : "false",
