@@ -33,7 +33,7 @@ import { VoteRankCard } from "@/components/vote-rank-card";
 import { JsonLd } from "@/components/json-ld";
 import { buildServerMetaDescription, normalizeServerDescription } from "@/lib/servers/description";
 import { getServerSession } from "@/lib/session";
-import { OG_IMAGES } from "@/lib/brand/og";
+import { ogCardImage, serverCardPath } from "@/lib/og/model";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { breadcrumbListSchema, serverSchema } from "@/lib/seo/structured-data";
 import { accessTypeLabel, accountModeLabel, authModeLabel } from "@/lib/servers/access";
@@ -167,7 +167,6 @@ function serverEditions(server: Pick<ManagedServer, "endpoints">) {
 export async function generateMetadata({ params }: PublicServerPageProps): Promise<Metadata> {
   const { slug } = await params;
   const server = await getCachedPublishedServer(slug);
-  const socialMedia = server?.media.find((media) => media.kind === "banner" || media.kind === "logo");
   if (server) {
     // Cached alongside the page's own call, so this costs a map lookup rather than a query.
     const summary = await getCachedReviewSummary(server.id);
@@ -186,7 +185,7 @@ export async function generateMetadata({ params }: PublicServerPageProps): Promi
       title,
       description,
       alternates: { canonical: `/servers/${server.slug}` },
-      openGraph: buildOpenGraph({ title: server.name, description, path: `/servers/${server.slug}`, images: socialMedia ? [{ url: socialMedia.url }] : OG_IMAGES }),
+      openGraph: buildOpenGraph({ title: server.name, description, path: `/servers/${server.slug}`, images: ogCardImage(serverCardPath(server.slug), `${server.name} en OpinaCraft: valoración, jugadores y votos del mes.`) }),
     };
   }
   // Same soft 404 as the blog: the shell has already streamed a 200 by the time

@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import sharp from "sharp";
-
-const ogImagePath = path.resolve("public/brand/og-default.jpg");
+import { OG_IMAGES } from "../src/lib/brand/og.ts";
+import {
+  displayHost,
+  formatRating,
+  isStaticCardKey,
+  OG_SIZE,
+  serverCardPath,
+  serverInitial,
+  serverNameFontSize,
+  serverVoteCardPath,
+  staticCardPath,
+  staticCards,
+} from "../src/lib/og/model.ts";
 
 function pageFiles() {
   const root = path.resolve("src/app");
@@ -14,23 +24,40 @@ function pageFiles() {
     .map((entry) => path.join("src/app", entry));
 }
 
-test("the default share card matches what the metadata advertises", async () => {
-  assert.ok(existsSync(ogImagePath), "the default Open Graph image must exist");
-
-  const metadata = await sharp(ogImagePath).metadata();
+test("the default share card is the static brand card, at the size platforms crop to", () => {
   // Facebook, X and WhatsApp all crop to 1.91:1; anything else gets letterboxed or cut.
-  assert.equal(metadata.format, "jpeg");
-  assert.equal(metadata.width, 1200);
-  assert.equal(metadata.height, 630);
+  assert.deepEqual(OG_SIZE, { width: 1200, height: 630 });
+  const [image] = OG_IMAGES as Array<{ url: string; width: number; height: number; alt: string }>;
+  assert.equal(image.url, staticCardPath("marca"));
+  assert.equal(image.width, 1200);
+  assert.equal(image.height, 630);
+  assert.ok(image.alt.length > 0);
+  assert.ok(isStaticCardKey("marca"), "the default card must be one the static route renders");
+});
 
-  // Some WhatsApp builds skip the preview entirely once the image passes a few
-  // hundred KB, so the card is kept well inside that.
-  assert.ok(statSync(ogImagePath).size <= 200_000, "the share card must stay under 200 KB");
+test("every card path is served by a route under src/app/og", () => {
+  assert.ok(existsSync(path.resolve("src/app/og/[page]/route.tsx")));
+  assert.ok(existsSync(path.resolve("src/app/og/inicio/route.tsx")));
+  assert.ok(existsSync(path.resolve("src/app/og/servers/[slug]/route.tsx")));
+  assert.ok(existsSync(path.resolve("src/app/og/servers/[slug]/votar/route.tsx")));
+  assert.equal(serverCardPath("aldea-norte"), "/og/servers/aldea-norte");
+  assert.equal(serverVoteCardPath("aldea-norte"), "/og/servers/aldea-norte/votar");
+  // A static key must not shadow the dynamic cards that live beside it under /og/.
+  assert.ok(!isStaticCardKey("servers") && !isStaticCardKey("inicio"));
+  assert.ok(!isStaticCardKey("toString"), "only own keys count as cards");
+  for (const key of Object.keys(staticCards)) assert.match(staticCardPath(key as keyof typeof staticCards), /^\/og\/[a-z-]+$/);
+});
 
-  const source = readFileSync(path.resolve("src/lib/brand/og.ts"), "utf8");
-  assert.match(source, /url: "\/brand\/og-default\.jpg"/);
-  assert.match(source, /width: 1200/);
-  assert.match(source, /height: 630/);
+test("server names step down in size as they grow, and the card text reads in Spanish", () => {
+  assert.equal(serverNameFontSize("Aldea Norte"), 84);
+  assert.ok(serverNameFontSize("Un nombre de servidor bastante largo") < serverNameFontSize("Aldea Norte"));
+  assert.equal(serverNameFontSize("x".repeat(80)), 44);
+  assert.equal(formatRating(4.56), "4,6");
+  assert.equal(formatRating(4), "4,0");
+  assert.equal(formatRating(null), null);
+  assert.equal(serverInitial("  élite smp"), "É");
+  assert.equal(displayHost("https://www.opinacraft.com"), "opinacraft.com");
+  assert.equal(displayHost("not a url"), "opinacraft.com");
 });
 
 test("every page that declares openGraph also declares its images", () => {

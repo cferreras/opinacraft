@@ -13,6 +13,8 @@ import { SiteHeader } from "@/components/site-header";
 import { VoteForm } from "@/components/vote-form";
 import { clientEnv } from "@/env/client";
 import { requestIp } from "@/lib/search/request-ip";
+import { ogCardImage, serverVoteCardPath } from "@/lib/og/model";
+import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { getCachedPublishedServer } from "@/lib/servers/cached-queries";
 import { getServerSession } from "@/lib/session";
 import { getCachedServerVoteStats, votesEnabled } from "@/lib/votes/cached";
@@ -28,9 +30,17 @@ export async function generateMetadata({ params }: VotePageProps): Promise<Metad
   const { slug } = await params;
   const server = votesEnabled() ? await getCachedPublishedServer(slug) : null;
   // A form behind a captcha has nothing for a search engine; the ficha is the page to rank.
+  if (!server) return { title: "Servidor no encontrado | OpinaCraft", robots: { index: false, follow: false } };
   return {
-    title: server ? `Votar por ${server.name} | OpinaCraft` : "Servidor no encontrado | OpinaCraft",
+    title: `Votar por ${server.name} | OpinaCraft`,
     robots: { index: false, follow: false },
+    // Kept out of the index, but this is the link a server posts on its Discord to ask for votes.
+    openGraph: buildOpenGraph({
+      title: `Vota por ${server.name}`,
+      description: "Vota cada día y ayúdale a subir en el ranking mensual de OpinaCraft.",
+      path: `/servers/${server.slug}/votar`,
+      images: ogCardImage(serverVoteCardPath(server.slug), `Vota por ${server.name} en OpinaCraft.`),
+    }),
   };
 }
 

@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ServerForm } from "@/components/server-form";
 import { SiteHeader } from "@/components/site-header";
+import { ogCardImage, staticCardPath } from "@/lib/og/model";
+import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { requireServerSession } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Añadir servidor | OpinaCraft", description: "Publica tu comunidad Minecraft en OpinaCraft.", alternates: { canonical: "/servers/new" } };
+export const metadata: Metadata = { title: "Añadir servidor | OpinaCraft", description: "Publica tu comunidad Minecraft en OpinaCraft.", alternates: { canonical: "/servers/new" }, openGraph: buildOpenGraph({ title: "Añadir servidor | OpinaCraft", description: "Publica tu comunidad Minecraft en OpinaCraft.", path: "/servers/new", images: ogCardImage(staticCardPath("publicar"), "Publica tu servidor de Minecraft en OpinaCraft.") }) };
 
 export default async function NewServerPage() {
   await connection();

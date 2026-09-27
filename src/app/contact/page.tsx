@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SiteHeader } from "@/components/site-header";
+import { ogCardImage, staticCardPath } from "@/lib/og/model";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 
 const title = "Contacto | OpinaCraft";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   // The only page on the site that shipped no canonical at all, which left the decision to
   // Google's URL clustering.
   alternates: { canonical: "/contact" },
-  openGraph: buildOpenGraph({ title, description, path: "/contact" }),
+  openGraph: buildOpenGraph({ title, description, path: "/contact", images: ogCardImage(staticCardPath("contacto"), "Contacto de OpinaCraft.") }),
 };
 
 export default function ContactPage() {

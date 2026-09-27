@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SiteHeader } from "@/components/site-header";
+import { ogCardImage, staticCardPath } from "@/lib/og/model";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 
 const title = "Términos de uso | OpinaCraft";
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
   title,
   description,
   alternates: { canonical: "/terms" },
-  openGraph: buildOpenGraph({ title, description, path: "/terms" }),
+  openGraph: buildOpenGraph({ title, description, path: "/terms", images: ogCardImage(staticCardPath("terminos"), "Términos de uso de OpinaCraft.") }),
 };
 
 const sections: readonly [string, ReactNode][] = [

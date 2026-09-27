@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { JsonLd } from "@/components/json-ld";
 import { SiteHeader } from "@/components/site-header";
+import { ogCardImage, staticCardPath } from "@/lib/og/model";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { breadcrumbListSchema } from "@/lib/seo/structured-data";
 import { aboutPath, siteAuthor } from "@/lib/site/about";
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
   title,
   description,
   alternates: { canonical: aboutPath },
-  openGraph: buildOpenGraph({ title, description, path: aboutPath }),
+  openGraph: buildOpenGraph({ title, description, path: aboutPath, images: ogCardImage(staticCardPath("quienes-somos"), "Quiénes somos: cómo verifica OpinaCraft cada servidor.") }),
 };
 
 const mailto = `mailto:${siteAuthor.email}`;
