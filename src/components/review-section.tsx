@@ -29,7 +29,7 @@ export type ReviewVotes = {
 
 function RatingStars({ rating, size = "size-3.5" }: { rating: number; size?: string }) {
   return (
-    <span className="inline-flex items-center gap-0.5 text-rating" aria-label={`${rating} de 5 estrellas`}>
+    <span role="img" className="inline-flex items-center gap-0.5 text-rating" aria-label={`${rating} de 5 estrellas`}>
       {[1, 2, 3, 4, 5].map((star) => <Star key={star} aria-hidden="true" className={`${size} fill-current ${star <= Math.round(rating) ? "" : "text-muted-foreground/25"}`} />)}
     </span>
   );

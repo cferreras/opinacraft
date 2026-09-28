@@ -1,4 +1,5 @@
 import { Blocks } from "lucide-react";
+import { getImageProps } from "next/image";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { ServerMedia } from "@/lib/servers/queries";
@@ -22,10 +23,13 @@ export function ServerLogo({
 }) {
   const logo = media.find((item) => item.kind === "logo");
   const initial = name.trim().charAt(0).toUpperCase();
+  // Owners upload logos at up to 1024px and the card draws them at 44. Going through the image
+  // optimizer serves a 1x/2x pair sized for the slot instead of the original file.
+  const image = logo ? getImageProps({ src: logo.url, alt: "", width: size, height: size }).props : null;
   return (
     // `className` goes last so a caller's radius wins over the default one.
     <Avatar className={cn("shrink-0 rounded-md", className)}>
-      {logo && <AvatarImage src={logo.url} alt={`Logotipo de ${name}`} width={size} height={size} className="rounded-[inherit] object-cover" />}
+      {image && <AvatarImage src={image.src} srcSet={image.srcSet} alt={`Logotipo de ${name}`} width={size} height={size} decoding="async" className="rounded-[inherit] object-cover" />}
       {monogram && initial ? (
         <AvatarFallback aria-hidden="true" className="rounded-[inherit] bg-[oklch(0.32_0.06_160)] text-[length:inherit] font-extrabold tracking-[-0.04em] text-[oklch(0.9_0.09_160)]">
           {initial}
