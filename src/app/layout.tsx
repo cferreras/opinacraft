@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { JetBrains_Mono, Manrope } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -10,6 +11,10 @@ import { OG_IMAGES } from "@/lib/brand/og";
 import { siteLocale, siteName, siteUrl } from "@/lib/seo/site-url";
 import { organizationSchema, webSiteSchema } from "@/lib/seo/structured-data";
 
+// Self-hosted at build time and preloaded, with size-adjusted fallbacks so the swap does not shift
+// layout. globals.css reads the variables into the Tailwind font tokens.
+const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", display: "swap" });
+const jetBrainsMono = JetBrains_Mono({ subsets: ["latin"], weight: "500", variable: "--font-jetbrains-mono", display: "swap" });
 
 export const metadata: Metadata = {
   // Social metadata needs absolute URLs, and a canonical has to name the host that answers 200.
@@ -45,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" className={`${manrope.variable} ${jetBrainsMono.variable}`} suppressHydrationWarning>
       <body className="min-h-full bg-background font-sans text-foreground antialiased">
         {/* Sitewide identity: the publisher every BlogPosting points at, and the site search the
             header already runs on ⌘K. Rendered outside the streaming boundary so it is in the

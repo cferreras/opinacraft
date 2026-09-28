@@ -1,4 +1,3 @@
-@import "https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=JetBrains+Mono:wght@500&display=swap";
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -12,7 +11,9 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.54 0.16 160);
+  /* 0.52, not the 0.54 the rest of the 160 hue sits at: that one gave 4.3:1 under
+   * `--primary-foreground` and 4.48:1 as text on white, both just under AA. */
+  --primary: oklch(0.52 0.16 160);
   --primary-foreground: oklch(0.985 0.004 160);
   /* Readable text on an `--accent` tint, the same pairing idea as the category `-ink` tokens
    * below: `--primary` itself only just clears contrast on that surface at pill sizes. */
@@ -26,11 +27,13 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.54 0.16 160);
-  --success: oklch(0.56 0.16 160);
+  --ring: oklch(0.52 0.16 160);
+  /* Dark enough to read as text on `--success-soft` (4.6:1) and on a card, which the status
+   * pills and the ping readout both do; 0.56 managed 3.6:1 on the tint. Same for `--warning`. */
+  --success: oklch(0.5 0.16 160);
   --success-soft: oklch(0.95 0.03 160);
   --info: oklch(0.58 0.12 230);
-  --warning: oklch(0.62 0.15 80);
+  --warning: oklch(0.54 0.15 80);
   --warning-soft: oklch(0.97 0.035 90);
   /* Stars and rating bars: a lighter gold than `--warning`, which reads as a caution rather than a score. */
   --rating: oklch(0.76 0.15 80);
@@ -60,7 +63,7 @@
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.54 0.16 160);
+  --sidebar-primary: oklch(0.52 0.16 160);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
@@ -123,9 +126,12 @@
    * It is a real breakpoint token rather than a `min-[70rem]:` variant on purpose: Tailwind emits
    * arbitrary min-width variants before the named ones, so `lg:` would override it at every width. */
   --breakpoint-wide: 70rem;
-  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-heading: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", consolas, "Liberation Mono", monospace;
+  /* The families come from `next/font` in the root layout, which self-hosts them and sets these
+   * variables on <html>; an @import of Google's stylesheet here blocked the first paint behind two
+   * extra round trips. */
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "SFMono-Regular", consolas, "Liberation Mono", monospace;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -224,6 +230,10 @@ select {
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.68 0.16 160);
   --info: oklch(0.72 0.12 230);
+  /* The light theme darkened these for contrast on pale surfaces; on a dark card that would go the
+   * wrong way, so the dark theme keeps the lighter originals. */
+  --success: oklch(0.56 0.16 160);
+  --warning: oklch(0.62 0.15 80);
   /* On a dark surface the badge ink lifts well above the base hue; the base
    * itself only tints the badge, so it stays put. */
   --category-guias-ink: oklch(0.8 0.13 160);

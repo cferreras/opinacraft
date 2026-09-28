@@ -43,7 +43,8 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self' https:",
-  "upgrade-insecure-requests",
+  // No `upgrade-insecure-requests`: browsers ignore it in a report-only policy and log a console
+  // error saying so. Add it back if the policy is ever enforced; HSTS covers the upgrade meanwhile.
   `report-uri ${cspReportPath}`,
   "report-to csp-endpoint",
 ].join("; ");
@@ -63,6 +64,8 @@ const nextConfig: NextConfig = {
   redirects: async () => [{ source: "/servers", destination: "/", permanent: true }],
   headers: async () => [{ source: "/:path*", headers: securityHeaders }],
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  // Server logos live in Vercel Blob; `ServerLogo` resizes them through the optimizer.
+  images: { remotePatterns: [{ protocol: "https", hostname: "*.public.blob.vercel-storage.com" }] },
   reactCompiler: true,
   experimental: {
     optimizePackageImports: ["@tabler/icons-react", "lucide-react"],

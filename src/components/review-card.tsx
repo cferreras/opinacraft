@@ -12,7 +12,7 @@ import { LocalizedTimestamp } from "@/components/localized-timestamp";
 
 function Rating({ rating }: { rating: number }) {
   return (
-    <span className="inline-flex items-center gap-px text-rating" aria-label={`${rating} de 5 estrellas`}>
+    <span role="img" className="inline-flex items-center gap-px text-rating" aria-label={`${rating} de 5 estrellas`}>
       {[1, 2, 3, 4, 5].map((star) => <Star key={star} aria-hidden="true" className={`size-3.25 fill-current ${star <= rating ? "" : "text-muted-foreground/25"}`} />)}
     </span>
   );
