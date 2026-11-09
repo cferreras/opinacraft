@@ -13,6 +13,7 @@ import { SiteHeader } from "@/components/site-header";
 import {
   blogCoverHeight,
   blogCoverWidth,
+  blogImageQuality,
   blogPath,
   blogPosts,
   blogPostPath,
@@ -94,7 +95,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             <h1 className="mt-4 max-w-[43.75rem] text-[1.75rem] font-bold leading-[2.125rem] tracking-[-0.025em] sm:text-4xl sm:leading-[2.75rem]">{post.title}</h1>
             <p className="mt-3.5 max-w-[43.75rem] text-base leading-[1.6875rem] text-muted-foreground">{post.excerpt}</p>
 
-            <Image src={post.cover} alt={post.coverAlt} width={blogCoverWidth} height={blogCoverHeight} priority sizes="(min-width: 1024px) 50rem, 100vw" className="mt-7 aspect-video w-full rounded-xl object-cover ring-1 ring-foreground/10" />
+            <Image src={post.cover} alt={post.coverAlt} width={blogCoverWidth} height={blogCoverHeight} quality={blogImageQuality} priority sizes="(min-width: 1024px) 50rem, 100vw" className="mt-7 aspect-video w-full rounded-xl object-cover ring-1 ring-foreground/10" />
 
             {post.sections.map((section, index) => (
               <section key={section.heading}>
@@ -104,6 +105,22 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                     {paragraph}
                   </p>
                 ))}
+                {section.figure ? (
+                  <figure className="mt-6 max-w-[43.75rem]">
+                    <Image
+                      src={section.figure.src}
+                      alt={section.figure.alt}
+                      width={section.figure.width}
+                      height={section.figure.height}
+                      quality={blogImageQuality}
+                      sizes="(min-width: 768px) 43.75rem, 100vw"
+                      className="w-full rounded-xl ring-1 ring-foreground/10"
+                    />
+                    {section.figure.caption ? (
+                      <figcaption className="mt-2.5 text-[0.8125rem] leading-5 text-muted-foreground">{section.figure.caption}</figcaption>
+                    ) : null}
+                  </figure>
+                ) : null}
                 {/* The pulled line sits between the second and third section, where the article's
                     middle needs a breath. */}
                 {post.pullQuote && index === 1 ? (
@@ -123,7 +140,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                   {more.map((item) => (
                     <Card key={item.slug} className="relative gap-0 py-0 transition-colors hover:bg-muted/30 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring/50">
                       <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-3.5 p-3.5">
-                        <Image src={item.cover} alt={item.coverAlt} width={208} height={208} sizes="6.5rem" className="aspect-square w-full rounded-[0.625rem] object-cover" />
+                        <Image src={item.cover} alt={item.coverAlt} width={208} height={208} quality={blogImageQuality} sizes="6.5rem" className="aspect-square w-full rounded-[0.625rem] object-cover" />
                         <div className="min-w-0">
                           <BlogCategoryLabel category={item.category} />
                           <p className="mt-1.5 text-sm font-semibold leading-5">
