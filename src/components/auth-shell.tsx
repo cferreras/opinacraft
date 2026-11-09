@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandWordmark } from "@/components/brand-mark";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
@@ -17,9 +17,9 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
     <main className="grid flex-1 place-items-center px-4 py-8 sm:py-12">
       <section className="grid w-full max-w-4xl overflow-hidden rounded-xl border bg-card shadow-sm md:grid-cols-[0.9fr_1.1fr]">
         <aside className="hidden flex-col justify-between bg-primary p-8 text-primary-foreground md:flex lg:p-10">
-          <Link href="/" className="relative z-10 inline-flex items-center gap-2.5 text-sm font-bold tracking-tight">
-            <BrandMark size={28} className="text-primary-foreground" />
-            OpinaCraft
+          {/* On the green panel the tail would vanish in --primary, so the mark goes one-colour. */}
+          <Link href="/" className="relative z-10 inline-flex items-center">
+            <BrandWordmark tone="mono" className="text-[1.375rem] font-extrabold tracking-[-0.025em]" />
           </Link>
 
           <div className="relative z-10 max-w-[18rem]">
@@ -36,9 +36,8 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
 
         <Card className="rounded-none border-0 shadow-none">
           <CardHeader className="space-y-3 p-6 sm:p-8">
-            <Link href="/" className="inline-flex items-center gap-2 text-xs font-bold tracking-tight md:hidden">
-              <BrandMark size={22} className="text-primary" />
-              OpinaCraft
+            <Link href="/" className="inline-flex items-center md:hidden">
+              <BrandWordmark className="text-[1.125rem] font-extrabold tracking-[-0.02em]" />
             </Link>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Acceso a la cuenta</p>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Heart } from "lucide-react";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandWordmark } from "@/components/brand-mark";
 import { ThemeSwitch } from "@/components/theme-toggle";
 import { aboutPath } from "@/lib/site/about";
 import { discordInviteUrl, tiktokProfileUrl, youtubeChannelUrl } from "@/lib/site/community";
@@ -46,11 +46,10 @@ const legalLinks = [
   { label: "Privacidad", href: "/privacy" },
 ] as const;
 
-function BrandLink({ size = 24, className }: { size?: number; className?: string }) {
+function BrandLink({ large = false }: { large?: boolean }) {
   return (
-    <Link href="/" aria-label="OpinaCraft, inicio" className={cn("inline-flex shrink-0 items-center gap-2 text-[0.9375rem] font-bold tracking-tight text-foreground transition-opacity hover:opacity-80", className)}>
-      <BrandMark size={size} className="text-primary" />
-      <span>OpinaCraft</span>
+    <Link href="/" aria-label="OpinaCraft, inicio" className="inline-flex shrink-0 items-center text-foreground transition-opacity hover:opacity-80">
+      <BrandWordmark className={cn("font-extrabold tracking-[-0.02em]", large ? "text-[1.375rem]" : "text-[1.0625rem]")} />
     </Link>
   );
 }
@@ -68,7 +67,7 @@ function CompactFooter() {
     <footer className="border-t bg-background">
       <div className="mx-auto grid min-h-14 w-full max-w-6xl gap-2 px-4 py-3 text-xs text-muted-foreground sm:grid-cols-[auto_auto_1fr] sm:items-center sm:gap-x-6 sm:px-6">
         <div className="flex min-w-0 items-center gap-x-5">
-          <BrandLink size={22} />
+          <BrandLink />
           <span>© OpinaCraft</span>
         </div>
         <nav aria-label="Enlaces legales" className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -151,7 +150,7 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "compact" 
 
         <div className="grid grid-cols-2 gap-x-[1.3125rem] gap-y-[2.125rem] py-[2.125rem] sm:grid-cols-3 sm:gap-x-[3.4375rem] sm:py-[3.4375rem] lg:grid-cols-[1.618fr_1fr_1fr_1fr]">
           <div className="col-span-2 min-w-0 sm:col-span-3 lg:col-span-1">
-            <BrandLink size={28} className="text-lg font-extrabold tracking-[-0.02em]" />
+            <BrandLink large />
             <p className="mt-[0.8125rem] max-w-[21.25rem] text-sm leading-[1.618] text-pretty text-(--footer-muted)">
               El directorio donde las comunidades de Minecraft se muestran tal y como son: con su estado, sus modalidades y las opiniones de quienes ya juegan en ellas.
             </p>

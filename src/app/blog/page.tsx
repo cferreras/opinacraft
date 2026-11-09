@@ -16,6 +16,7 @@ import {
   blogCategoryMeta,
   blogCoverHeight,
   blogCoverWidth,
+  blogImageQuality,
   blogPath,
   blogPostPath,
   formatBlogDate,
@@ -76,7 +77,7 @@ function PostCard({ post }: { post: BlogPost }) {
   return (
     <Card className="relative grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3.5 p-3.5 transition-colors hover:bg-muted/30 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring/50 sm:block sm:gap-0 sm:p-0">
       <div className="min-w-0">
-        <Image src={post.cover} alt={post.coverAlt} width={480} height={270} sizes="(min-width: 640px) 22rem, 5.5rem" className="aspect-square w-full rounded-[0.625rem] object-cover sm:aspect-video sm:rounded-none" />
+        <Image src={post.cover} alt={post.coverAlt} width={480} height={270} quality={blogImageQuality} sizes="(min-width: 640px) 22rem, 5.5rem" className="aspect-square w-full rounded-[0.625rem] object-cover sm:aspect-video sm:rounded-none" />
       </div>
       <div className="min-w-0 sm:px-4 sm:pb-5 sm:pt-4">
         <BlogCategoryBadge category={post.category} />
@@ -116,7 +117,7 @@ export default async function BlogIndexPage({ searchParams }: { searchParams: Pr
 
         {featured ? (
           <Card className="relative mt-6 gap-0 py-0 transition-colors hover:bg-muted/30 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring/50 lg:grid lg:grid-cols-[minmax(0,33rem)_minmax(0,1fr)]">
-            <Image src={featured.cover} alt={featured.coverAlt} width={blogCoverWidth} height={blogCoverHeight} priority sizes="(min-width: 1024px) 33rem, 100vw" className="aspect-video w-full object-cover lg:h-full lg:rounded-l-xl lg:rounded-tr-none" />
+            <Image src={featured.cover} alt={featured.coverAlt} width={blogCoverWidth} height={blogCoverHeight} quality={blogImageQuality} priority sizes="(min-width: 1024px) 33rem, 100vw" className="aspect-video w-full object-cover lg:h-full lg:rounded-l-xl lg:rounded-tr-none" />
             <div className="flex flex-col justify-center px-5 py-6 sm:px-8">
               <div className="flex flex-wrap items-center gap-2.5">
                 <BlogCategoryBadge category={featured.category} />

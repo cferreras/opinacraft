@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark, BrandWordmark } from "@/components/brand-mark";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -44,13 +44,11 @@ const moderationNavigation = { label: "Moderación", href: "/admin", icon: Shiel
 
 type NavigationItem = (typeof navigation)[number] | typeof moderationNavigation;
 
+// The grid only stays open at a reasonable size, so the wordmark is set larger
+// than the old mark-plus-name lockup was.
 function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <span className="inline-flex items-center gap-2 text-[1.0625rem] font-extrabold tracking-[-0.02em]">
-      <BrandMark size={compact ? 24 : 26} className="text-primary" />
-      {!compact && <span>OpinaCraft</span>}
-    </span>
-  );
+  if (compact) return <BrandMark size={24} />;
+  return <BrandWordmark className="text-[1.375rem] font-extrabold tracking-[-0.025em] text-foreground" />;
 }
 
 function isNavigationActive(pathname: string, href: string) {
