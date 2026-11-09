@@ -16,6 +16,7 @@ import type { CatalogServer } from "@/lib/servers/queries";
 import type { CatalogRowRanking } from "@/lib/servers/catalog-filters";
 import type { FeaturedOpinion } from "@/lib/votes/featured-opinions";
 import { formatVotes } from "@/lib/votes/month";
+import { cn } from "@/lib/utils";
 
 export type RowRanking = CatalogRowRanking;
 
@@ -131,7 +132,9 @@ function StripCell({ label, stacked = false, children }: { label: string; stacke
 function PositionMark({ position, className = "" }: { position: number; className?: string }) {
   const podium = position <= 3;
   return (
-    <span className={`inline-flex items-center justify-center rounded-md font-extrabold tabular-nums tracking-[-0.02em] ${podium ? "bg-accent text-primary-ink" : "text-muted-foreground"} ${className}`}>
+    // `cn` so a caller's `hidden` replaces the base `inline-flex` instead of losing to it in the
+    // stylesheet's order, which left the table column's mark showing on the card too.
+    <span className={cn("inline-flex items-center justify-center rounded-md font-extrabold tabular-nums tracking-[-0.02em]", podium ? "bg-accent text-primary-ink" : "text-muted-foreground", className)}>
       <span className="sr-only">Puesto </span>{position}
     </span>
   );
