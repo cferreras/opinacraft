@@ -38,7 +38,8 @@ const contentSecurityPolicy = [
   "form-action 'self'",
   // Turnstile loads its challenge script from Cloudflare and renders it in an iframe of its own.
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
-  "frame-src 'self' https://challenges.cloudflare.com",
+  // Server trailers are YouTube embeds (privacy-enhanced domain, no cookies until played).
+  "frame-src 'self' https://challenges.cloudflare.com https://www.youtube-nocookie.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",

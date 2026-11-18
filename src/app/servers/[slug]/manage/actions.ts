@@ -58,7 +58,7 @@ export type VerificationState = { outcome: VerificationOutcome } | { error: Veri
 
 export type ManageState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "gameModes" | "country" | "endpoints" | "publicationStatus", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "trailerUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "gameModes" | "country" | "endpoints" | "publicationStatus", string>>;
 };
 
 function formValue(formData: FormData, key: string) {
@@ -76,6 +76,7 @@ function getServerInput(formData: FormData): UpdateServerInput {
     websiteUrl: formValue(formData, "websiteUrl"),
     storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
+    trailerUrl: formValue(formData, "trailerUrl"),
     accessType: formValue(formData, "accessType") as UpdateServerInput["accessType"],
     accessFormUrl: formValue(formData, "accessFormUrl"),
     accountMode: formValue(formData, "accountMode") as UpdateServerInput["accountMode"],

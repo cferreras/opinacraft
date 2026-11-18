@@ -29,6 +29,7 @@ type ServerBase = {
   websiteUrl: string | null;
   storeUrl: string | null;
   discordUrl: string | null;
+  trailerUrl: string | null;
   country: string | null;
   accessType: "open" | "whitelist";
   accessFormUrl: string | null;
@@ -413,6 +414,7 @@ export async function listManagedServers(userId: string) {
         websiteUrl: servers.websiteUrl,
         storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
+        trailerUrl: servers.trailerUrl,
         country: servers.country,
         accessType: servers.accessType,
         accessFormUrl: servers.accessFormUrl,
@@ -537,6 +539,7 @@ async function hydratePublishedCatalogServers(ids: string[], edition?: "java" | 
         websiteUrl: servers.websiteUrl,
         storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
+        trailerUrl: servers.trailerUrl,
         country: servers.country,
         accessType: servers.accessType,
         accessFormUrl: servers.accessFormUrl,
@@ -879,6 +882,7 @@ export async function getPublishedServerCoreBySlug(slug: string) {
         websiteUrl: servers.websiteUrl,
         storeUrl: servers.storeUrl,
         discordUrl: servers.discordUrl,
+        trailerUrl: servers.trailerUrl,
         country: servers.country,
         accessType: servers.accessType,
         accessFormUrl: servers.accessFormUrl,
@@ -938,6 +942,7 @@ export async function getManagedServerBySlug(slug: string, userId: string) {
       websiteUrl: servers.websiteUrl,
       storeUrl: servers.storeUrl,
       discordUrl: servers.discordUrl,
+      trailerUrl: servers.trailerUrl,
       country: servers.country,
       accessType: servers.accessType,
       accessFormUrl: servers.accessFormUrl,

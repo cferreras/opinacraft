@@ -132,6 +132,7 @@ export const servers = pgTable(
     websiteUrl: text("website_url"),
     storeUrl: text("store_url"),
     discordUrl: text("discord_url"),
+    trailerUrl: text("trailer_url"),
     country: varchar("country", { length: 8 }),
     accessType: serverAccessType("access_type").default("open").notNull(),
     accessFormUrl: text("access_form_url"),

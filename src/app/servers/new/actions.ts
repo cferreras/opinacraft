@@ -22,7 +22,7 @@ import { invalidatePublicServerCache } from "@/lib/servers/cache-tags";
 
 export type CreateServerState = {
   formError?: string;
-  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "gameModes" | "country" | "endpoints", string>>;
+  fieldErrors?: Partial<Record<"name" | "description" | "websiteUrl" | "storeUrl" | "discordUrl" | "trailerUrl" | "accessType" | "accessFormUrl" | "accountMode" | "authMode" | "gameModes" | "country" | "endpoints", string>>;
   created?: { id: string; slug: string };
 };
 
@@ -41,6 +41,7 @@ function getInput(formData: FormData): CreateServerInput {
     websiteUrl: formValue(formData, "websiteUrl"),
     storeUrl: formValue(formData, "storeUrl"),
     discordUrl: formValue(formData, "discordUrl"),
+    trailerUrl: formValue(formData, "trailerUrl"),
     accessType: formValue(formData, "accessType") as CreateServerInput["accessType"],
     accessFormUrl: formValue(formData, "accessFormUrl"),
     accountMode: formValue(formData, "accountMode") as CreateServerInput["accountMode"],

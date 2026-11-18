@@ -8,6 +8,7 @@ export type ServerManageFormData = {
   websiteUrl: string | null;
   storeUrl: string | null;
   discordUrl: string | null;
+  trailerUrl: string | null;
   accessType: ManagedServer["accessType"];
   accessFormUrl: string | null;
   accountMode: ManagedServer["accountMode"];
@@ -29,6 +30,7 @@ export function toServerManageFormData(
     | "websiteUrl"
     | "storeUrl"
     | "discordUrl"
+    | "trailerUrl"
     | "accessType"
     | "accessFormUrl"
     | "accountMode"
@@ -48,6 +50,7 @@ export function toServerManageFormData(
     websiteUrl: server.websiteUrl,
     storeUrl: server.storeUrl,
     discordUrl: server.discordUrl,
+    trailerUrl: server.trailerUrl,
     accessType: server.accessType,
     accessFormUrl: server.accessFormUrl,
     accountMode: server.accountMode,

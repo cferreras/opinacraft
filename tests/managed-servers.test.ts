@@ -16,6 +16,7 @@ function makeUnverifiedServer(): ManagedServer {
     websiteUrl: null,
     storeUrl: null,
     discordUrl: null,
+    trailerUrl: null,
     accessType: "open",
     accessFormUrl: null,
     accountMode: "premium_only",
