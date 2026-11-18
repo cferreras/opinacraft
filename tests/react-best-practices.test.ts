@@ -465,7 +465,7 @@ test("answers the verification forms in place instead of redirecting to the top 
 test("keeps the catalog filter controls following the URL across client-side navigation", () => {
   const hookSource = readProjectFile("src/hooks/use-synced-field-value.ts");
   const selectSource = readProjectFile("src/components/filter-select.tsx");
-  const searchSource = readProjectFile("src/components/ai-search-box.tsx");
+  const searchSource = readProjectFile("src/components/server-search-box.tsx");
   const barSource = readProjectFile("src/components/catalog-filter-bar.tsx");
 
   // "Borrar filtros" and the active-filter chips navigate within the same route, so the controls
@@ -481,11 +481,11 @@ test("keeps the catalog filter controls following the URL across client-side nav
   // Clearing leaves an unsent draft sitting on an incoming value that never changed, so the box is
   // told the catalog is unfiltered rather than inferring it from the value.
   assert.match(hookSource, /useSyncedFieldValue\(incoming: string, resetWhen = false, hold = false\)/);
-  // The search box navigates on a debounce while the visitor types, so the URL it produces must
+  // A search can land while the visitor is already typing the next one, so the URL it produces must
   // not be written back over the text typed since: the field is held while it has focus.
   assert.match(searchSource, /useSyncedFieldValue\(incomingValue, cleared, editing\)/);
   assert.match(searchSource, /onBlur=\{\(\) => setEditing\(false\)\}/);
-  assert.match(searchSource, /setEditing\(true\);/);
+  assert.match(searchSource, /onFocus=\{\(\) => setEditing\(true\)\}/);
   assert.match(barSource, /const cleared = !query && !mode && !version && !country && !access && !edition;/);
   assert.doesNotMatch(barSource, /defaultValue|defaultQuery/);
 });

@@ -12,7 +12,7 @@ import { ServerLogo } from "@/components/server-logo";
 import { SiteHeader } from "@/components/site-header";
 import { VoteForm } from "@/components/vote-form";
 import { clientEnv } from "@/env/client";
-import { requestIp } from "@/lib/search/request-ip";
+import { requestIp } from "@/lib/request-ip";
 import { ogCardImage, serverVoteCardPath } from "@/lib/og/model";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { getCachedPublishedServer } from "@/lib/servers/cached-queries";
@@ -96,7 +96,7 @@ export default async function VotePage({ params }: VotePageProps) {
         initialNow={now.toISOString()}
         header={(
           <header className="flex items-center gap-4">
-            <ServerLogo name={server.name} media={server.media} size={56} monogram className="size-14 rounded-[0.8125rem] text-[1.5rem]" />
+            <ServerLogo name={server.name} media={server.media} size={56} className="size-14 rounded-[0.8125rem] text-[1.5rem]" />
             <div className="grid min-w-0 gap-0.5">
               <p className={overline}>Vota por</p>
               <h1 className="truncate text-2xl font-extrabold tracking-tight sm:text-[1.75rem]">{server.name}</h1>
