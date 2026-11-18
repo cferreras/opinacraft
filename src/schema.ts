@@ -3,7 +3,6 @@ import {
   bytea,
   bigint,
   boolean,
-  doublePrecision,
   foreignKey,
   integer,
   index,
@@ -838,70 +837,6 @@ export const serverEndpointPlayerHourly = pgTable(
     index("server_endpoint_player_hourly_server_bucket_idx").on(table.serverId, table.bucketStart),
     check("server_endpoint_player_hourly_source_changed_check", sql`${table.sourceChanged} between 0 and 1`),
     check("server_endpoint_player_hourly_counts_check", sql`${table.sampleCount} >= 0 and ${table.onlineCount} >= 0 and ${table.unknownCount} >= 0`),
-  ],
-);
-
-/**
- * What a natural-language query was understood to mean, keyed by the hash of its normalized form.
- *
- * This is a cache, not a record: rows may be deleted at any time and the only cost is one more
- * Jev call. It lives in Postgres rather than in memory because the site runs as serverless
- * functions, where an in-process map would be per instance and would not survive a cold start —
- * the two things a cache with a TTL measured in days cannot afford.
- *
- * `query` keeps the normalized text next to its hash so the interpretations can be read back and
- * the confidence bands tuned against what visitors actually typed.
- */
-export const searchInterpretations = pgTable(
-  "search_interpretations",
-  {
-    queryHash: varchar("query_hash", { length: 64 }).primaryKey(),
-    query: varchar("query", { length: 80 }).notNull(),
-    model: varchar("model", { length: 64 }).notNull(),
-    interpretation: jsonb("interpretation").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    // Sweeping expired rows is a range scan over this, not a full table scan.
-    index("search_interpretations_updated_at_idx").on(table.updatedAt),
-  ],
-);
-
-/**
- * How well one server answered one query, as judged server by server.
- *
- * This is the cache that makes per-server judging affordable. Scoring a catalog is one request per
- * batch of servers, so a query asked twice must not be paid for twice — and with a bounded catalog
- * the steady state is that almost everything is already known.
- *
- * `profile_hash` is what expires a row, not a clock. It identifies exactly what the model was shown,
- * so editing one server's description re-scores that server and leaves every other score standing.
- * A TTL alone could not do that: it would either hold a stale answer for days or throw away three
- * hundred good ones because one of them changed.
- *
- * Like `search_interpretations`, this is a cache and not a record: any row may be deleted at any
- * time and the only cost is asking again.
- */
-export const searchServerScores = pgTable(
-  "search_server_scores",
-  {
-    queryHash: varchar("query_hash", { length: 64 }).notNull(),
-    serverId: uuid("server_id")
-      .notNull()
-      .references(() => servers.id, { onDelete: "cascade" }),
-    // The probability that this server is what the query asked for. Stored as the judgement itself
-    // rather than as a verdict, so the show/hide threshold can be retuned without re-asking.
-    score: doublePrecision("score").notNull(),
-    profileHash: varchar("profile_hash", { length: 64 }).notNull(),
-    model: varchar("model", { length: 64 }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.queryHash, table.serverId] }),
-    // Reading a query's scores is one index scan over the leading column of the primary key.
-    index("search_server_scores_updated_at_idx").on(table.updatedAt),
   ],
 );
 

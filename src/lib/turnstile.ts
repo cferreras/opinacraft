@@ -1,11 +1,12 @@
 /**
- * Cloudflare Turnstile, server side.
+ * Cloudflare Turnstile, server side: the anti-bot check behind forms anyone can send without an
+ * account, such as the vote page.
  *
- * The widget runs invisibly and is executed when the visitor focuses the search box, so by the
- * time a natural-language search is attempted there is usually a token to exchange for a session.
- * A failure here is never fatal: the caller turns it into "AI search unavailable" and the ordinary
- * catalog search carries on, with an interactive challenge offered as the way back.
+ * The secret stays in this module. Callers only learn whether the visitor passed, failed, or
+ * whether the check is not configured at all, and decide for themselves what that means.
  */
+
+import { serverEnv } from "@/env/server";
 
 const SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 const VERIFY_TIMEOUT_MS = 3000;
@@ -45,4 +46,12 @@ export async function verifyTurnstileToken({ token, secret, remoteIp, fetchImpl 
   } catch (error) {
     return { ok: false, errorCodes: [error instanceof Error ? error.name : "unknown"] };
   }
+}
+
+export async function verifyVisitorChallenge(token: string, remoteIp?: string): Promise<"ok" | "failed" | "unconfigured"> {
+  const secret = serverEnv.TURNSTILE_SECRET_KEY;
+  if (!secret) return "unconfigured";
+  const verification = await verifyTurnstileToken({ token, secret, remoteIp });
+  if (!verification.ok) console.warn("[turnstile] rejected a token", verification.errorCodes?.join(",") ?? "unknown");
+  return verification.ok ? "ok" : "failed";
 }

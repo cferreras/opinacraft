@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql, type SQLWrapper } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/schema";
 import { getMonitorCadenceMinutes, getMonitorFreshness, type MonitorFreshness } from "./monitor-scheduling";
 import { catalogAccessCondition, type CatalogAccessFilter, type CatalogEdition } from "./catalog-filters";
+import { SQL_FOLD_FROM, SQL_FOLD_TO, catalogSearchPhrase, catalogSearchTerms, containsPattern, gameModesMatching, startsWithPattern } from "./catalog-search";
 import { MINECRAFT_VERSION_SQL_PATTERN, REPORTED_PADDING_SQL_PATTERN, catalogVersionOptions, isMinecraftVersion, reportedVersionMatches } from "./minecraft-version";
 import { normalizeGameModeInputs } from "./game-modes";
 import { reviewScoreSql } from "./review-score";
@@ -582,66 +583,6 @@ async function hydratePublishedCatalogServers(ids: string[], edition?: "java" | 
 }
 
 /**
- * Pages and hydrates a list of ids somebody else has already put in order.
- *
- * The catalog's own queries decide an order and then hydrate it; per-server judging decides the order
- * outside SQL, so it needs the second half on its own. The ranking is the input, and
- * {@link hydratePublishedCatalogServers} restores it after the fetch, so the ordering survives the
- * round trip through Postgres.
- */
-export async function listPublishedServersByRankedIds({ ids, page = 1, edition }: {
-  ids: readonly string[];
-  page?: number;
-  edition?: CatalogEdition;
-}): Promise<CatalogPage> {
-  const safePage = Math.min(Math.max(Math.trunc(page) || 1, 1), MAX_PUBLIC_SERVER_PAGE);
-  const start = (safePage - 1) * PUBLIC_SERVER_PAGE_SIZE;
-  const pageIds = ids.slice(start, start + PUBLIC_SERVER_PAGE_SIZE);
-
-  return {
-    servers: await hydratePublishedCatalogServers([...pageIds], edition),
-    hasNextPage: ids.length > start + PUBLIC_SERVER_PAGE_SIZE,
-    totalCount: ids.length,
-    page: safePage,
-  };
-}
-
-/**
- * The static half of every visible server's profile, for judging a query against the whole catalog.
- *
- * Deliberately not `hydratePublishedCatalogServers`: that one brings media, per-endpoint history and
- * review summaries, all of which would be built three hundred times and thrown away. This selects
- * only what a reader needs to decide whether a server is what somebody asked for.
- *
- * Live numbers are **not** here. `servers.monitor_*` is a copy that stopped being written when the
- * monitor moved to its own database, and feeding a stale player count to a question about "pocos
- * jugadores" would answer it wrongly rather than not at all. The caller merges the live half from the
- * monitor API, and where the monitor cannot be reached the profile honestly says it has no data.
- */
-export async function listServerProfileFacts() {
-  const rows = await db
-    .select({
-      id: servers.id,
-      name: servers.name,
-      description: servers.description,
-      country: servers.country,
-      accessType: servers.accessType,
-      accountMode: servers.accountMode,
-      gameModes: sql<string[]>`coalesce((select array_agg(gm.mode order by gm.position) from server_game_modes gm where gm.server_id = ${servers.id}), '{}')`,
-      editions: sql<string[]>`coalesce((select array_agg(distinct se.edition) from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified'), '{}')`,
-    })
-    .from(servers)
-    .where(visibleCatalogServerCondition())
-    // A stable order so two identical searches batch the servers the same way, which keeps the
-    // score cache hitting instead of re-asking the same question in a different grouping.
-    .orderBy(asc(servers.createdAt), asc(servers.id));
-
-  return rows;
-}
-
-export type ServerProfileFacts = Awaited<ReturnType<typeof listServerProfileFacts>>[number];
-
-/**
  * What the visitor picks in the catalog filter bar, apart from the search box.
  *
  * Three of these read as "any of these", not "all of these": one word from the search box can name
@@ -726,17 +667,61 @@ function catalogFacetConditions({ mode, country, version, access, edition }: Cat
   ];
 }
 
-/** Free text reaches the name, the description and the modes the server advertises. */
-function catalogSearchCondition(queryText: string) {
-  if (!queryText) return undefined;
-  const needle = queryText.slice(0, 80);
-  return sql`(${ilike(servers.name, `%${needle}%`)} or ${ilike(servers.description, `%${needle}%`)} or similarity(lower(${servers.name}), lower(${needle})) > 0.2 or similarity(lower(coalesce(${servers.description}, '')), lower(${needle})) > 0.2 or exists (select 1 from server_game_modes gm where gm.server_id = ${servers.id} and gm.mode like ${`%${needle.toLowerCase()}%`}))`;
+/** A column folded the way `foldSearchText` folds the query: no accents, lower case. */
+function foldedSql(column: SQLWrapper) {
+  return sql`lower(translate(coalesce(${column}, ''), ${SQL_FOLD_FROM}, ${SQL_FOLD_TO}))`;
 }
 
-/** Relevance: a name match outranks a mode match, and a mode match outranks the description. */
+/**
+ * How close a word must be to part of a server's name to count as a misspelling of it. Measured on
+ * the cases it exists for: "hypixl" scores 0.71 against "Hypixel" and "minijuegos" 0.64 against
+ * "Mini Juegos", while a word the name simply does not contain stays well below.
+ */
+const NAME_TYPO_SIMILARITY = 0.6;
+/** Shorter words have too few trigrams for a similarity to mean anything. */
+const MIN_TYPO_TERM_LENGTH = 4;
+
+/**
+ * Free text, word by word: every word has to appear in the name, the description, a mode the
+ * server advertises or one of its verified addresses. The name also forgives typos, because it is
+ * the one field people type from memory.
+ */
+function catalogSearchCondition(queryText: string) {
+  const terms = catalogSearchTerms(queryText);
+  if (terms.length === 0) return undefined;
+  const name = foldedSql(servers.name);
+  const description = foldedSql(servers.description);
+
+  return and(...terms.map((term) => {
+    const pattern = containsPattern(term);
+    const modes = gameModesMatching(term);
+    return or(
+      sql`${name} like ${pattern}`,
+      sql`${description} like ${pattern}`,
+      sql`exists (select 1 from server_endpoints se where se.server_id = ${servers.id} and se.verification_status = 'verified' and lower(se.host) like ${pattern})`,
+      modes.length > 0
+        ? sql`exists (select 1 from server_game_modes gm where gm.server_id = ${servers.id} and gm.mode in (${sql.join(modes.map((slug) => sql`${slug}`), sql`, `)}))`
+        : undefined,
+      term.length >= MIN_TYPO_TERM_LENGTH ? sql`word_similarity(${term}, ${name}) >= ${NAME_TYPO_SIMILARITY}` : undefined,
+    );
+  }));
+}
+
+/**
+ * Relevance. Typing a server's name is the commonest search there is, so an exact name comes first,
+ * then names that start with the query, then names holding every word. Within each band a close
+ * name outranks a matching mode, and a mode outranks the description.
+ */
 function catalogRelevanceOrder(queryText: string) {
-  const needle = queryText.slice(0, 80);
-  return desc(sql`greatest(similarity(lower(${servers.name}), lower(${needle})) * 3, coalesce((select max(similarity(gm.mode, lower(${needle}))) * 2 from server_game_modes gm where gm.server_id = ${servers.id}), 0), similarity(lower(coalesce(${servers.description}, '')), lower(${needle})))`);
+  const phrase = catalogSearchPhrase(queryText);
+  const terms = catalogSearchTerms(queryText);
+  const name = foldedSql(servers.name);
+  const everyWordInName = terms.length > 0 ? and(...terms.map((term) => sql`${name} like ${containsPattern(term)}`)) : sql`false`;
+
+  return [
+    asc(sql`case when ${name} = ${phrase} then 0 when ${name} like ${startsWithPattern(phrase)} then 1 when ${everyWordInName} then 2 else 3 end`),
+    desc(sql`greatest(word_similarity(${phrase}, ${name}) * 3, coalesce((select max(similarity(gm.mode, ${phrase})) * 2 from server_game_modes gm where gm.server_id = ${servers.id}), 0), similarity(${foldedSql(servers.description)}, ${phrase}))`),
+  ];
 }
 
 /**
@@ -779,7 +764,7 @@ export async function listPublishedServersWithMonitor({
     : byVotes
       ? rankingOrderSql(month)
       : queryText
-        ? [catalogRelevanceOrder(queryText)]
+        ? catalogRelevanceOrder(queryText)
         : sort === "recent"
           ? [desc(servers.createdAt)]
           : [desc(sql`coalesce(${reviewScoreSql()}, 0)`)];
@@ -834,7 +819,7 @@ export async function listPublishedServersFromNeon({ page = 1, query = "", statu
     : byVotes
       ? rankingOrderSql(month)
       : queryText
-        ? [catalogRelevanceOrder(queryText)]
+        ? catalogRelevanceOrder(queryText)
         : sort === "players"
           ? [desc(sql`coalesce(${servers.monitorPlayersCurrent}, 0)`)]
           : sort === "recent"

@@ -4,8 +4,8 @@ import { updateTag } from "next/cache";
 import { headers } from "next/headers";
 
 import { consumeRateLimit, RateLimitExceededError } from "@/lib/rate-limit";
-import { requestIp } from "@/lib/search/request-ip";
-import { verifyVisitorChallenge } from "@/lib/search/runtime";
+import { requestIp } from "@/lib/request-ip";
+import { verifyVisitorChallenge } from "@/lib/turnstile";
 import { getCachedPublishedServer } from "@/lib/servers/cached-queries";
 import { getServerSession } from "@/lib/session";
 import { voterTag, votesEnabled, votesTag } from "@/lib/votes/cached";
