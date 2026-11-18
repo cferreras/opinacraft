@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { after } from "next/server";
+import { eq } from "drizzle-orm";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
@@ -54,6 +55,30 @@ export const auth = betterAuth({
         message: "Ya existe una cuenta con ese correo.",
       });
     }),
+  },
+  databaseHooks: {
+    user: {
+      update: {
+        // Discord signs in with `overrideUserInfoOnSignIn`, which rewrites name and image from the
+        // profile. Keep only the image, and only for accounts that never uploaded their own: a
+        // Discord avatar hash goes stale (404) as soon as the user changes it on Discord.
+        before: async (data, context) => {
+          if (!context?.path?.startsWith("/callback/")) return;
+
+          const email = typeof data.email === "string" ? data.email.toLowerCase() : null;
+          const { name: _name, image, ...rest } = data;
+          if (!email || typeof image !== "string") return { data: rest };
+
+          const [account] = await db
+            .select({ imageKey: authSchema.user.imageKey })
+            .from(authSchema.user)
+            .where(eq(authSchema.user.email, email))
+            .limit(1);
+
+          return { data: account?.imageKey ? rest : { ...rest, image } };
+        },
+      },
+    },
   },
   rateLimit: {
     enabled: true,
@@ -116,6 +141,7 @@ export const auth = betterAuth({
           discord: {
             clientId: discordClientId,
             clientSecret: discordClientSecret,
+            overrideUserInfoOnSignIn: true,
           },
         },
       }
