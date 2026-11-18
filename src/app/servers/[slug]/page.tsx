@@ -26,6 +26,7 @@ import { ReportForm } from "@/components/report-form";
 import { ReviewSection } from "@/components/review-section";
 import { ServerCountryCode } from "@/components/server-country-code";
 import { ServerLogo } from "@/components/server-logo";
+import { ServerTrailer } from "@/components/server-trailer";
 import { ServerSectionNav } from "@/components/server-section-nav";
 import { ServerUtilityActions, ShareServerButton } from "@/components/server-utility-actions";
 import { SiteHeader } from "@/components/site-header";
@@ -309,6 +310,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
             <p className="order-4 max-w-[38rem] text-[0.9375rem] leading-6 text-foreground/75 sm:text-base sm:leading-[1.625rem] lg:order-none lg:-mt-3.25">
               {description}
             </p>
+            <ServerTrailer url={server.trailerUrl} serverName={server.name} />
 
             <section aria-label="Datos clave" className="order-2 grid grid-cols-2 lg:order-none gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)_repeat(3,minmax(0,1fr))]">
               <Metric

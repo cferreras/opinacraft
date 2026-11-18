@@ -23,6 +23,7 @@ import {
 } from "./description.ts";
 import { MAX_SERVER_GAME_MODES, normalizeGameModeInputs } from "./game-modes.ts";
 import { normalizeCountryInput } from "./countries.ts";
+import { canonicalTrailerUrl, parseYouTubeTrailer } from "./trailer.ts";
 
 export const minecraftEditions = ["java", "bedrock"] as const;
 export type MinecraftEdition = (typeof minecraftEditions)[number];
@@ -43,6 +44,7 @@ export type CreateServerInput = {
   websiteUrl?: string;
   storeUrl?: string;
   discordUrl?: string;
+  trailerUrl?: string;
   accessType?: ServerAccessType;
   accessFormUrl?: string;
   accountMode?: ServerAccountMode;
@@ -69,6 +71,7 @@ export type NormalizedCreateServerInput = {
   websiteUrl: string | null;
   storeUrl: string | null;
   discordUrl: string | null;
+  trailerUrl: string | null;
   accessType: ServerAccessType;
   accessFormUrl: string | null;
   accountMode: ServerAccountMode;
@@ -103,6 +106,7 @@ export const createServerInputSchema = z
     websiteUrl: z.string().trim().max(MAX_URL_LENGTH, URL_LENGTH_MESSAGE).optional(),
     storeUrl: z.string().trim().max(MAX_URL_LENGTH, URL_LENGTH_MESSAGE).optional(),
     discordUrl: z.string().trim().max(MAX_URL_LENGTH, URL_LENGTH_MESSAGE).optional(),
+    trailerUrl: z.string().trim().max(MAX_URL_LENGTH, URL_LENGTH_MESSAGE).optional(),
     accessType: z.enum(serverAccessTypes).default("open"),
     accessFormUrl: z.string().trim().max(MAX_URL_LENGTH, URL_LENGTH_MESSAGE).optional(),
     accountMode: z.enum(serverAccountModes).default("premium_only"),
@@ -174,6 +178,7 @@ export class ServerInputError extends Error {
     | "websiteUrl"
     | "storeUrl"
     | "discordUrl"
+    | "trailerUrl"
     | "accessFormUrl"
     | "gameModes"
     | "country"
@@ -189,6 +194,7 @@ export class ServerInputError extends Error {
       | "websiteUrl"
       | "storeUrl"
       | "discordUrl"
+      | "trailerUrl"
       | "accessFormUrl"
       | "gameModes"
       | "country"
@@ -343,6 +349,18 @@ export function normalizeHttpUrl(value: string, field: ServerUrlField) {
   return parsed.toString();
 }
 
+export function normalizeTrailerUrl(value: string) {
+  if (!value.trim()) return null;
+  const trailer = parseYouTubeTrailer(value);
+  if (!trailer) {
+    throw new ServerInputError(
+      "Usa un enlace de un vídeo o Short de YouTube (youtube.com/watch?v=… o youtube.com/shorts/…).",
+      "trailerUrl",
+    );
+  }
+  return canonicalTrailerUrl(trailer);
+}
+
 export function defaultPortForEdition(edition: MinecraftEdition) {
   return defaultMinecraftPort(edition);
 }
@@ -368,6 +386,7 @@ export function normalizeCreateServerInput(
     websiteUrl: emptyToUndefined(input.websiteUrl),
     storeUrl: emptyToUndefined(input.storeUrl),
     discordUrl: emptyToUndefined(input.discordUrl),
+    trailerUrl: emptyToUndefined(input.trailerUrl),
     accessFormUrl: emptyToUndefined(input.accessFormUrl),
   });
 
@@ -420,6 +439,7 @@ export function normalizeCreateServerInput(
     discordUrl: parsed.discordUrl
       ? normalizeHttpUrl(parsed.discordUrl, "discordUrl")
       : null,
+    trailerUrl: parsed.trailerUrl ? normalizeTrailerUrl(parsed.trailerUrl) : null,
     accessType: parsed.accessType,
     accessFormUrl: parsed.accessFormUrl
       ? normalizeHttpUrl(parsed.accessFormUrl, "accessFormUrl")
