@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FilterSelect } from "@/components/filter-select";
-import { AiSearchBox } from "@/components/ai-search-box";
+import { ServerSearchBox } from "@/components/server-search-box";
 import { accessIntentLabel, catalogAccessOptions, catalogEditionOptions, isCatalogAccessFilter } from "@/lib/servers/catalog-filters";
 import { nicheGameModes, popularGameModes } from "@/lib/servers/game-modes";
 import { findServerRegion, isServerCountryCode, serverCountries } from "@/lib/servers/countries";
@@ -19,8 +19,6 @@ type CatalogFilterBarProps = {
   edition?: string;
   versionOptions: readonly string[];
   clearHref?: string;
-  /** Absent when natural-language search is unconfigured, which leaves the plain keyword box. */
-  turnstileSiteKey?: string;
 };
 
 // Search plus the five facets a visitor picks between, on one line: mode, version, country, access
@@ -35,24 +33,22 @@ export function CatalogFilterBar({
   edition,
   versionOptions,
   clearHref,
-  turnstileSiteKey,
 }: CatalogFilterBarProps) {
   // "Borrar filtros" promises an empty bar, but the URL it lands on says nothing about the text
   // the visitor had typed without sending it, so the search box is told the catalog is unfiltered
   // again instead of inferring it from a value that never changed.
   const cleared = !query && !mode && !version && !country && !access && !edition;
 
-  // A group the search box inferred is not one of the picker's options, so it is added as one. The
-  // alternative was showing "Todos" over an active filter, or the first of eighteen countries as if
-  // it were the whole selection — both of which would have the control lie about the results.
+  // A group in the URL (a region, or an intent such as "no premium") is not one of the picker's
+  // options, so it is added as one. The alternative was showing "Todos" over an active filter, or
+  // the first of eighteen countries as if it were the whole selection — both of which would have
+  // the control lie about the results.
   const countryRegion = country && !isServerCountryCode(country) ? findServerRegion(country) : null;
   const accessIntent = access && !isCatalogAccessFilter(access) ? access : null;
 
   return (
     <Card className="gap-2 px-4 py-4">
-      {/* The box owns the search row, the invisible challenge and the suggestion chips: they are
-          one control, and only it knows whether the last query was understood. */}
-      <AiSearchBox value={query} cleared={cleared} turnstileSiteKey={turnstileSiteKey} />
+      <ServerSearchBox value={query} cleared={cleared} />
 
       <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-wrap lg:items-center">
         <div className="min-w-0 lg:flex-1">

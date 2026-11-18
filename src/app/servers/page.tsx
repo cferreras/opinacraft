@@ -7,26 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { AiRankingNotice } from "@/components/ai-ranking-notice";
 import { BlogHighlightsCard } from "@/components/blog-highlights-card";
 import { CatalogFilterBar } from "@/components/catalog-filter-bar";
 import { PublicServerRow, type RowRanking } from "@/components/public-server-row";
 import { RankingSortMenu } from "@/components/ranking-sort-menu";
 import { SiteHeader } from "@/components/site-header";
 import { JsonLd } from "@/components/json-ld";
-import { clientEnv } from "@/env/client";
-import { isAiSearchConfigured } from "@/lib/search/runtime";
 import { homeCardPath, ogCardImage } from "@/lib/og/model";
 import { buildOpenGraph } from "@/lib/seo/open-graph";
 import { itemListSchema } from "@/lib/seo/structured-data";
 import { getCachedCatalogVersions, getCachedFeaturedOpinions, getCachedMonitorCatalogPage, getCachedMonitorStatuses, getCachedPublishedServerPage } from "@/lib/servers/cached-queries";
 import { isMonitorApiConfigured } from "@/lib/servers/monitor-api-client";
-import { listPublishedServersByRankedIds } from "@/lib/servers/queries";
-import { runSemanticSearch } from "@/lib/search/semantic-runtime";
-import { sessionIdFromToken } from "@/lib/search/runtime";
-import { SEARCH_SESSION_COOKIE } from "@/lib/search/session";
-import { requestIp } from "@/lib/search/request-ip";
-import { cookies, headers } from "next/headers";
 import {
   isMonitorDependentCatalogQuery,
   isPublicServerTableSort,
@@ -38,6 +29,7 @@ import {
 } from "@/lib/servers/queries";
 import { getServerResultsSummary } from "@/lib/servers/result-summary";
 import { buildCatalogHref, catalogInputFrom, catalogPath } from "@/lib/servers/catalog-route";
+import { SEARCH_QUERY_MAX_LENGTH } from "@/lib/servers/catalog-search";
 import { accessParamValues, catalogAccessOptions, catalogRowRanking, catalogSortOptionsFor, catalogStatusOptions, defaultCatalogSort, matchedAccessIntent, parseCatalogAccessParams, parseCatalogEditionParam, resolveCatalogSort } from "@/lib/servers/catalog-filters";
 import { gameModeLabel, parseGameModeParams } from "@/lib/servers/game-modes";
 import { countryParamValues, parseCountryParams, serverCountriesLabel } from "@/lib/servers/countries";
@@ -193,7 +185,7 @@ function accessChipLabel(values: readonly string[]) {
   return values.map((value) => catalogAccessOptions.find((option) => option.value === value)?.label ?? value).join(", ");
 }
 
-export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; relevancia?: string; mode?: string | string[]; version?: string; country?: string | string[]; access?: string | string[]; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
+export default async function PublicServersPage({ searchParams }: { searchParams: Promise<{ page?: string; q?: string; mode?: string | string[]; version?: string; country?: string | string[]; access?: string | string[]; edition?: string; status?: string; sort?: string; tableSort?: string; tableDirection?: string }> }) {
   await connection();
   const query = await searchParams;
   const requestedPage = Number.parseInt(query.page ?? "1", 10);
@@ -218,31 +210,16 @@ export default async function PublicServersPage({ searchParams }: { searchParams
   const activeTableDirection: PublicServerSortDirection = tableSort ? tableDirection : "desc";
   const safePage = Number.isFinite(requestedPage) ? requestedPage : 1;
 
-  /**
-   * With `?relevancia=ia`, `q` is not text to match: it is the description each server is judged
-   * against, so the keyword condition must not also run. Filtering by a phrase nobody wrote into a
-   * name and ranking by how well each server answers it would intersect two different questions and
-   * return nothing — the same trap the facet pipeline avoids by making filters and keywords
-   * exclusive.
-   */
-  const judgeBy = query.relevancia === "ia" ? (query.q ?? "").trim() : "";
-  const semantic = judgeBy ? await runSemanticSearch(judgeBy, { modes, countries, access, ...(edition ? { edition } : {}) }, {
-    sessionId: sessionIdFromToken((await cookies()).get(SEARCH_SESSION_COOKIE)?.value),
-    ip: requestIp(await headers()),
-  }) : null;
-  const ranked = semantic?.ran ? semantic.ranking : null;
-
   const reset = monthlyReset();
   const listArgs = {
     page: safePage,
-    // Judged queries keep their text out of the SQL for the reason above.
-    query: ranked ? "" : query.q ?? "",
+    query: query.q ?? "",
     mode: modes, version, country: countries, access, edition, status, sort,
     tableSort: activeTableSort, tableDirection: activeTableDirection,
     // Only the ranking depends on the month, so only its cache entries are keyed by it.
     ...(sort === "votes" ? { month: reset.month } : {}),
   } as const;
-  const monitorDependent = !ranked && isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, version, sort, tableSort: activeTableSort });
+  const monitorDependent = isMonitorApiConfigured() && isMonitorDependentCatalogQuery({ status, version, sort, tableSort: activeTableSort });
   const monitorResult = monitorDependent
     ? await getCachedMonitorCatalogPage(listArgs).catch((error) => {
       console.error("[monitor] catalog query unavailable", error instanceof Error ? error.name : "unknown");
@@ -250,10 +227,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     })
     : null;
   const monitorUnavailable = monitorDependent && monitorResult === null;
-  const result = ranked
-    // The ranking is the order; Postgres only fills in what each server is.
-    ? await listPublishedServersByRankedIds({ ids: ranked.scores.map((entry) => entry.serverId), page: safePage, edition })
-    : monitorResult ?? (monitorDependent ? { servers: [], hasNextPage: false, totalCount: 0, page: listArgs.page ?? 1 } : await getCachedPublishedServerPage(listArgs));
+  const result = monitorResult ?? (monitorDependent ? { servers: [], hasNextPage: false, totalCount: 0, page: listArgs.page ?? 1 } : await getCachedPublishedServerPage(listArgs));
   let servers = result.servers;
   if (isMonitorApiConfigured() && !monitorDependent) {
     try {
@@ -266,8 +240,7 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     }
   }
   const { hasNextPage, page, totalCount } = result;
-  // The judged order has columns of its own to explain, so the votes stay out of it.
-  const showVotes = votesOn && !ranked;
+  const showVotes = votesOn;
   const byVotes = showVotes && sort === "votes" && !tableSort;
   const serverIds = servers.map((server) => server.id);
   const [monthlyVotes, opinions] = showVotes && serverIds.length > 0
@@ -286,7 +259,6 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     : undefined;
   const baseParams = new URLSearchParams();
   if (query.q) baseParams.set("q", query.q);
-  if (ranked) baseParams.set("relevancia", "ia");
   for (const slug of modes) baseParams.append("mode", slug);
   if (version) baseParams.set("version", version);
   for (const value of countryParams) baseParams.append("country", value);
@@ -310,25 +282,22 @@ export default async function PublicServersPage({ searchParams }: { searchParams
     return buildCatalogHref(catalogInputFrom(next));
   };
   const pageHref = (nextPage: number) => hrefWith({ page: String(nextPage) }, { keepPage: true });
-  const ordering = { sort: undefined, tableSort: undefined, tableDirection: undefined, relevancia: undefined };
+  const ordering = { sort: undefined, tableSort: undefined, tableDirection: undefined };
   // A bare catalog is already the ranking; a search is relevance unless the votes are named.
   const sortHref = (value: PublicServerSort) => hrefWith({ ...ordering, sort: value === "votes" && !hasQuery ? undefined : value });
   const votesHref = sortHref("votes");
   const rankingSortOptions = catalogSortOptionsFor(true).map((option) => ({ key: option.value, label: option.label, href: sortHref(option.value) }));
   const activeRankingSort = byVotes ? "votes" : !tableSort && hasExplicitSort ? sort : null;
-  // Ordering by a column means leaving the judged order: clearing `relevancia` here is what makes the
-  // column headers tell the truth, since a ranked page ignores `tableSort` entirely.
   const tableSortHref = (nextSort: PublicServerTableSort) =>
-    hrefWith({ sort: undefined, relevancia: undefined, tableSort: nextSort, tableDirection: activeTableSort === nextSort && activeTableDirection === "asc" ? "desc" : "asc" });
+    hrefWith({ sort: undefined, tableSort: nextSort, tableDirection: activeTableSort === nextSort && activeTableDirection === "asc" ? "desc" : "asc" });
   // A region counts as the one filter the visitor asked for, not as eighteen.
   const activeFilterCount = [hasQuery, modes.length > 0, Boolean(version), countries.length > 0, access.length > 0, Boolean(edition), Boolean(status)].filter(Boolean).length;
   const hasActiveFilters = activeFilterCount > 0 || Boolean(query.sort && query.sort !== defaultCatalogSort(votesOn)) || Boolean(tableSort);
+  const searchText = query.q?.trim().slice(0, SEARCH_QUERY_MAX_LENGTH) ?? "";
+  const searchHasFilters = hasQuery && activeFilterCount > 1;
   // Offered even when a filter is active: the list is cheap, cached, and a facet the visitor is
   // already inside should not reorder itself under them.
   const versionOptions = await getCachedCatalogVersions().catch(() => [] as string[]);
-  // Both halves have to be configured: the widget needs its public key, and the route behind it
-  // needs the API key, the Turnstile secret and the session secret.
-  const turnstileSiteKey = isAiSearchConfigured() ? clientEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY : undefined;
   const serverResultsSummary = getServerResultsSummary({ page, pageSize: PUBLIC_SERVER_PAGE_SIZE, visibleCount: servers.length, totalCount });
   const totalPages = Math.max(1, Math.ceil(totalCount / PUBLIC_SERVER_PAGE_SIZE));
   return (
@@ -381,25 +350,13 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                     access={accessParams[0]}
                     edition={edition}
                     versionOptions={versionOptions}
-                    turnstileSiteKey={turnstileSiteKey}
                     clearHref={hasActiveFilters ? catalogPath : undefined}
                   />
-
-                {ranked && semantic?.ran ? (
-                  <AiRankingNotice
-                    judged={semantic.judged}
-                    approximate={ranked.approximate}
-                    partial={semantic.partial}
-                    // Dropping `relevancia` turns the same text back into a keyword search, which is
-                    // the honest way out: the visitor keeps their words and loses only the judgement.
-                    plainHref={hrefWith({ relevancia: undefined })}
-                  />
-                ) : null}
 
                 {activeFilterCount > 0 ? (
                   <div className="mt-3.25 flex flex-wrap items-center gap-2">
                     <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Filtros activos</span>
-                    {hasQuery ? <ActiveFilterChip label={`Búsqueda: ${query.q?.trim()}`} removeHref={hrefWith({ q: undefined })} removeLabel="Quitar la búsqueda" /> : null}
+                    {hasQuery ? <ActiveFilterChip label={`Búsqueda: ${searchText}`} removeHref={hrefWith({ q: undefined })} removeLabel="Quitar la búsqueda" /> : null}
                     {modes.map((slug) => <ActiveFilterChip key={slug} label={`Modo: ${gameModeLabel(slug)}`} removeHref={hrefWith({ mode: modes.filter((item) => item !== slug) })} removeLabel={`Quitar el filtro de modo ${gameModeLabel(slug)}`} />)}
                     {version ? <ActiveFilterChip label={`Versión: ${version}`} removeHref={hrefWith({ version: undefined })} removeLabel="Quitar el filtro de versión" /> : null}
                     {/* One chip per facet, not per value: a selection the visitor named with one
@@ -446,10 +403,19 @@ export default async function PublicServersPage({ searchParams }: { searchParams
                       <Empty className="rounded-xl border">
                         <EmptyHeader>
                           <EmptyMedia variant="icon"><Search /></EmptyMedia>
-                          <EmptyTitle>{hasActiveFilters ? "Ningún servidor coincide con estos filtros" : "Todavía no hay servidores publicados"}</EmptyTitle>
-                          <EmptyDescription>{hasActiveFilters ? "Prueba a quitar el modo o la versión, o busca solo por nombre." : "Sé el primero en publicar una comunidad de Minecraft en OpinaCraft."}</EmptyDescription>
+                          <EmptyTitle>{hasQuery ? `Sin resultados para «${searchText}»` : hasActiveFilters ? "Ningún servidor coincide con estos filtros" : "Todavía no hay servidores publicados"}</EmptyTitle>
+                          <EmptyDescription>
+                            {hasQuery
+                              ? searchHasFilters
+                                ? "Prueba a buscar sin los filtros, o con menos palabras."
+                                : "Revisa cómo está escrito o prueba con menos palabras. Puedes buscar por nombre, modalidad o dirección."
+                              : hasActiveFilters ? "Prueba a quitar el modo o la versión." : "Sé el primero en publicar una comunidad de Minecraft en OpinaCraft."}
+                          </EmptyDescription>
                         </EmptyHeader>
-                        {hasActiveFilters ? <Button variant="outline" asChild><Link href={catalogPath}>Ver todos los servidores</Link></Button> : <Button asChild><Link href="/servers/new">Publicar servidor</Link></Button>}
+                        {searchHasFilters
+                          // The words are usually the part the visitor cares about, so the way out keeps them.
+                          ? <Button variant="outline" asChild><Link href={buildCatalogHref({ q: searchText })}>Buscar sin filtros</Link></Button>
+                          : hasActiveFilters ? <Button variant="outline" asChild><Link href={catalogPath}>Ver todos los servidores</Link></Button> : <Button asChild><Link href="/servers/new">Publicar servidor</Link></Button>}
                       </Empty>
                     ) : (
                       <>
