@@ -12,10 +12,22 @@ function migrationFolders() {
     .sort();
 }
 
+type SnapshotEntity = { entityType: string; schema?: string; name?: string };
+
 function snapshotOf(folder: string) {
   const file = path.join(migrationsDir, folder, "snapshot.json");
   if (!existsSync(file)) return null;
-  return JSON.parse(readFileSync(file, "utf8")) as { id: string; prevIds: string[]; ddl: unknown[] };
+  return JSON.parse(readFileSync(file, "utf8")) as { id: string; prevIds: string[]; ddl: SnapshotEntity[] };
+}
+
+function tableNames(ddl: readonly SnapshotEntity[]) {
+  return ddl.filter((entity) => entity.entityType === "tables").map((entity) => `${entity.schema ?? "public"}.${entity.name}`);
+}
+
+/** The tables a migration drops on purpose, read from its own SQL. */
+function droppedTables(folder: string) {
+  const sql = readFileSync(path.join(migrationsDir, folder, "migration.sql"), "utf8");
+  return new Set([...sql.matchAll(/DROP TABLE(?: IF EXISTS)? (?:"([^"]+)"\.)?"([^"]+)"/gi)].map((match) => `${match[1] ?? "public"}.${match[2]}`));
 }
 
 test("every migration folder carries the SQL that drizzle-kit migrate applies", () => {
@@ -53,5 +65,10 @@ test("the newest snapshot continues the chain instead of starting a new one", ()
   // A snapshot whose prevIds point somewhere else means two histories were generated in parallel,
   // and the losing one's migrations would be regenerated from scratch.
   assert.ok(newest.prevIds.includes(previous.id), `${withSnapshots.at(-1)} should follow ${withSnapshots.at(-2)}`);
-  assert.ok(newest.ddl.length >= previous.ddl.length, "the newest snapshot should describe the whole schema");
+  // A partial snapshot loses tables it never meant to. A table may only go missing when the
+  // migration beside the snapshot says so with a DROP TABLE.
+  const dropped = droppedTables(withSnapshots.at(-1)!);
+  const kept = new Set(tableNames(newest.ddl));
+  const lost = tableNames(previous.ddl).filter((table) => !kept.has(table) && !dropped.has(table));
+  assert.deepEqual(lost, [], "the newest snapshot should describe the whole schema");
 });

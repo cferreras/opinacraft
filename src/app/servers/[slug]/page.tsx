@@ -283,7 +283,7 @@ export default async function PublicServerPage({ params, searchParams }: PublicS
           <div className="min-w-0 max-lg:contents lg:col-start-1 lg:row-start-1 lg:grid lg:gap-8.5">
             <section className="order-1 lg:order-none" aria-labelledby="server-name">
               <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3.25 gap-y-3.25 sm:items-start sm:gap-x-5.25 sm:gap-y-2">
-                <ServerLogo name={server.name} media={server.media} size={89} monogram className="size-[3.4375rem] rounded-[0.8125rem] text-[1.625rem] sm:row-span-3 sm:size-[5.5625rem] sm:rounded-[1.3125rem] sm:text-[2.625rem]" />
+                <ServerLogo name={server.name} media={server.media} size={89} className="size-[3.4375rem] rounded-[0.8125rem] text-[1.625rem] sm:row-span-3 sm:size-[5.5625rem] sm:rounded-[1.3125rem] sm:text-[2.625rem]" />
                   <div className="flex flex-col items-start gap-x-3.25 gap-y-1.25 sm:flex-row sm:flex-wrap sm:items-center sm:gap-y-2 sm:pt-1">
                     <h1 id="server-name" className="text-[1.625rem] font-extrabold leading-[1.1] tracking-[-0.03em] sm:text-[2.625rem]">{server.name}</h1>
                     <span className="inline-flex h-6.5 items-center gap-1.25 rounded-full bg-success-soft px-2.5 text-xs font-bold text-primary-ink">
