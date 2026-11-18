@@ -8,6 +8,7 @@ import {
   blogCategoryBySlug,
   blogCategoryHref,
   blogCategoryMeta,
+  blogImageQuality,
   blogPath,
   blogPosts,
   blogPostPath,
@@ -83,6 +84,32 @@ test("every post ships a cover image that exists and stays small enough to serve
   }
 
   assert.equal(new Set(blogPosts.map((post) => post.cover)).size, blogPosts.length, "each post needs its own cover");
+});
+
+test("article figures exist, describe themselves and declare the file's real size", async () => {
+  const { default: sharp } = await import("sharp");
+  const figures = blogPosts.flatMap((post) => post.sections.flatMap((section) => (section.figure ? [{ post, figure: section.figure }] : [])));
+
+  for (const { post, figure } of figures) {
+    assert.match(figure.src, /^\/blog\/[a-z0-9-]+\.webp$/, `figure path in ${post.slug}: ${figure.src}`);
+    assert.ok(figure.alt.trim().length > 0, `figure alt in ${post.slug}: ${figure.src}`);
+    const file = path.resolve(`public${figure.src}`);
+    assert.ok(existsSync(file), `missing figure in ${post.slug}: ${figure.src}`);
+    assert.ok(statSync(file).size < 120 * 1024, `figure too heavy in ${post.slug}: ${figure.src}`);
+    const metadata = await sharp(file).metadata();
+    assert.deepEqual([metadata.width, metadata.height], [figure.width, figure.height], `figure size in ${post.slug}: ${figure.src}`);
+  }
+});
+
+test("blog images skip the optimizer's default quality, which turns covers blocky", () => {
+  const qualities = /qualities:\s*\[([^\]]*)\]/.exec(readProjectFile("next.config.ts"))?.[1]?.split(",").map((value) => Number(value.trim()));
+  assert.ok(qualities?.includes(blogImageQuality), "next.config.ts must list blogImageQuality in images.qualities");
+
+  for (const file of ["src/app/blog/page.tsx", "src/app/blog/[slug]/page.tsx", "src/components/blog-highlights-card.tsx"]) {
+    const images = readProjectFile(file).match(/<Image\b[\s\S]*?\/>/g) ?? [];
+    assert.ok(images.length > 0, `no images found in ${file}`);
+    for (const image of images) assert.match(image, /quality=\{blogImageQuality\}/, `${file}: ${image.slice(0, 80)}`);
+  }
 });
 
 test("category colour comes from tokens the stylesheet actually defines", () => {

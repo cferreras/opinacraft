@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 import { BlogCategoryBadge } from "@/components/blog-category-badge";
 import { Card } from "@/components/ui/card";
-import { blogPath, blogPostPath, formatBlogDate, latestBlogPosts } from "@/lib/blog/posts";
+import { blogImageQuality, blogPath, blogPostPath, formatBlogDate, latestBlogPosts } from "@/lib/blog/posts";
 
 // Rail module on the catalog: the newest post leads with its cover, the rest stay as compact text
 // rows. One image gives the module presence; four would compete with the results table beside it.
@@ -25,7 +25,7 @@ export function BlogHighlightsCard({ className = "" }: { className?: string }) {
         href={blogPostPath(featured.slug)}
         className="group block border-t transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
       >
-        <Image src={featured.cover} alt={featured.coverAlt} width={480} height={297} sizes="(min-width: 1024px) 15rem, 100vw" className="aspect-[1.618/1] h-auto max-h-[13.75rem] w-full object-cover lg:max-h-none" />
+        <Image src={featured.cover} alt={featured.coverAlt} width={480} height={297} quality={blogImageQuality} sizes="(min-width: 1024px) 15rem, 100vw" className="aspect-[1.618/1] h-auto max-h-[13.75rem] w-full object-cover lg:max-h-none" />
         <div className="px-4 pb-3.5 pt-3">
           <BlogCategoryBadge category={featured.category} className="h-5 px-2 text-[0.625rem]" />
           <p className="mt-2 text-[0.84375rem] font-bold leading-[1.1875rem] tracking-[-0.008em] transition-colors group-hover:text-primary">{featured.title}</p>

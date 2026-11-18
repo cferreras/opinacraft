@@ -1,7 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 128" fill="none" role="img" aria-labelledby="lockupTitle">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 128" fill="none" role="img" aria-labelledby="lockupTitle">
   <title id="lockupTitle">OpinaCraft</title>
   <!-- Convert the wordmark to outlines before using this file anywhere Manrope
        is not loaded; inside the app the webfont is already present. -->
-  <path fill="#00894c" fill-rule="evenodd" clip-rule="evenodd" d="M28 6L100 6L116 22L116 86L100 102L52 102L32 122L28 122L28 102L12 86L12 22ZM61.5 23L66.5 23L74.05 41.17L93.66 42.74L95.2 47.48L80.26 60.28L84.83 79.42L80.79 82.36L64 72.1L47.21 82.36L43.17 79.42L47.74 60.28L32.8 47.48L34.34 42.74L53.95 41.17L61.5 23Z" />
-  <text x="156" y="82" fill="#070b09" font-family="Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="76" font-weight="800" letter-spacing="-2.6">OpinaCraft</text>
+  <g transform="translate(8 30.88) scale(0.72) translate(-13 -9)">
+    <path fill="#070b09" d="M23 9H43Q47 9 47 13V33Q47 37 43 37H23Q19 37 19 33V13Q19 9 23 9ZM57 9H77Q81 9 81 13V33Q81 37 77 37H57Q53 37 53 33V13Q53 9 57 9ZM91 9H111Q115 9 115 13V33Q115 37 111 37H91Q87 37 87 33V13Q87 9 91 9ZM23 43H43Q47 43 47 47V67Q47 71 43 71H23Q19 71 19 67V47Q19 43 23 43ZM91 43H111Q115 43 115 47V67Q115 71 111 71H91Q87 71 87 67V47Q87 43 91 43ZM57 77H77Q81 77 81 81V101Q81 105 77 105H57Q53 105 53 101V81Q53 77 57 77ZM91 77H111Q115 77 115 81V101Q115 105 111 105H91Q87 105 87 101V81Q87 77 91 77Z" />
+    <path fill="#00894c" d="M23 77H43Q47 77 47 81V101Q47 105 43 105H30L17 118L13 118L19 89V81Q19 77 23 77Z" />
+  </g>
+  <text x="85.44" y="100" fill="#070b09" font-family="Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="96" font-weight="800" letter-spacing="-3">pinaCraft</text>
 </svg>

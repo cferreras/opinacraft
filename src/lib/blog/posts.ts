@@ -37,12 +37,24 @@ export const blogCategoryMeta: Record<BlogCategory, { slug: string; badge: strin
   },
 };
 
-// Intrinsic size of the cover art. Every post ships one file at this size; the layout never
-// asks for more than half of it, so the covers stay sharp on a 2x display.
+// Nominal size of the cover art. Files are 16:9 and ideally this size, never upscaled to reach
+// it: a cover straight from ChatGPT stays at its own width (1536 px or more). The layout shows a
+// cover at most 50rem wide, so either way it stays sharp on a 2x display.
 export const blogCoverWidth = 1920;
 export const blogCoverHeight = 1080;
 
-export type BlogSection = { heading: string; paragraphs: readonly string[] };
+// next/image re-encodes every picture it serves, at 75 unless told otherwise. The covers and
+// figures are already compressed WebP with flat backgrounds and fine edges, where that second
+// pass shows as blocky noise. next.config.ts has to list this value in `images.qualities`.
+export const blogImageQuality = 90;
+
+/**
+ * An illustration inside an article, drawn after its section's paragraphs. Width and height are
+ * the file's intrinsic size, so the layout reserves the right box before the image loads.
+ */
+export type BlogFigure = { src: string; alt: string; width: number; height: number; caption?: string };
+
+export type BlogSection = { heading: string; paragraphs: readonly string[]; figure?: BlogFigure };
 
 export type BlogPost = {
   slug: string;
@@ -68,6 +80,68 @@ export type BlogPost = {
 
 // Newest first: the rail card and the index both read this order directly.
 export const blogPosts: readonly BlogPost[] = [
+  {
+    slug: "nuevo-logo",
+    title: "Estrenamos logo: una rejilla de crafteo que también es una O",
+    category: "Guías",
+    publishedAt: "2026-11-09",
+    excerpt: "OpinaCraft cambia de imagen. El nuevo logo junta tres cosas en un solo símbolo: la mesa de crafteo, la O del nombre y un bocadillo para tu opinión.",
+    readingMinutes: 3,
+    cover: "/blog/portada-nuevo-logo.webp",
+    coverAlt: "Ilustración en 3D del nuevo logo de OpinaCraft, ocho bloques verdes que forman una O, con el de la esquina inferior izquierda en verde menta y en forma de bocadillo, sobre fondo claro: la imagen que abre el artículo sobre el cambio de logo.",
+    pullQuote: "Es la primera letra del nombre, una mesa de crafteo y un bocadillo de chat a la vez.",
+    sections: [
+      {
+        heading: "Por qué cambiamos de logo",
+        paragraphs: [
+          "Hasta ahora, OpinaCraft se presentaba con un bocadillo verde con una estrella dentro. Contaba bien la mitad de la historia, la de las opiniones y las valoraciones, pero podía ser el logo de cualquier web de reseñas: de restaurantes, de hoteles o de móviles.",
+          "Queríamos un símbolo que se reconociera como algo de Minecraft a primera vista, sin tirar de lo de siempre: nada de picos, espadas ni bloques de hierba. Y que siguiera diciendo lo que hacemos, que es reunir lo que la gente opina de cada servidor.",
+        ],
+        figure: {
+          src: "/blog/nuevo-logo-antes-y-ahora.webp",
+          alt: "Comparación de los dos logos de OpinaCraft. A la izquierda, el anterior: un bocadillo verde con una estrella blanca junto al nombre. A la derecha, el nuevo: una rejilla de cuadrados negros que sustituye a la O del nombre, con la esquina inferior izquierda en verde y con forma de bocadillo.",
+          width: 1600,
+          height: 900,
+          caption: "El logo anterior y el nuevo, uno al lado del otro.",
+        },
+      },
+      {
+        heading: "Una rejilla de crafteo que hace de O",
+        paragraphs: [
+          "El punto de partida es la rejilla de 3×3 de la mesa de crafteo, la que todo el mundo ha usado cientos de veces. Si le quitas la casilla del centro, lo que queda es un cuadrado hueco: una O, la primera letra de OpinaCraft. Por eso en el logo la rejilla no va al lado del nombre, sino dentro de él.",
+          "La última pieza es la esquina inferior izquierda. Esa casilla se estira en punta, como la esquina de un bocadillo de chat, y es la única en verde. Es donde entra tu opinión.",
+        ],
+        figure: {
+          src: "/blog/nuevo-logo-construccion.webp",
+          alt: "Tres pasos de la construcción del logo: una rejilla de nueve cuadrados negros; la misma rejilla sin el cuadrado central, que forma una O; y la versión final, con la esquina inferior izquierda en verde y acabada en punta de bocadillo.",
+          width: 1600,
+          height: 900,
+          caption: "De la mesa de crafteo a la O del nombre, en tres pasos.",
+        },
+      },
+      {
+        heading: "La versión que se leía «ppinacraft»",
+        paragraphs: [
+          "En uno de los primeros bocetos, la casilla verde colgaba entera por debajo de la rejilla, como el rabo de un bocadillo de cómic. Sobre el papel tenía sentido, pero al ponerla delante del resto del nombre pasó lo inevitable: aquello ya no era una O con cola, era una p. El logo decía «ppinacraft».",
+          "La solución fue sacar la punta en diagonal desde la propia esquina, como en los globos de chat de las apps de mensajería, y que apenas baje de la línea del texto. Así la O se lee como una O y el bocadillo sigue ahí.",
+        ],
+      },
+      {
+        heading: "Dónde lo vas a ver",
+        paragraphs: [
+          "Ya está en la cabecera, en el pie de página, en las pantallas de acceso, en la pestaña del navegador y en el icono que se guarda al añadir OpinaCraft a la pantalla de inicio del móvil. Con el tema oscuro, la rejilla pasa a blanco y la esquina sigue en verde.",
+          "Por lo demás no cambia nada: el catálogo, las fichas y las reseñas siguen donde estaban. Si tienes la web anclada en el móvil, puede que el icono tarde un poco en actualizarse, porque cada navegador lo renueva a su ritmo.",
+        ],
+        figure: {
+          src: "/blog/nuevo-logo-en-la-web.webp",
+          alt: "El nuevo logo de OpinaCraft sobre fondo blanco y sobre fondo negro, junto al icono de la app (la rejilla en blanco con la esquina en negro sobre un cuadrado verde) y el favicon en verde a 64, 32 y 16 píxeles.",
+          width: 1600,
+          height: 900,
+          caption: "Tema claro, tema oscuro, icono de la app y favicon.",
+        },
+      },
+    ],
+  },
   {
     slug: "buscar-como-hablas",
     title: "Busca como hablas: el catálogo ya entiende frases enteras",

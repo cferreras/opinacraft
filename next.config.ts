@@ -65,7 +65,8 @@ const nextConfig: NextConfig = {
   headers: async () => [{ source: "/:path*", headers: securityHeaders }],
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   // Server logos live in Vercel Blob; `ServerLogo` resizes them through the optimizer.
-  images: { remotePatterns: [{ protocol: "https", hostname: "*.public.blob.vercel-storage.com" }] },
+  // 90 is `blogImageQuality`: blog covers and figures would turn blocky at the default 75.
+  images: { qualities: [75, 90], remotePatterns: [{ protocol: "https", hostname: "*.public.blob.vercel-storage.com" }] },
   reactCompiler: true,
   experimental: {
     optimizePackageImports: ["@tabler/icons-react", "lucide-react"],

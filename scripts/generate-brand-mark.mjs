@@ -1,7 +1,9 @@
-// Generates every OpinaCraft brand asset from one piece of geometry: a chamfered
-// speech bubble with a five-pointed star knocked out of it. Everything downstream
-// -- the SVG files, the raster fallbacks, the favicon and the path constant the
-// React component draws -- comes from here, so the shapes cannot drift apart.
+// Generates every OpinaCraft brand asset from one piece of geometry: a 3x3
+// crafting grid with its centre slot empty, so it reads as the "O" of OpinaCraft,
+// and its bottom-left slot pulled into a speech-bubble corner. Everything
+// downstream -- the SVG files, the raster fallbacks, the favicon and the path
+// constants the React components draw -- comes from here, so the shapes cannot
+// drift apart.
 //
 // Run with: node scripts/generate-brand-mark.mjs
 import { writeFileSync } from "node:fs";
@@ -32,93 +34,111 @@ const GREEN = oklch(0.54, 0.16, 160); // --primary
 const INK = oklch(0.145, 0.01, 160);  // --foreground
 
 // --- geometry ----------------------------------------------------------------
-// Everything sits in a 128x128 box. The body is an octagon (x 12..116, y 6..102,
-// 16-unit chamfers) with a wedge tail fused into its bottom edge: vertical left
-// side, 45-degree right side, and a 4-unit flat foot so no needle point survives
-// rasterisation at favicon sizes.
-const BODY = "M28 6L100 6L116 22L116 86L100 102L52 102L32 122L28 122L28 102L12 86L12 22Z";
+// Everything sits in a 128x128 box. Nine 28-unit slots with 6-unit gaps make a
+// 96-unit square (x 19..115, y 9..105); the gaps are wide enough to stay open at
+// header sizes, where a narrower gutter smeared the grid into a plain ring. The
+// centre slot is left out -- that hole is the "O".
+const SLOT = 28;
+const GAP = 6;
+const RADIUS = 4;
+const ORIGIN = { x: 19, y: 9 };
+const RING_SIZE = 3 * SLOT + 2 * GAP;
 
-// The star is a true pentagram -- centre (64, 55), outer radius 38, inner radius
-// 0.45 of that -- with each of the five tips sliced off 6 units short by a line
-// perpendicular to the point's own axis. Slicing on the axis is what makes all
-// five terminals identical; drawing them by hand is what made earlier drafts
-// lopsided.
-const CENTRE = { x: 64, y: 55 };
-const OUTER = 38;
-const INNER = OUTER * 0.45;
-const TIP_CUT = 6;
+const slotAt = (column, row) => ({ x: ORIGIN.x + column * (SLOT + GAP), y: ORIGIN.y + row * (SLOT + GAP) });
+const roundedSlot = ({ x, y }) => {
+  const r = RADIUS, s = SLOT;
+  return `M${x + r} ${y}H${x + s - r}Q${x + s} ${y} ${x + s} ${y + r}V${y + s - r}Q${x + s} ${y + s} ${x + s - r} ${y + s}H${x + r}Q${x} ${y + s} ${x} ${y + s - r}V${y + r}Q${x} ${y} ${x + r} ${y}Z`;
+};
 
-const radians = (deg) => (deg * Math.PI) / 180;
-const polar = (deg, radius) => ({
-  x: CENTRE.x + radius * Math.cos(radians(deg)),
-  y: CENTRE.y + radius * Math.sin(radians(deg)),
-});
+// The eight slots round the edge, bar the bottom-left one, which is the tail.
+const RING_SLOTS = [[0, 0], [1, 0], [2, 0], [0, 1], [2, 1], [1, 2], [2, 2]].map(([c, r]) => slotAt(c, r));
+const RING_PATH = RING_SLOTS.map(roundedSlot).join("");
 
-// Where the edge running inner -> outer crosses the tip's cut line.
-function tipCorner(innerDeg, outerDeg) {
-  const from = polar(innerDeg, INNER);
-  const to = polar(outerDeg, OUTER);
-  const axis = { x: Math.cos(radians(outerDeg)), y: Math.sin(radians(outerDeg)) };
-  const reach = (from.x - CENTRE.x) * axis.x + (from.y - CENTRE.y) * axis.y;
-  const t = (OUTER - TIP_CUT - reach) / (OUTER - reach);
-  return { x: from.x + t * (to.x - from.x), y: from.y + t * (to.y - from.y) };
-}
+// The bottom-left slot keeps three rounded corners; its fourth runs out into a
+// speech-bubble point aimed down and to the left. Aiming it outwards rather than
+// straight down is deliberate: a slot hanging under the baseline made the "O" read
+// as a "p". The 4-unit flat foot keeps a needle point from vanishing at favicon
+// sizes, and the 13-unit drop stays within a descender's reach.
+const tailSlot = slotAt(0, 2);
+const TAIL_PATH = (() => {
+  const { x, y } = tailSlot, r = RADIUS, s = SLOT;
+  return `M${x + r} ${y}H${x + s - r}Q${x + s} ${y} ${x + s} ${y + r}V${y + s - r}Q${x + s} ${y + s} ${x + s - r} ${y + s}H${x + 11}L${x - 2} ${y + s + 13}L${x - 6} ${y + s + 13}L${x} ${y + s - 16}V${y + r}Q${x} ${y} ${x + r} ${y}Z`;
+})();
 
-const pointAngle = (k) => -90 + 72 * k;
-const valleyAngle = (k) => -54 + 72 * k;
-const tip = (k) => [tipCorner(valleyAngle(k - 1), pointAngle(k)), tipCorner(valleyAngle(k), pointAngle(k))];
+// One path for single-colour uses (Open Graph cards, the mono SVG).
+const MARK_PATH = `${RING_PATH}${TAIL_PATH}`;
 
-// Only the top point and the right flank are computed; the left flank is their
-// reflection, so symmetry about x = 64 is exact rather than merely rounded.
-const flip = (p) => ({ x: 2 * CENTRE.x - p.x, y: p.y });
-const [topLeft, topRight] = tip(0);
-const [armStart, armEnd] = tip(1);
-const [legStart, legEnd] = tip(2);
-
-const STAR_POINTS = [
-  topLeft, topRight, polar(valleyAngle(0), INNER),
-  armStart, armEnd, polar(valleyAngle(1), INNER),
-  legStart, legEnd, polar(valleyAngle(2), INNER),
-  flip(legEnd), flip(legStart), flip(polar(valleyAngle(1), INNER)),
-  flip(armEnd), flip(armStart), flip(polar(valleyAngle(0), INNER)),
-  flip(topRight),
-];
+// The tight box round the drawn shapes, used when the mark stands in for the
+// "O" of the wordmark. Its top edge is the ring's top, and the ring's bottom sits
+// RING_SIZE below it, so CSS can line those up with the cap height and baseline.
+const O_BOX = { x: ORIGIN.x - 6, y: ORIGIN.y, width: RING_SIZE + 6, height: RING_SIZE + 13 };
 
 const round = (v) => String(Number((Math.round(v * 100) / 100).toFixed(2)));
-const STAR = STAR_POINTS.map((p, i) => `${i ? "L" : "M"}${round(p.x)} ${round(p.y)}`).join("") + "Z";
-
-// evenodd is what turns the star into a hole rather than a second shape.
-const MARK_PATH = `${BODY}${STAR}`;
 
 // --- svg ---------------------------------------------------------------------
-const markSvg = (fill, desc) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="markTitle markDesc">
+// The two-tone mark: the grid in ink, the tail in brand green. As a browser-tab
+// icon it follows the tab's colour scheme so the ink grid never disappears on a
+// dark tab bar.
+const duoSvg = (desc) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="markTitle markDesc">
   <title id="markTitle">OpinaCraft</title>
   <desc id="markDesc">${desc}</desc>
-  <path fill="${fill}" fill-rule="evenodd" clip-rule="evenodd" d="${MARK_PATH}" />
+  <style>.grid{fill:${INK}}@media (prefers-color-scheme:dark){.grid{fill:#ffffff}}</style>
+  <path class="grid" d="${RING_PATH}" />
+  <path fill="${GREEN}" d="${TAIL_PATH}" />
 </svg>
 `;
 
-writeFileSync("public/brand/opinacraft-mark.svg", markSvg(GREEN, "Marca de OpinaCraft: burbuja de opinión con una estrella recortada."));
+const markSvg = (fill, desc) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="markTitle markDesc">
+  <title id="markTitle">OpinaCraft</title>
+  <desc id="markDesc">${desc}</desc>
+  <path fill="${fill}" d="${MARK_PATH}" />
+</svg>
+`;
+
+writeFileSync("public/brand/opinacraft-mark.svg", duoSvg("Marca de OpinaCraft: rejilla de crafteo 3×3 que forma la O, con la esquina de un bocadillo."));
 writeFileSync("public/brand/opinacraft-mark-mono.svg", markSvg("currentColor", "Marca de OpinaCraft a una tinta; hereda el color del texto."));
 
-// The wordmark is measured, not guessed: Manrope 800 at 76px with -2.6 tracking
-// runs 388.8 units wide from x=156. Baseline 82 puts the cap-height centre on the
-// body's centre (y=54) -- the tail hangs below like a descender and is left out of
-// that alignment on purpose.
-writeFileSync("public/brand/opinacraft-lockup.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 128" fill="none" role="img" aria-labelledby="lockupTitle">
+// The lockup sets the mark as the "O" of the wordmark. Manrope's cap height is
+// 0.72 em, so at 96px the ring (RING_SIZE units) is scaled to 69.1px and its
+// bottom sits on the baseline at y=100; the tail drops below it like a descender.
+const LOCKUP_FONT = 96;
+const LOCKUP_BASELINE = 100;
+const capHeight = LOCKUP_FONT * 0.72;
+const oScale = capHeight / RING_SIZE;
+const oWidth = O_BOX.width * oScale;
+writeFileSync("public/brand/opinacraft-lockup.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 128" fill="none" role="img" aria-labelledby="lockupTitle">
   <title id="lockupTitle">OpinaCraft</title>
   <!-- Convert the wordmark to outlines before using this file anywhere Manrope
        is not loaded; inside the app the webfont is already present. -->
-  <path fill="${GREEN}" fill-rule="evenodd" clip-rule="evenodd" d="${MARK_PATH}" />
-  <text x="156" y="82" fill="${INK}" font-family="Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="76" font-weight="800" letter-spacing="-2.6">OpinaCraft</text>
+  <g transform="translate(8 ${round(LOCKUP_BASELINE - capHeight)}) scale(${round(oScale * 1000) / 1000}) translate(${-O_BOX.x} ${-O_BOX.y})">
+    <path fill="${INK}" d="${RING_PATH}" />
+    <path fill="${GREEN}" d="${TAIL_PATH}" />
+  </g>
+  <text x="${round(8 + oWidth + 4)}" y="${LOCKUP_BASELINE}" fill="${INK}" font-family="Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="${LOCKUP_FONT}" font-weight="800" letter-spacing="-3">pinaCraft</text>
 </svg>
 `);
 
-// The React component draws from this constant so a geometry change here reaches
-// the header and footer without anyone re-typing a path.
+// The React components draw from these constants so a geometry change here
+// reaches the header and footer without anyone re-typing a path.
 writeFileSync("src/lib/brand/mark-path.ts", `// Generated by scripts/generate-brand-mark.mjs. Do not edit by hand.
+
+/** The whole mark in one path, for single-colour uses. 128x128 box. */
 export const BRAND_MARK_PATH =
   "${MARK_PATH}";
+
+/** The seven grid slots that stay in the foreground colour. */
+export const BRAND_MARK_GRID_PATH =
+  "${RING_PATH}";
+
+/** The bottom-left slot with its speech-bubble point, drawn in brand green. */
+export const BRAND_MARK_TAIL_PATH =
+  "${TAIL_PATH}";
+
+/**
+ * The tight box round the mark when it stands in for the wordmark's "O": its top
+ * is the grid's top, and the grid's bottom sits \`gridHeight\` units lower.
+ */
+export const BRAND_O_BOX = { x: ${O_BOX.x}, y: ${O_BOX.y}, width: ${O_BOX.width}, height: ${O_BOX.height}, gridHeight: ${RING_SIZE} } as const;
 `);
 
 // --- raster ------------------------------------------------------------------
@@ -131,12 +151,13 @@ const webp = await sharp(source).resize(256, 256).webp({ lossless: true }).toBuf
 writeFileSync("public/brand/opinacraft-mark.webp", webp);
 
 // iOS ignores transparency on home-screen icons and composites onto white, so
-// this one ships as a white mark on the brand green with its own padding.
+// this one ships on the brand green with its own padding: a white grid and an
+// ink tail, the same two-tone split as the header.
 writeFileSync("public/brand/opinacraft-apple-touch-icon.png", await sharp(Buffer.from(
   `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
      <rect width="180" height="180" fill="${GREEN}" />
      <g transform="translate(26 26) scale(1)">
-       <svg width="128" height="128" viewBox="0 0 128 128"><path fill="#ffffff" fill-rule="evenodd" clip-rule="evenodd" d="${MARK_PATH}" /></svg>
+       <svg width="128" height="128" viewBox="0 0 128 128"><path fill="#ffffff" d="${RING_PATH}" /><path fill="${INK}" d="${TAIL_PATH}" /></svg>
      </g>
    </svg>`,
 )).png().toBuffer());
@@ -170,4 +191,4 @@ const directory = SIZES.map((size, index) => {
 
 writeFileSync("src/app/favicon.ico", Buffer.concat([header, ...directory, ...frames]));
 
-console.log(`brand mark rebuilt: green ${GREEN}, star ${round(Math.min(...STAR_POINTS.map((p) => p.x)))}..${round(Math.max(...STAR_POINTS.map((p) => p.x)))} wide`);
+console.log(`brand mark rebuilt: green ${GREEN}, ink ${INK}, grid ${RING_SIZE} units square at (${ORIGIN.x}, ${ORIGIN.y})`);
